@@ -17,6 +17,15 @@ function stubFetch(status: number, body: unknown) {
   }))
 }
 
+function mockResponse(status: number, body: unknown) {
+  return {
+    status,
+    ok: status >= 200 && status < 300,
+    statusText: status === 429 ? 'Too Many Requests' : 'Error',
+    json: () => Promise.resolve(body),
+  }
+}
+
 const PARKING_RESPONSE = {
   elements: [
     { type: 'node', id: 42, lat: 48.1, lon: 11.1, tags: { amenity: 'parking', name: 'Testparkplatz' } },
@@ -101,9 +110,37 @@ describe('fetchPois', () => {
     expect(result[0]).toMatchObject({ lat: 48.2, lon: 11.2, type: 'campsite' })
   })
 
-  it('throws on proxy error response', async () => {
+  it('throws when every mirror responds with an error', async () => {
     stubFetch(429, { error: 'rate limited' })
     await expect(fetchPois(BOUNDS, [f('parking')])).rejects.toThrow('429')
+  })
+
+  // Regression: a single mirror can reject a request (e.g. 403/406) while the
+  // others are healthy — fetchPois used to call one fixed endpoint with no
+  // fallback, so one rejecting mirror took POI loading down entirely.
+  it('falls back to the next mirror when the first rejects', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(mockResponse(403, null))
+      .mockResolvedValueOnce(mockResponse(200, PARKING_RESPONSE))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await fetchPois(BOUNDS, [f('parking')])
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(result).toHaveLength(1)
+    expect(result[0]).toMatchObject({ id: 42, type: 'parking' })
+  })
+
+  it('falls back past a network error to the next mirror', async () => {
+    const fetchMock = vi.fn()
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValueOnce(mockResponse(200, PARKING_RESPONSE))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await fetchPois(BOUNDS, [f('parking')])
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(result).toHaveLength(1)
   })
 
   it('filters elements without coordinates', async () => {
@@ -127,6 +164,18 @@ describe('fetchPois', () => {
     })
     const result = await fetchPois(BOUNDS, [f('parking')])
     expect(result.map(p => p.id)).toEqual([6])
+  })
+
+  it('propagates AbortError from an external signal without trying more mirrors', async () => {
+    const controller = new AbortController()
+    const fetchMock = vi.fn().mockImplementation(() => {
+      controller.abort()
+      return Promise.reject(new DOMException('The operation was aborted', 'AbortError'))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(fetchPois(BOUNDS, [f('parking')], controller.signal)).rejects.toThrow()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
   it('handles missing elements field gracefully', async () => {
