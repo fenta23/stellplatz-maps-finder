@@ -3,6 +3,7 @@ import type { OsmPoi } from '@/features/pois/OverpassClient.js'
 import type { PoiImage } from './imageGallery.js'
 import type { NearbyItem } from './PoiDetailPanel.js'
 import type { OsmNote } from './noteRenderer.js'
+import { fetchNearby } from './nearbyClient.js'
 
 // ── Wikimedia Commons (pure helpers) ──────────────────────────────────────────
 
@@ -66,7 +67,7 @@ export const loadMapillaryImages = (p: LatLon): Promise<PoiImage[]> =>
   getJson(`/api/mapillary?lat=${p.lat}&lon=${p.lon}`, [] as PoiImage[])
 
 export const loadNearby = (p: LatLon): Promise<NearbyItem[]> =>
-  getJson(`/api/nearby?lat=${p.lat}&lon=${p.lon}`, [] as NearbyItem[])
+  fetchNearby(p.lat, p.lon)
 
 export const loadNotes = (p: LatLon): Promise<OsmNote[]> =>
   getJson(`/api/notes?lat=${p.lat}&lon=${p.lon}`, [] as OsmNote[])

@@ -1,4 +1,8 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest'
+
+const { fetchNearbyMock } = vi.hoisted(() => ({ fetchNearbyMock: vi.fn() }))
+vi.mock('./nearbyClient.js', () => ({ fetchNearby: fetchNearbyMock }))
+
 import { wikimediaTitle, wikimediaApiUrl, resolveWikimediaImage, collectTagImages, loadMapillaryImages, loadNearby, loadNotes } from './poiData.js'
 
 afterEach(() => vi.unstubAllGlobals())
@@ -100,20 +104,20 @@ describe('loadMapillaryImages', () => {
   })
 })
 
+// loadNearby just delegates to nearbyClient's fetchNearby (which fetches
+// Overpass mirrors directly) — see nearbyClient.test.ts for the actual
+// fetch/classify/sort logic.
 describe('loadNearby', () => {
-  beforeEach(() => { vi.stubGlobal('fetch', vi.fn()) })
-  afterEach(() => vi.unstubAllGlobals())
+  afterEach(() => fetchNearbyMock.mockReset())
 
-  it('returns items on success', async () => {
+  it('delegates to fetchNearby with the point\'s lat/lon', async () => {
     const data = [{ kind: 'fuel', name: 'Tanke', distance: 200, lat: 48.2, lon: 11.3 }]
-    globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve(data) })
-    const r = await loadNearby({ lat: 48.1, lon: 11.2 })
-    expect(r).toEqual(data)
-  })
+    fetchNearbyMock.mockResolvedValue(data)
 
-  it('returns empty on error', async () => {
-    globalThis.fetch = vi.fn().mockRejectedValue(new Error('net'))
-    expect(await loadNearby({ lat: 48.1, lon: 11.2 })).toEqual([])
+    const r = await loadNearby({ lat: 48.1, lon: 11.2 })
+
+    expect(fetchNearbyMock).toHaveBeenCalledWith(48.1, 11.2)
+    expect(r).toEqual(data)
   })
 })
 
