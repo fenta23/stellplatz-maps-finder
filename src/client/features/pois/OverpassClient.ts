@@ -1,5 +1,5 @@
 import { notNullUndefined } from '@shared/common.js'
-import { apiUrl } from '@/core/config.js'
+import { OVERPASS_ENDPOINTS } from '@/core/overpassEndpoints.js'
 import { buildOverpassQuery, classifyElement, type FilterDef } from '@/features/filters/filterModel.js'
 
 /**
@@ -90,6 +90,45 @@ function parseElements(data: { elements?: OsmElement[] }, filters: readonly Filt
     .filter(notNullUndefined)
 }
 
+const MIRROR_TIMEOUT_MS = 10_000
+
+/**
+ * Tries each mirror in turn, first success wins. A caller-supplied `signal`
+ * (e.g. the map moved again) aborts the whole attempt immediately; a single
+ * mirror's own timeout or error just falls through to the next one.
+ */
+async function fetchFromOverpass(
+  query: string,
+  signal?: AbortSignal,
+): Promise<{ elements?: OsmElement[] }> {
+  const body = `data=${encodeURIComponent(query)}`
+  let lastError = new Error('Overpass error: no endpoints configured')
+
+  for (const url of OVERPASS_ENDPOINTS) {
+    const timeoutSignal = AbortSignal.timeout(MIRROR_TIMEOUT_MS)
+    const attemptSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body,
+        signal: attemptSignal,
+      })
+      if (!res.ok) {
+        lastError = new Error(`Overpass error: ${res.status} ${res.statusText}`)
+        continue
+      }
+      return await res.json() as { elements?: OsmElement[] }
+    } catch (err) {
+      // The caller cancelled (e.g. map panned again) — stop retrying and
+      // propagate the AbortError so poiRefresher can swallow it silently.
+      if (signal?.aborted) throw err
+      lastError = err instanceof Error ? err : new Error(String(err))
+    }
+  }
+  throw lastError
+}
+
 export async function fetchPois(
   bounds: LatLngBounds,
   filters: readonly FilterDef[],
@@ -98,18 +137,6 @@ export async function fetchPois(
   if (!filters.some(f => f.kind === 'osm' && f.selectors.length > 0)) return []
 
   const query = buildQuery(bounds, filters)
-  const res = await fetch(apiUrl('/api/overpass'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: `data=${encodeURIComponent(query)}`,
-    // exactOptionalPropertyTypes: pass signal only when present
-    ...(signal ? { signal } : {}),
-  })
-
-  if (!res.ok) {
-    throw new Error(`Overpass proxy error: ${res.status} ${res.statusText}`)
-  }
-
-  const data = await res.json() as { elements?: OsmElement[] }
+  const data = await fetchFromOverpass(query, signal)
   return parseElements(data, filters)
 }
