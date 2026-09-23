@@ -50,15 +50,20 @@ async function fetchOne(url: string, body: string): Promise<unknown> {
     })
     // 429 / 5xx are upstream trouble — treat as failure so the mirror is demoted.
     if (upstream.status === 429 || upstream.status >= 500) {
+      console.error(`[overpass] ${url} -> ${upstream.status} after ${Date.now() - start}ms`)
       throw new Error(`Overpass ${upstream.status}`)
     }
     if (!upstream.ok) {
+      console.error(`[overpass] ${url} -> ${upstream.status} ${upstream.statusText} after ${Date.now() - start}ms`)
       throw new Error(`Overpass error: ${upstream.statusText}`)
     }
     const json = await upstream.json() as unknown
     recordSuccess(stats, url, Date.now() - start)
     return json
   } catch (err) {
+    if (err instanceof Error && !err.message.startsWith('Overpass')) {
+      console.error(`[overpass] ${url} -> ${err.name}: ${err.message} after ${Date.now() - start}ms`)
+    }
     recordFailure(stats, url, Date.now())
     throw err
   }
