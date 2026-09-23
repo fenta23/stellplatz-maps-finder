@@ -1,15 +1,18 @@
 export const BBOX_SNAP_DEG = 0.2
 export const POI_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000 // 30 days
 
-// Cold-start priority order (healthiest-known first) — overpassHandler races the
-// top two. At runtime overpassRanking.ts re-sorts these by observed latency and
-// failures, so a slow/flapping mirror is demoted automatically.
+// Cold-start priority order (healthiest-known first) — overpassHandler races all
+// of these in parallel. At runtime overpassRanking.ts re-sorts them by observed
+// latency and failures, so a slow/flapping mirror is demoted automatically.
+//
+// kumi.systems and openstreetmap.ru were dropped 2026-09-23: both were fully
+// unreachable (connection timeout, 0/3 probes) from multiple networks, just
+// burning the per-attempt timeout budget with no chance of success. See
+// CHANGELOG for the underlying Overpass outage this was tuned around.
 export const OVERPASS_ENDPOINTS = [
+  'https://overpass.openstreetmap.fr/api/interpreter',
   'https://osm.hpi.de/overpass/api/interpreter',
   'https://overpass-api.de/api/interpreter',
-  'https://overpass.kumi.systems/api/interpreter',
-  'https://overpass.openstreetmap.fr/api/interpreter',
-  'https://overpass.openstreetmap.ru/api/interpreter',
 ] as const
 
 export const USER_AGENT = 'stellplatz-maps-finder/0.1 (https://github.com/local/stellplatz)'
