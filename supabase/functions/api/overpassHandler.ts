@@ -32,7 +32,7 @@ export async function handleOverpass(req: Request, origin: string | null): Promi
 
 const OVERPASS_TIMEOUT_MS = 10_000
 /** Race this many of the top-ranked endpoints in parallel; first success wins. */
-const RACE_COUNT = 2
+const RACE_COUNT = 3
 
 // Per-isolate, best-effort health stats. Warms up over a few requests and resets
 // on a cold start — a soft ranking hint, not persisted (see overpassRanking.ts).

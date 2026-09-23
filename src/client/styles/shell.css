@@ -161,7 +161,6 @@
         inset: 0;
         margin: auto;
         width: min(560px, calc(100vw - 48px));
-        height: fit-content;
         max-height: calc(100dvh - 48px);
         padding: 0;
         border-radius: var(--radius);
