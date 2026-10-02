@@ -4,7 +4,7 @@
 #
 # Pro Land (drei parallel): Geofabrik-Extrakt laden → osmium tags-filter →
 # Original löschen (europe-latest.osm.pbf am Stück wäre 35 GB). Danach alles
-# mergen (dedupliziert Grenzobjekte: gleiche ID + Version), Kacheln bauen und
+# mergen, per time-filter nur die neueste Version je Objekt behalten, Kacheln bauen und
 # direkt als Pages-Artefakt deployen. Committet wird nur STAND.md: GitHub
 # deaktiviert Zeitpläne in öffentlichen Repos nach 60 Tagen ohne Repo-Aktivität,
 # ohne Commit würden die Kacheln nach ~2 Monaten still veralten.
@@ -101,8 +101,15 @@ jobs:
 
       - name: Merge
         run: |
-          osmium merge "$WORK"/filtered/*.osm.pbf -O -o "$WORK/europe-filtered.osm.pbf"
+          # merge entfernt Grenz-Duplikate nur bei gleicher ID + Version. Die
+          # Extrakte haben aber leicht unterschiedliche Stände, also bleiben
+          # geänderte Grenzobjekte doppelt drin, und osmium export bricht ab
+          # ("Node ID twice in input"). time-filter ohne Zeitpunkt behandelt
+          # die Datei als History und behält je Objekt nur die neueste Version.
+          osmium merge "$WORK"/filtered/*.osm.pbf -O -o "$WORK/merged.osm.pbf"
           rm -rf "$WORK/filtered"
+          osmium time-filter "$WORK/merged.osm.pbf" -O -o "$WORK/europe-filtered.osm.pbf"
+          rm "$WORK/merged.osm.pbf"
           osmium fileinfo -e "$WORK/europe-filtered.osm.pbf" | grep -A3 'Number of nodes'
 
       - name: Build tiles
