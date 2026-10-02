@@ -118,8 +118,10 @@ async function handleSummarize(body: AiRequest, req: Request, origin: string | n
     if (supabase) await writeCachedSummary(supabase, cacheKey, summary)
     return jsonResponse({ summary }, 200, origin)
   } catch (err) {
+    // 502 instead of a silent { summary: null } so a dead provider shows up in
+    // the network tab; the client hides the block on any non-2xx anyway.
     console.error('AI summarize failed:', err)
-    return jsonResponse({ summary: null }, 200, origin)
+    return errorResponse('AI provider error', 502, origin)
   }
 }
 
@@ -205,14 +207,19 @@ async function handleChat(body: AiRequest, req: Request, origin: string | null):
   ]
 
   let parsed = await askChat(messages)
-  if (!parsed) {
+  if (parsed === 'invalid') {
     // one corrective retry — strict JSON only
     parsed = await askChat([
       ...messages,
       { role: 'system', content: 'Deine letzte Antwort war kein gültiges JSON. Antworte NUR mit dem geforderten JSON-Objekt.' },
     ])
   }
-  if (!parsed) {
+  // Provider down (expired key, quota, unknown model) is not the user's fault —
+  // don't ask them to rephrase. No retry: the same call would fail again.
+  if (parsed === 'provider') {
+    return jsonResponse({ status: 'error', reply: 'Die KI-Suche ist gerade nicht erreichbar.', intent: null }, 200, origin)
+  }
+  if (parsed === 'invalid') {
     return jsonResponse({ status: 'clarify', reply: 'Das habe ich nicht verstanden – kannst du es anders formulieren?', intent: null }, 200, origin)
   }
   return jsonResponse(parsed, 200, origin)
@@ -220,21 +227,22 @@ async function handleChat(body: AiRequest, req: Request, origin: string | null):
 
 interface ChatReply { status: string; reply: string; intent: unknown }
 
-async function askChat(messages: ChatMessage[]): Promise<ChatReply | null> {
+/** 'provider' = the AI call itself failed; 'invalid' = it answered, but unusably. */
+async function askChat(messages: ChatMessage[]): Promise<ChatReply | 'provider' | 'invalid'> {
   let text: string
   try {
     text = await chatCompletion(messages, { maxTokens: 500, temperature: 0.3, jsonObject: true })
   } catch (err) {
     console.error('AI chat failed:', err)
-    return null
+    return 'provider'
   }
   const obj = extractJsonObject(text)
-  if (!obj) return null
+  if (!obj) return 'invalid'
 
   const status = typeof obj['status'] === 'string' ? obj['status'] : ''
-  if (status !== 'clarify' && status !== 'ready' && status !== 'offtopic') return null
+  if (status !== 'clarify' && status !== 'ready' && status !== 'offtopic') return 'invalid'
   const reply = typeof obj['reply'] === 'string' ? obj['reply'].slice(0, 600) : ''
-  if (!reply) return null
+  if (!reply) return 'invalid'
 
   // Pass intent through verbatim — the client does the hard allowlist validation.
   return { status, reply, intent: status === 'ready' ? (obj['intent'] ?? null) : null }
