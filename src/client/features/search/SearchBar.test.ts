@@ -54,7 +54,8 @@ describe('SearchBar', () => {
       expect(vi.mocked(fetch)).toHaveBeenCalled()
     })
     const url = String(vi.mocked(fetch).mock.calls[0]?.[0])
-    expect(url).toContain('/api/geocode')
+    expect(url).toContain('nominatim.openstreetmap.org/search')
+    expect(url).not.toContain('/api/geocode')
     expect(url).toContain('M%C3%BCnchen')
     void sb
   })

@@ -50,7 +50,7 @@ import { createPoiRefresher } from './poiRefresher.js'
 import { initImport } from './importWiring.js'
 import { initCustomPois } from './customPoiWiring.js'
 import { initAuthSync } from './authWiring.js'
-import { API_BASE, apiUrl } from '@/core/config.js'
+import { geocode } from '@/core/nominatim.js'
 import {
   SVG_STAR, SVG_NOTE, SVG_USER, SVG_TRASH, SVG_INFO, SVG_UPLOAD, SVG_SHIELD, SVG_BUILDING, SVG_HELP, SVG_LEAF,
 } from './icons.js'
@@ -357,14 +357,9 @@ async function init() {
     for (const def of intent.adHocFilters) filterStore.put(def)
 
     if (intent.place) {
-      try {
-        const res = await fetch(apiUrl(`/api/geocode?q=${encodeURIComponent(intent.place)}&limit=1`))
-        if (res.ok) {
-          const hits = await res.json() as Array<{ lat: string; lon: string }>
-          const hit = hits[0]
-          if (hit) mapService.setCenter(Number(hit.lat), Number(hit.lon), 12)
-        }
-      } catch { /* filters still apply even if geocoding fails */ }
+      // geocode() resolves [] on failure — filters still apply either way.
+      const [hit] = await geocode(intent.place, { limit: 1 })
+      if (hit) mapService.setCenter(Number(hit.lat), Number(hit.lon), 12)
     }
     void refresh()
   }
@@ -427,7 +422,6 @@ async function init() {
   // ── Google Maps Import ──────────────────────────────────────────────────────
   const importHandle = initImport({
     customPoiStore: customPois.store,
-    apiBase: API_BASE,
     setStatus, flashStatus, flashInfo,
     refreshCustomMarkers: customPois.refreshMarkers,
   })
