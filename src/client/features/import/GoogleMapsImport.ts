@@ -168,28 +168,6 @@ export interface Geocoder {
   geocode(name: string): Promise<{ lat: number; lon: number } | null>
 }
 
-export function createNominatimGeocoder(apiBase: string): Geocoder {
-  const base = apiBase.replace(/\/+$/, '')
-  return {
-    async geocode(name) {
-      try {
-        const res = await fetch(`${base}/api/geocode?q=${encodeURIComponent(name)}`)
-        if (!res.ok) return null
-        const data: unknown = await res.json()
-        if (Array.isArray(data) && data.length > 0) {
-          const r = data[0] as Record<string, unknown>
-          const lat = typeof r['lat'] === 'string' ? parseFloat(r['lat']) : NaN
-          const lon = typeof r['lon'] === 'string' ? parseFloat(r['lon']) : NaN
-          if (isFinite(lat) && isFinite(lon)) return { lat, lon }
-        }
-        return null
-      } catch {
-        return null
-      }
-    },
-  }
-}
-
 // ── Unified import ─────────────────────────────────────────────────────────────
 
 export interface ImportOptions {

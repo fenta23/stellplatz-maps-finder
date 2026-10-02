@@ -1,18 +1,12 @@
 import './search.css'
 import type { LatLngBounds } from '@/features/pois/OverpassClient.js'
-import { apiUrl } from '@/core/config.js'
+import { geocode, type NominatimResult } from '@/core/nominatim.js'
 import { createEventScope, type EventScope } from '@/core/events.js'
 
 export type PlaceSelectedEvent = {
   readonly lat: number
   readonly lng: number
   readonly name: string
-}
-
-interface NominatimResult {
-  readonly lat: string
-  readonly lon: string
-  readonly display_name: string
 }
 
 export class SearchBar {
@@ -121,23 +115,10 @@ export class SearchBar {
     this.input.blur() // dismiss the on-screen keyboard
   }
 
-  private async fetchResults(): Promise<NominatimResult[]> {
+  private async fetchResults(): Promise<readonly NominatimResult[]> {
     const q = this.input.value.trim()
     if (q.length < 2) return []
-
-    const params = new URLSearchParams({ q, limit: '6' })
-    if (this.bounds) {
-      // Nominatim viewbox: left(west),top(north),right(east),bottom(south)
-      params.set('viewbox', `${this.bounds.west},${this.bounds.north},${this.bounds.east},${this.bounds.south}`)
-    }
-
-    try {
-      const res = await fetch(apiUrl(`/api/geocode?${params}`))
-      if (!res.ok) return []
-      return await res.json() as NominatimResult[]
-    } catch {
-      return []
-    }
+    return geocode(q, { limit: 6, ...(this.bounds ? { viewbox: this.bounds } : {}) })
   }
 
   private selectResult(r: NominatimResult): void {
@@ -149,7 +130,7 @@ export class SearchBar {
     }
   }
 
-  private showDropdown(results: NominatimResult[]): void {
+  private showDropdown(results: readonly NominatimResult[]): void {
     this.dropdown.innerHTML = ''
     if (results.length === 0) { this.hideDropdown(); return }
 

@@ -1,12 +1,12 @@
 import '@/features/import/import.css'
 import { clone, ref } from '@/core/template.js'
+import { geocode } from '@/core/nominatim.js'
 import { importGoogleMapsFile, type Geocoder } from '@/features/import/GoogleMapsImport.js'
 import type { ICustomPoiStore } from '@/features/custom-pois/CustomPoiStore.js'
 import importPanelHtml from '@/features/import/importPanel.html?raw'
 
 export interface ImportWiringDeps {
   readonly customPoiStore: ICustomPoiStore
-  readonly apiBase: string
   readonly setStatus: (msg: string) => void
   readonly flashStatus: (msg: string) => void
   readonly flashInfo: (msg: string) => void
@@ -18,7 +18,7 @@ export interface ImportHandle {
 }
 
 export function initImport(deps: ImportWiringDeps): ImportHandle {
-  const { customPoiStore, apiBase, setStatus, flashStatus, flashInfo, refreshCustomMarkers } = deps
+  const { customPoiStore, setStatus, flashStatus, flashInfo, refreshCustomMarkers } = deps
 
   const panel = clone(importPanelHtml)
   panel.classList.remove('open')
@@ -32,16 +32,11 @@ export function initImport(deps: ImportWiringDeps): ImportHandle {
 
   const geocoder: Geocoder = {
     async geocode(name) {
-      const res = await fetch(`${apiBase.replace(/\/+$/, '')}/api/geocode?q=${encodeURIComponent(name)}`)
-      if (!res.ok) return null
-      const data: unknown = await res.json()
-      if (Array.isArray(data) && data.length > 0) {
-        const r = data[0] as Record<string, unknown>
-        const lat = typeof r['lat'] === 'string' ? parseFloat(r['lat']) : NaN
-        const lon = typeof r['lon'] === 'string' ? parseFloat(r['lon']) : NaN
-        if (isFinite(lat) && isFinite(lon)) return { lat, lon }
-      }
-      return null
+      const [r] = await geocode(name, { limit: 1 })
+      if (!r) return null
+      const lat = parseFloat(r.lat)
+      const lon = parseFloat(r.lon)
+      return isFinite(lat) && isFinite(lon) ? { lat, lon } : null
     },
   }
 
