@@ -1,0 +1,104 @@
+/* ── Version-2.0-Overlay ── */
+.whats-new {
+    position: fixed;
+    inset: 0;
+    z-index: 1900;
+    background: rgba(28, 25, 21, 0.55);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    box-sizing: border-box;
+}
+.whats-new.open { display: flex; }
+
+.whats-new-card {
+    position: relative;
+    z-index: 1;
+    background: var(--bg);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-lg);
+    width: 100%;
+    max-width: 440px;
+    max-height: calc(100dvh - 32px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    animation: whats-new-pop 0.35s ease-out;
+}
+.whats-new-hero {
+    background: linear-gradient(160deg, var(--accent-strong) 0%, #3d4d34 100%);
+    color: #fff;
+    padding: 24px 20px 20px;
+    text-align: center;
+}
+.whats-new-hero h2 { margin: 8px 0 0; font-size: 1.6rem; }
+.whats-new-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: var(--radius-pill);
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #ffffffcc;
+}
+.whats-new-body { padding: 18px 20px 20px; display: flex; flex-direction: column; gap: 16px; }
+.whats-new-main {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    padding: 14px;
+    border-radius: var(--radius);
+    background: rgba(75, 86, 64, 0.1);
+    color: var(--accent-strong);
+}
+.whats-new-main p { margin: 4px 0 0; font-size: 0.9rem; opacity: 0.85; }
+.whats-new-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.whats-new-list li { display: flex; gap: 10px; align-items: center; font-size: 0.95rem; }
+.whats-new-btn {
+    border: 0;
+    border-radius: var(--radius-pill);
+    background: var(--accent-strong);
+    color: #fff;
+    font: inherit;
+    font-weight: 600;
+    padding: 12px 20px;
+    cursor: pointer;
+}
+
+/* Konfetti: nur transform/opacity, läuft einmal */
+.whats-new-confetti {
+    position: absolute;
+    inset: 0;
+    z-index: 2; /* über der Karte (z-index 1), Klicks gehen durch */
+    overflow: hidden;
+    pointer-events: none;
+}
+.confetti-piece {
+    position: absolute;
+    top: -20px;
+    left: var(--x);
+    width: 8px;
+    height: 14px;
+    background: var(--color);
+    opacity: 0;
+    animation: confetti-fall var(--dur) var(--delay) ease-in forwards;
+}
+.confetti-piece.round { width: 10px; height: 10px; border-radius: 50%; }
+
+@keyframes confetti-fall {
+    0% { opacity: 1; transform: translate3d(0, 0, 0) rotate(0deg); }
+    85% { opacity: 1; }
+    100% { opacity: 0; transform: translate3d(var(--dx), 105dvh, 0) rotate(var(--rot)); }
+}
+@keyframes whats-new-pop {
+    from { opacity: 0; transform: scale(0.94); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .whats-new-card { animation: none; }
+    .whats-new-confetti { display: none; }
+}

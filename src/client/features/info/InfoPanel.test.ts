@@ -9,7 +9,7 @@ describe("InfoPanel", () => {
     new InfoPanel(c);
     await flush();
     expect(c.textContent).toContain("Camp Finder");
-    expect(c.textContent).toContain("v0.9.");
+    expect(c.textContent).toContain("v2.0.");
     expect(c.textContent).toContain("Changelog");
   });
 

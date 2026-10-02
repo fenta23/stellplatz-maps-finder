@@ -1,10 +1,9 @@
 import './info.css'
 import { clone, ref } from '@/core/template.js'
 import { createEventScope, type EventScope } from '@/core/events.js'
+import { APP_VERSION } from '@/core/version.js'
 import panelHtml from './infoPanel.html?raw'
 import changelogRaw from '../../../../CHANGELOG.md?raw'
-
-const VERSION = '0.9.1'
 
 // DSGVO-Verantwortlicher: per Build-Env injiziert (GitHub Secret), damit der
 // Klarname nicht im öffentlichen Repo steht. Auf der Live-Seite ist er sichtbar
@@ -44,7 +43,7 @@ export class InfoPanel {
 
   constructor(container: HTMLElement) {
     this.panel = clone(panelHtml)
-    ref(this.panel, 'version').textContent = `v${VERSION}`
+    ref(this.panel, 'version').textContent = `v${APP_VERSION}`
     this.panel.querySelectorAll('[data-ref="controller"]').forEach(el => { el.textContent = CONTROLLER })
     ref(this.panel, 'changelog').innerHTML = renderChangelog(changelogRaw)
     this.panel.querySelector('.fav-close')?.addEventListener('click', () => this.close())
