@@ -18,6 +18,9 @@ npm run build     # → dist/client/
 - API-Calls via `apiUrl()` (`src/client/core/config.ts`): relativ per Vite-Proxy, absolut per `VITE_API_BASE`
 - Kein SW-Caching für API/Tiles
 
+## Troubleshooting
+Bekannte Störungen (OSM-Cloud-IP-Block, KI-Provider, Migrationen): `docs/troubleshooting.md`
+
 ## Dev ohne Docker
 `.env` mit `VITE_API_BASE=https://<ref>.supabase.co/functions/v1` setzen → API geht direkt zur Production.
 
