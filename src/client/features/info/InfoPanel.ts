@@ -55,6 +55,12 @@ export class InfoPanel {
     this.events.on(document, 'keydown', e => { if (e.key === 'Escape' && this.isOpen()) this.close() })
   }
 
+  /** Stand der POI-Kacheln (manifest.date, YYYY-MM-DD) in der Kartendaten-Attribution. */
+  setPoiDataDate(date: string): void {
+    const [y, m, d] = date.split('-')
+    ref(this.panel, 'poi-data-date').textContent = y && m && d ? `, Stand ${d}.${m}.${y}` : ''
+  }
+
   isOpen(): boolean { return this.panel.classList.contains('open') }
 
   open(): void { this.panel.classList.add('open') }

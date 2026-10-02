@@ -8,7 +8,7 @@
 ```
 npm install       # deps
 npm run dev       # Vite :5173 (API via VITE_API_BASE aus .env oder lokaler Proxy :54321)
-npm test          # unit tests (Vitest, 482 tests)
+npm test          # unit tests (Vitest, 809 tests)
 npm run test:int  # integration tests vs Edge Function
 npm run build     # → dist/client/
 ```
@@ -31,7 +31,7 @@ core/       config.ts (apiUrl), template.ts (clone/ref), bind.ts (renderList)
 features/
   menu/       SideMenu + clearAppCache
   map/        MapService + leafletAdapter + locationMarker
-  pois/       OverpassClient + PoiMarkerManager + poiMeta
+  pois/       OverpassClient + poiTiles (statische Kacheln) + PoiMarkerManager + poiMeta
   poi-detail/ PoiDetailPanel + poiData (Bilder, Nearby, Notes)
   routing/    DirectionsService
   search/     SearchBar
@@ -54,6 +54,11 @@ _shared/    utils.ts (CORS, Query-Validation, BBox-Snap, Supabase-Client, Rate-L
 - **POI-Cache**: Supabase Postgres (Tabelle `poi_cache`, BBox-Snap 0.2°, TTL 30 Tage)
 - **CORS**: Erlaubt `fenta23.github.io`, `capacitor://localhost`, `http://localhost:5173` + `ALLOWED_ORIGINS`-Env
 - Deploy: `npx supabase functions deploy api --no-verify-jwt`
+
+## POI-Kacheln
+- Eingebaute Filter kommen aus statischen Kacheln (Daten-Repo `fenta23/camp-finder-data`, wöchentlich aus Geofabrik), eigene/KI-Filter live via Overpass; Fallback auf Overpass
+- Build: `scripts/poi-tiles/` (importiert `DEFAULT_FILTERS`/`classifyElement`), Workflow-Vorlage in `scripts/poi-tiles/data-repo/`
+- Details + lokaler Test: `docs/troubleshooting.md#poi-kacheln`
 
 ## POI Types (Overpass)
 - Parking → `amenity=parking`

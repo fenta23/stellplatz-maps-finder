@@ -8,6 +8,8 @@ Hier stehen Störungen, die schon einmal aufgetreten sind: woran man sie erkennt
 |---|---|---|
 | Ortssuche findet nichts, `/api/geocode` → `403` | Nominatim blockt Cloud-IPs | [OSM-Dienste blocken Cloud-IPs](#osm-dienste-blocken-cloud-ips) |
 | Karte bleibt leer, keine POI-Marker | Overpass blockt Cloud-IPs | [OSM-Dienste blocken Cloud-IPs](#osm-dienste-blocken-cloud-ips) |
+| Eingebaute POIs laden wieder langsam (9–19 s), Konsole: `POI tiles failed, falling back to Overpass` | POI-Kacheln nicht erreichbar | [POI-Kacheln](#poi-kacheln) |
+| POI-Stand im Info-Panel älter als eine Woche | Wöchentlicher Kachel-Build gescheitert | [POI-Kacheln](#poi-kacheln) |
 | KI-Suche: „Die KI-Suche ist gerade nicht erreichbar.“ | KI-Provider lehnt ab (Key, Guthaben, Secrets) | [KI-Provider-Ausfall](#ki-provider-ausfall) |
 | POI-Zusammenfassung fehlt, `/api/ai` → `502` | dto. | [KI-Provider-Ausfall](#ki-provider-ausfall) |
 | KI-Suche: „Das habe ich nicht verstanden …“ | Modell liefert unbrauchbares JSON (seit #90 kein Provider-Fehler mehr) | Prompt bzw. Modell prüfen |
@@ -41,6 +43,44 @@ Kommt lokal `200` und über die Edge Function `403`, ist es dieser Block.
 `/api/overpass`, `/api/nearby` und `/api/geocode` gibt es serverseitig noch, der Client ruft sie aber nicht mehr auf. Beim Import gilt weiter die Nominatim-Policy von höchstens 1 Anfrage pro Sekunde.
 
 Nicht betroffen sind bisher `/api/route`, `/api/mapillary` und `/api/ai`. Map-Tiles laufen grundsätzlich nie über den Proxy.
+
+---
+
+## POI-Kacheln
+
+**Aufbau:** Die eingebauten Filter (Parkplatz, Camper, Camping, Entsorgung, Wasser, Klettern, Hütte, Schutzhütte) kommen nicht mehr live von Overpass. Sie werden einmal pro Woche aus den Geofabrik-Extrakten vorberechnet und als statische Kacheln im Daten-Repo [`fenta23/camp-finder-data`](https://github.com/fenta23/camp-finder-data) auf GitHub Pages ausgeliefert. Eigene und KI-Filter fragen weiter live bei Overpass an.
+
+| Teil | Ort |
+|---|---|
+| Build-Skript (Filter → Kacheln) | `scripts/poi-tiles/build.ts`, `tiles.ts` |
+| Workflow + README des Daten-Repos (Vorlage) | `scripts/poi-tiles/data-repo/` |
+| Client | `src/client/features/pois/poiTiles.ts`, `app/poiRefresher.ts` |
+| Basis-URL | `VITE_POI_TILES_BASE`, Default in `src/client/core/config.ts` |
+
+**Fallback:** Schlagen Manifest oder Kachel fehl (Netz, `404`, Timeout 5 s bzw. 15 s), laufen die eingebauten Filter für den Ausschnitt wie früher über Overpass. Nach einem gescheiterten Manifest versucht der Client es erst nach 60 s erneut und geht bis dahin direkt zu Overpass. Die App bleibt also benutzbar, ist dann aber so langsam wie vor den Kacheln.
+
+**Diagnose:**
+
+```bash
+curl -sS https://fenta23.github.io/camp-finder-data/manifest.json | jq '{version, date, parking: (.tiles.parking|length), rest: (.tiles.rest|length)}'
+```
+
+- Manifest fehlt oder ist alt → Actions-Log des Workflows *Build POI tiles* im Daten-Repo ansehen und ihn per *Run workflow* neu starten.
+- Ein neuer Build ersetzt das Verzeichnis der alten Version. Offene Tabs bekommen dann `404`, laden das Manifest einmal neu und holen die neue Version.
+
+**Lokal testen:**
+
+```bash
+npx tsx scripts/poi-tiles/build.ts --expressions > /tmp/expr.txt
+osmium tags-filter sachsen-latest.osm.pbf -e /tmp/expr.txt -O -o /tmp/filtered.osm.pbf
+npx tsx scripts/poi-tiles/build.ts /tmp/filtered.osm.pbf /tmp/tiles
+# beliebiger statischer Server mit CORS auf :3000, dann:
+VITE_POI_TILES_BASE=http://localhost:3000 npm run dev
+```
+
+Die Ausdrücke als Datei übergeben (`-e`), nicht per `$(…)`: zsh trennt unquotierte Variablen nicht an Leerzeichen, osmium bekommt dann einen einzigen kaputten Ausdruck und filtert fast alles weg.
+
+**Bekannte Lücke:** `osmium export` baut Flächen nur aus Multipolygon-Relationen. Andere Relationen (z. B. viele `sport=climbing`-Sites mit `type=site`) fehlen in den Kacheln.
 
 ---
 

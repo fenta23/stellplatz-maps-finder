@@ -43,10 +43,20 @@ export interface OsmElement {
 
 export interface OsmPoi {
   readonly id: number
+  /**
+   * OSM element type. Node and way ids overlap, so identity is `poiKey()`.
+   * Optional: favorites/notes/custom POIs rebuild an OsmPoi without it.
+   */
+  readonly osmType?: 'node' | 'way' | 'relation'
   readonly type: PoiType
   readonly lat: number
   readonly lon: number
   readonly tags: OsmTags
+}
+
+/** Unique POI identity across element types (`way/123` ≠ `node/123`). */
+export function poiKey(poi: Pick<OsmPoi, 'id' | 'osmType'>): string {
+  return `${poi.osmType ?? 'node'}/${poi.id}`
 }
 
 /** Build the Overpass query from the given filter definitions (data-driven). */
@@ -76,16 +86,19 @@ function elementToLatLon(el: OsmElement): { lat: number; lon: number } | null {
 }
 
 function parseElements(data: { elements?: OsmElement[] }, filters: readonly FilterDef[]): readonly OsmPoi[] {
-  const seen = new Set<number>()
+  const seen = new Set<string>()
   return (data.elements ?? [])
-    .filter(el => !seen.has(el.id) && seen.add(el.id))
+    .filter(el => {
+      const key = `${el.type}/${el.id}`
+      return !seen.has(key) && seen.add(key)
+    })
     .map((el): OsmPoi | null => {
       const pos = elementToLatLon(el)
       if (!pos) return null
       // Classify against the same filters that built the query; first match wins.
       const type = classifyElement(el.tags, el.type, filters)
       if (type === null) return null
-      return { id: el.id, type, lat: pos.lat, lon: pos.lon, tags: el.tags }
+      return { id: el.id, osmType: el.type, type, lat: pos.lat, lon: pos.lon, tags: el.tags }
     })
     .filter(notNullUndefined)
 }

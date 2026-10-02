@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { fetchPois, buildQuery, isPrivateParking } from './OverpassClient.js'
+import { fetchPois, buildQuery, isPrivateParking, poiKey } from './OverpassClient.js'
 import type { LatLngBounds, OsmPoi } from './OverpassClient.js'
 import { DEFAULT_FILTERS, type FilterDef } from '@/features/filters/filterModel.js'
 
@@ -193,5 +193,23 @@ describe('fetchPois', () => {
     })
     const result = await fetchPois(BOUNDS, [f('parking')])
     expect(result).toHaveLength(1)
+  })
+
+  it('keeps a node and a way that share the same numeric id (regression)', async () => {
+    stubFetch(200, {
+      elements: [
+        { type: 'node', id: 9, lat: 48.1, lon: 11.1, tags: { amenity: 'parking' } },
+        { type: 'way', id: 9, center: { lat: 48.2, lon: 11.2 }, tags: { amenity: 'parking' } },
+      ],
+    })
+    const result = await fetchPois(BOUNDS, [f('parking')])
+    expect(result.map(poiKey)).toEqual(['node/9', 'way/9'])
+  })
+})
+
+describe('poiKey', () => {
+  it('distinguishes element types, defaults to node', () => {
+    expect(poiKey({ id: 1, osmType: 'way' })).toBe('way/1')
+    expect(poiKey({ id: 1 })).toBe('node/1')
   })
 })

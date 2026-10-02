@@ -9,6 +9,8 @@ import { createLocationMarker } from '@/features/map/locationMarker.js'
 import { panPoiIntoView } from '@/features/map/panIntoView.js'
 import { PoiMarkerManager } from '@/features/pois/PoiMarkerManager.js'
 import type { OsmPoi } from '@/features/pois/OverpassClient.js'
+import { createPoiTileSource } from '@/features/pois/poiTiles.js'
+import { POI_TILES_BASE } from '@/core/config.js'
 import { DirectionsService, type RoutingMode } from '@/features/routing/DirectionsService.js'
 import { PoiDetailPanel } from '@/features/poi-detail/PoiDetailPanel.js'
 import { collectTagImages, loadMapillaryImages, loadNearby, loadNotes } from '@/features/poi-detail/poiData.js'
@@ -46,7 +48,7 @@ import { HelpSeenStore } from '@/features/help/HelpSeenStore.js'
 import { ResponsibilityPanel } from '@/features/responsibility/ResponsibilityPanel.js'
 import { createSession } from './session.js'
 import { createSelection } from './selection.js'
-import { createPoiRefresher } from './poiRefresher.js'
+import { createPoiRefresher, fetchSignature } from './poiRefresher.js'
 import { initImport } from './importWiring.js'
 import { initCustomPois } from './customPoiWiring.js'
 import { initAuthSync } from './authWiring.js'
@@ -261,12 +263,17 @@ async function init() {
   }
 
   // ── POI refresh on map changes ──────────────────────────────────────────────
+  // Built-in filters from static tiles, user/AI filters live via Overpass.
+  const poiTiles = createPoiTileSource(POI_TILES_BASE)
+  const getOsmFilters = () => filterStore.list().filter(f => f.kind === 'osm' && !f.hidden && f.selectors.length > 0)
   const { refresh } = createPoiRefresher({
     getBounds: () => mapService.getBounds(),
     setMarkers: pois => markerManager.updatePois(pois),
     setStatus,
-    getOsmFilters: () => filterStore.list().filter(f => f.kind === 'osm' && !f.hidden && f.selectors.length > 0),
+    getOsmFilters,
+    tiles: poiTiles,
   })
+  let lastFetchSignature = fetchSignature(getOsmFilters())
 
   let refreshTimer: ReturnType<typeof setTimeout> | undefined
   const refreshDebounced = () => {
@@ -280,6 +287,12 @@ async function init() {
   setTimeout(() => void refresh(), 800)
 
   filterStore.onChange(() => {
+    // A new/edited filter or parking switched on needs data not loaded yet.
+    const sig = fetchSignature(getOsmFilters())
+    if (sig !== lastFetchSignature) {
+      lastFetchSignature = sig
+      refreshDebounced()
+    }
     markerManager.setActiveTypes(osmFilterIds())
     markerManager.setStyleResolver(styleResolver)
     const personal = filterStore.get(PERSONAL_FILTER_ID)
@@ -428,6 +441,7 @@ async function init() {
 
   // ── Side menu ───────────────────────────────────────────────────────────────
   const infoPanel = new InfoPanel(document.body)
+  poiTiles.manifest().then(m => infoPanel.setPoiDataDate(m.date)).catch(() => { /* Overpass fallback, no date */ })
   const datenschutzPanel = new DatenschutzPanel(document.body)
   const impressumPanel = new ImpressumPanel(document.body)
   const responsibilityPanel = new ResponsibilityPanel(document.body)
