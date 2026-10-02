@@ -1,0 +1,129 @@
+# Wöchentlicher Build der statischen POI-Kacheln (Europa) für Camp Finder.
+# Lebt im Daten-Repo fenta23/camp-finder-data; die Vorlage liegt in
+# stellplatz-maps-finder/scripts/poi-tiles/data-repo/.
+#
+# Pro Land: Geofabrik-Extrakt laden → osmium tags-filter → Original löschen
+# (europe-latest.osm.pbf mit 35 GB passt nicht auf den Runner). Danach alles
+# mergen (dedupliziert Grenzobjekte: gleiche ID + Version), Kacheln bauen und
+# direkt als Pages-Artefakt deployen. Committet wird nur STAND.md: GitHub
+# deaktiviert Zeitpläne in öffentlichen Repos nach 60 Tagen ohne Repo-Aktivität,
+# ohne Commit würden die Kacheln nach ~2 Monaten still veralten.
+
+name: Build POI tiles
+
+on:
+  schedule:
+    - cron: '17 3 * * 1' # Montag 03:17 UTC (Geofabrik-Extrakte sind dann frisch)
+  workflow_dispatch:
+
+permissions:
+  contents: write # STAND.md (Keepalive)
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      # Sammelregionen, die sich mit Ländern überschneiden (kosten nur Zeit).
+      SKIP_REGIONS: 'alps dach britain-and-ireland united-kingdom'
+      WORK: /mnt/work
+    steps:
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo mkdir -p "$WORK" && sudo chown "$USER" "$WORK"
+          df -h / /mnt
+
+      - name: Checkout app (filter definitions + build script)
+        uses: actions/checkout@v4
+        with:
+          repository: fenta23/stellplatz-maps-finder
+          path: app
+
+      - name: Checkout data repo (README)
+        uses: actions/checkout@v4
+        with:
+          path: data
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q osmium-tool
+          osmium --version | head -1
+          cd app && npm ci
+
+      - name: Download + filter countries
+        working-directory: app
+        run: |
+          npx tsx scripts/poi-tiles/build.ts --expressions > "$WORK/expressions.txt"
+          cat "$WORK/expressions.txt"
+          mkdir -p "$WORK/filtered"
+          curl -sSfL --retry 5 https://download.geofabrik.de/index-v1-nogeom.json -o "$WORK/index.json"
+          jq -r --arg skip "$SKIP_REGIONS" '
+            ($skip | split(" ")) as $s
+            | .features[].properties
+            | select(.parent == "europe" and (.id as $id | $s | index($id) | not))
+            | "\(.id) \(.urls.pbf)"' "$WORK/index.json" > "$WORK/regions.txt"
+          echo "$(wc -l < "$WORK/regions.txt") Regionen"
+          while read -r id url; do
+            start=$(date +%s)
+            curl -sSfL --retry 5 --retry-delay 30 -o "$WORK/in.osm.pbf" "$url"
+            size=$(du -h "$WORK/in.osm.pbf" | cut -f1)
+            osmium tags-filter "$WORK/in.osm.pbf" -e "$WORK/expressions.txt" -O -o "$WORK/filtered/$id.osm.pbf"
+            rm "$WORK/in.osm.pbf"
+            echo "$id: $size → $(du -h "$WORK/filtered/$id.osm.pbf" | cut -f1) in $(( $(date +%s) - start ))s"
+          done < "$WORK/regions.txt"
+
+      - name: Merge
+        run: |
+          osmium merge "$WORK"/filtered/*.osm.pbf -O -o "$WORK/europe-filtered.osm.pbf"
+          rm -rf "$WORK/filtered"
+          osmium fileinfo -e "$WORK/europe-filtered.osm.pbf" | grep -A3 'Number of nodes'
+
+      - name: Build tiles
+        working-directory: app
+        env:
+          NODE_OPTIONS: --max-old-space-size=12288
+          # ~50 % der erwarteten Europa-Mengen (3,9 Mio. / 0,3 Mio.): ein kaputter
+          # Filter-Schritt bricht hier ab, statt leere Kacheln zu deployen — die
+          # alte Version bleibt dann online.
+          POI_TILES_MIN_PARKING: 2000000
+          POI_TILES_MIN_REST: 150000
+        run: |
+          VERSION=$(date -u +%F)
+          npx tsx scripts/poi-tiles/build.ts "$WORK/europe-filtered.osm.pbf" "$WORK/site" "$VERSION"
+          cp ../data/README.md "$WORK/site/README.md"
+          touch "$WORK/site/.nojekyll"
+          du -sh "$WORK/site"; du -sh "$WORK/site/$VERSION"/*
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: /mnt/work/site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Commit STAND.md (keepalive)
+        working-directory: data
+        run: |
+          jq -r '"# Stand\n\n- Build: \(.date) (`\(.version)`)\n- Parkplätze: \(.counts.parking) POIs in \(.tiles.parking | length) Kacheln\n- Rest: \(.counts.rest) POIs in \(.tiles.rest | length) Kacheln\n\nDaten © OpenStreetMap-Mitwirkende, ODbL."' \
+            "$WORK/site/manifest.json" > STAND.md
+          cat STAND.md
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add STAND.md
+          git diff --cached --quiet || { git commit -m "Stand $(jq -r .date "$WORK/site/manifest.json")" && git push; }
