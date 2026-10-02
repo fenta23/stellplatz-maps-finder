@@ -119,6 +119,29 @@ describe('createPoiTileSource', () => {
     expect(pois).toHaveLength(3)
   })
 
+  it('a superseded refresh does not cancel downloads the next one needs (regression)', async () => {
+    // Real fetch semantics: an aborted signal rejects the request.
+    const inner = fakeServer(files)
+    const fetchFn = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      await new Promise(r => setTimeout(r, 5))
+      if (init?.signal?.aborted) throw new DOMException('aborted', 'AbortError')
+      return inner(url, init)
+    }) as unknown as typeof fetch & ReturnType<typeof vi.fn>
+    const src = createPoiTileSource('https://tiles.test', fetchFn)
+    const wanted = new Map([['rest', ['203_51']]] as const)
+
+    const first = new AbortController()
+    const p1 = src.fetchTilePois(wanted, builtins, first.signal)
+    first.abort() // map moved again while manifest + tile were loading
+    const p2 = src.fetchTilePois(wanted, builtins, new AbortController().signal)
+
+    await expect(p1).rejects.toMatchObject({ name: 'AbortError' })
+    expect(await p2).toHaveLength(3)
+    const urls = fetchFn.mock.calls.map(c => String(c[0]))
+    expect(urls.filter(u => u.endsWith('manifest.json'))).toHaveLength(1)
+    expect(urls.filter(u => u.endsWith('203_51.json.gz'))).toHaveLength(1)
+  })
+
   it('rejects an invalid manifest', async () => {
     const src = createPoiTileSource('https://tiles.test', fakeServer({ '/manifest.json': json({ hello: 1 }) }))
     await expect(src.manifest()).rejects.toThrow(/invalid manifest/)

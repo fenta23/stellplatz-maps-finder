@@ -26,8 +26,20 @@ const TILE_TIMEOUT_MS = 15_000
 // instead of paying a request (or a 5 s timeout) on every pan.
 const MANIFEST_RETRY_MS = 60_000
 
-const withTimeout = (ms: number, signal?: AbortSignal): AbortSignal =>
-  signal ? AbortSignal.any([signal, AbortSignal.timeout(ms)]) : AbortSignal.timeout(ms)
+/**
+ * Let one caller stop waiting without cancelling the shared download: a newer
+ * refresh (the map moved again) usually needs the very same tiles/manifest.
+ */
+function abandonable<T>(p: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return p
+  const aborted = () => new DOMException('The operation was aborted', 'AbortError')
+  if (signal.aborted) return Promise.reject(aborted())
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(aborted())
+    signal.addEventListener('abort', onAbort, { once: true })
+    p.then(resolve, reject).finally(() => signal.removeEventListener('abort', onAbort))
+  })
+}
 
 const KIND: Readonly<Record<string, OsmElementKind>> = { n: 'node', w: 'way', r: 'relation' }
 
@@ -87,6 +99,19 @@ export function createPoiTileSource(
   let cached: Promise<TileManifest> | null = null
   let failedAt = -Infinity
   const listed = new Map<TileLayer, ReadonlySet<string>>()
+  // Downloads in flight, shared by overlapping refreshes (keyed by URL).
+  const inflight = new Map<string, Promise<unknown>>()
+
+  function getTile(url: string): Promise<unknown> {
+    let p = inflight.get(url)
+    if (!p) {
+      p = getJson(url, { signal: AbortSignal.timeout(TILE_TIMEOUT_MS) })
+      inflight.set(url, p)
+      const done = () => { inflight.delete(url) }
+      p.then(done, done)
+    }
+    return p
+  }
 
   async function getJson(url: string, init: RequestInit): Promise<unknown> {
     const res = await fetchFn(url, init)
@@ -99,7 +124,8 @@ export function createPoiTileSource(
       return Promise.reject(new Error('POI tiles: manifest unavailable (retry later)'))
     }
     // no-cache = revalidate: picks up a new weekly build without a stale day.
-    cached ??= (getJson(`${root}/manifest.json`, { cache: 'no-cache', signal: withTimeout(MANIFEST_TIMEOUT_MS, signal) }) as Promise<TileManifest>)
+    // Shared by all callers, so only its own timeout may cancel it.
+    cached ??= (getJson(`${root}/manifest.json`, { cache: 'no-cache', signal: AbortSignal.timeout(MANIFEST_TIMEOUT_MS) }) as Promise<TileManifest>)
       .then(m => {
         if (!m?.version || !m.cellDeg || !m.tiles) throw new Error('POI tiles: invalid manifest')
         listed.clear()
@@ -108,11 +134,10 @@ export function createPoiTileSource(
       })
       .catch(err => {
         cached = null
-        // A superseded refresh aborting its own request says nothing about the server.
-        if (!signal?.aborted) failedAt = now()
+        failedAt = now()
         throw err
       })
-    return cached
+    return abandonable(cached, signal)
   }
 
   async function fetchTilePois(
@@ -142,8 +167,7 @@ export function createPoiTileSource(
       const present = listed.get(layer)
       for (const key of keys) if (present?.has(key)) urls.push(`${root}/${m.version}/${layer}/${key}.json.gz`)
     }
-    const tileSignal = withTimeout(TILE_TIMEOUT_MS, signal)
-    const bodies = await Promise.all(urls.map(u => getJson(u, { signal: tileSignal })))
+    const bodies = await abandonable(Promise.all(urls.map(getTile)), signal)
     return bodies.flatMap(b => recordsToPois(b as TileRecord[], filters))
   }
 
