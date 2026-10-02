@@ -2,9 +2,9 @@
 # Lebt im Daten-Repo fenta23/camp-finder-data; die Vorlage liegt in
 # stellplatz-maps-finder/scripts/poi-tiles/data-repo/.
 #
-# Pro Land: Geofabrik-Extrakt laden → osmium tags-filter → Original löschen
-# (europe-latest.osm.pbf mit 35 GB passt nicht auf den Runner). Danach alles
-# mergen (dedupliziert Grenzobjekte: gleiche ID + Version), Kacheln bauen und
+# Pro Land (drei parallel): Geofabrik-Extrakt laden → osmium tags-filter →
+# Original löschen (europe-latest.osm.pbf am Stück wäre 35 GB). Danach alles
+# mergen, per time-filter nur die neueste Version je Objekt behalten, Kacheln bauen und
 # direkt als Pages-Artefakt deployen. Committet wird nur STAND.md: GitHub
 # deaktiviert Zeitpläne in öffentlichen Repos nach 60 Tagen ohne Repo-Aktivität,
 # ohne Commit würden die Kacheln nach ~2 Monaten still veralten.
@@ -72,26 +72,44 @@ jobs:
           npx tsx scripts/poi-tiles/build.ts --expressions > "$WORK/expressions.txt"
           cat "$WORK/expressions.txt"
           mkdir -p "$WORK/filtered"
-          curl -sSfL --retry 5 https://download.geofabrik.de/index-v1-nogeom.json -o "$WORK/index.json"
+          curl -sSfL --speed-limit 50000 --speed-time 60 --retry 8 --retry-delay 60 --retry-all-errors \
+            https://download.geofabrik.de/index-v1-nogeom.json -o "$WORK/index.json"
           jq -r --arg skip "$SKIP_REGIONS" '
             ($skip | split(" ")) as $s
             | .features[].properties
             | select(.parent == "europe" and (.id as $id | $s | index($id) | not))
             | "\(.id) \(.urls.pbf)"' "$WORK/index.json" > "$WORK/regions.txt"
           echo "$(wc -l < "$WORK/regions.txt") Regionen"
-          while read -r id url; do
-            start=$(date +%s)
-            curl -sSfL --retry 5 --retry-delay 30 -o "$WORK/in.osm.pbf" "$url"
-            size=$(du -h "$WORK/in.osm.pbf" | cut -f1)
-            osmium tags-filter "$WORK/in.osm.pbf" -e "$WORK/expressions.txt" -O -o "$WORK/filtered/$id.osm.pbf"
-            rm "$WORK/in.osm.pbf"
-            echo "$id: $size → $(du -h "$WORK/filtered/$id.osm.pbf" | cut -f1) in $(( $(date +%s) - start ))s"
-          done < "$WORK/regions.txt"
+          # Ein Land: laden → filtern → Original löschen. Drei parallel (4 Kerne,
+          # max. ~3 × 4,5 GB auf der Platte). curl bricht ab, wenn weniger als
+          # 50 KB/s über 60 s ankommen (Geofabrik hing schon einmal mit offener
+          # Verbindung), und versucht es bis zu 8× neu.
+          cat > "$WORK/region.sh" <<'EOS'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          id=$1 url=$2 tmp="$WORK/in-$1.osm.pbf" start=$(date +%s)
+          curl -sSfL --speed-limit 50000 --speed-time 60 \
+               --retry 8 --retry-delay 60 --retry-all-errors -o "$tmp" "$url"
+          size=$(du -h "$tmp" | cut -f1)
+          osmium tags-filter "$tmp" -e "$WORK/expressions.txt" -O -o "$WORK/filtered/$id.osm.pbf"
+          rm "$tmp"
+          echo "$id: $size → $(du -h "$WORK/filtered/$id.osm.pbf" | cut -f1) in $(( $(date +%s) - start ))s"
+          EOS
+          chmod +x "$WORK/region.sh"
+          xargs -P 3 -L 1 "$WORK/region.sh" < "$WORK/regions.txt"
+          echo "$(ls "$WORK/filtered" | wc -l) von $(wc -l < "$WORK/regions.txt") Regionen gefiltert"
 
       - name: Merge
         run: |
-          osmium merge "$WORK"/filtered/*.osm.pbf -O -o "$WORK/europe-filtered.osm.pbf"
+          # merge entfernt Grenz-Duplikate nur bei gleicher ID + Version. Die
+          # Extrakte haben aber leicht unterschiedliche Stände, also bleiben
+          # geänderte Grenzobjekte doppelt drin, und osmium export bricht ab
+          # ("Node ID twice in input"). time-filter ohne Zeitpunkt behandelt
+          # die Datei als History und behält je Objekt nur die neueste Version.
+          osmium merge "$WORK"/filtered/*.osm.pbf -O -o "$WORK/merged.osm.pbf"
           rm -rf "$WORK/filtered"
+          osmium time-filter "$WORK/merged.osm.pbf" -O -o "$WORK/europe-filtered.osm.pbf"
+          rm "$WORK/merged.osm.pbf"
           osmium fileinfo -e "$WORK/europe-filtered.osm.pbf" | grep -A3 'Number of nodes'
 
       - name: Build tiles

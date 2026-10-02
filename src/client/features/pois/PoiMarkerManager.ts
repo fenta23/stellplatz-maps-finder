@@ -1,5 +1,5 @@
 import type { OsmPoi, PoiType } from './OverpassClient.js'
-import { isPrivateParking } from './OverpassClient.js'
+import { isPrivateParking, poiKey } from './OverpassClient.js'
 import { DEFAULT_FILTERS, filterIconPath } from '@/features/filters/filterModel.js'
 
 export interface MarkerHandle {
@@ -84,7 +84,7 @@ export function svgToDataUrl(svg: string): string {
 }
 
 export class PoiMarkerManager {
-  private readonly markers = new Map<number, TrackedMarker>()
+  private readonly markers = new Map<string, TrackedMarker>() // keyed by poiKey()
   private readonly activeTypes: Set<string>
   private favoriteIds: ReadonlySet<string> = new Set()
   private noteIds: ReadonlySet<string> = new Set()
@@ -107,7 +107,7 @@ export class PoiMarkerManager {
   }
 
   updatePois(pois: readonly OsmPoi[]): void {
-    const incoming = new Set(pois.map(p => p.id))
+    const incoming = new Set(pois.map(poiKey))
 
     for (const [id, tracked] of this.markers) {
       if (!incoming.has(id)) {
@@ -117,7 +117,8 @@ export class PoiMarkerManager {
     }
 
     for (const poi of pois) {
-      if (this.markers.has(poi.id)) continue
+      const key = poiKey(poi)
+      if (this.markers.has(key)) continue
       const isPrivate = isPrivateParking(poi)
       const handle = this.adapter.createMarker({
         lat: poi.lat,
@@ -126,7 +127,7 @@ export class PoiMarkerManager {
         icon: this.iconFor({ poiType: poi.type, poiId: poi.id, isPrivate }),
         onClick: () => this.onSelect(poi),
       })
-      this.markers.set(poi.id, { handle, poiType: poi.type, poiId: poi.id, isPrivate })
+      this.markers.set(key, { handle, poiType: poi.type, poiId: poi.id, isPrivate })
     }
 
     for (const [, tracked] of this.markers) {

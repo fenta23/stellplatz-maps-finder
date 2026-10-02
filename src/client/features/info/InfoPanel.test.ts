@@ -23,6 +23,15 @@ describe("InfoPanel", () => {
     expect(c.textContent).toContain("OpenStreetMap");
   });
 
+  it("shows the POI tile date once known", async () => {
+    const c = document.createElement("div");
+    const panel = new InfoPanel(c);
+    const date = c.querySelector('[data-ref="poi-data-date"]')!;
+    expect(date.textContent).toBe("");
+    panel.setPoiDataDate("2026-10-02");
+    expect(date.textContent).toBe(", Stand 02.10.2026");
+  });
+
   it("open and close via class", async () => {
     const c = document.createElement("div");
     const panel = new InfoPanel(c);

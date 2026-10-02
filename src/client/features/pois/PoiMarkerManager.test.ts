@@ -54,6 +54,13 @@ describe('PoiMarkerManager', () => {
     expect(adapter.handles).toHaveLength(2)
   })
 
+  it('keeps separate markers for a node and a way with the same id (regression)', () => {
+    const adapter = makeAdapter()
+    const mgr = new PoiMarkerManager(adapter, vi.fn())
+    mgr.updatePois([{ ...poi(1), osmType: 'node' }, { ...poi(1), osmType: 'way' }])
+    expect(mgr.count).toBe(2)
+  })
+
   it('removes markers no longer in result set', () => {
     const adapter = makeAdapter()
     const mgr = new PoiMarkerManager(adapter, vi.fn())

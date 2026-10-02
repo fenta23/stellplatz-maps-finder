@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { OsmPoi } from '@/features/pois/OverpassClient.js'
+import type { PoiTileSource, TileLayer, TileManifest } from '@/features/pois/poiTiles.js'
+import { DEFAULT_FILTERS, type FilterDef } from '@/features/filters/filterModel.js'
 
 // Shared mock fn referenced by both the module mock and the tests.
 const { fetchPoisMock } = vi.hoisted(() => ({ fetchPoisMock: vi.fn() }))
@@ -9,7 +11,7 @@ vi.mock('@/features/pois/OverpassClient.js', async (orig) => ({
   fetchPois: fetchPoisMock,
 }))
 
-import { createPoiRefresher } from './poiRefresher.js'
+import { createPoiRefresher, fetchSignature } from './poiRefresher.js'
 
 // Each fetched area returns one POI placed at the SW corner of the queried
 // region (so distinct areas → distinct ids).
@@ -120,5 +122,154 @@ describe('createPoiRefresher (single-query + accumulation)', () => {
     await createPoiRefresher(deps).refresh()
     expect(fetchPoisMock).not.toHaveBeenCalled()
     expect(setMarkers).not.toHaveBeenCalled()
+  })
+})
+
+// ── Static tiles for built-in filters ────────────────────────────────────────
+
+const BUILTINS = DEFAULT_FILTERS.filter(f => f.kind === 'osm')
+const withParkingOff = BUILTINS.map(f => (f.id === 'parking' ? { ...f, enabled: false } : f))
+const FUEL: FilterDef = {
+  id: 'u-fuel', name: 'Tankstelle', iconId: 'fuel', color: '#C62828', enabled: true, kind: 'osm',
+  builtin: false, order: 100, selectors: [{ elements: ['node'], tags: [{ key: 'amenity', value: 'fuel' }] }],
+}
+const MANIFEST: TileManifest = {
+  version: 'v1', date: '2026-10-02', cellDeg: 0.25, tiles: { parking: [], rest: [] }, attribution: '',
+}
+
+function fakeTiles(opts: { fail?: boolean } = {}) {
+  const fetchTilePois = vi.fn(async (wanted: ReadonlyMap<TileLayer, readonly string[]>): Promise<readonly OsmPoi[]> => {
+    if (opts.fail) throw new Error('tiles down')
+    return [...wanted].flatMap(([layer, keys]) => keys.map((k, i): OsmPoi => ({
+      id: i + 1, osmType: layer === 'parking' ? 'way' : 'node', type: layer === 'parking' ? 'parking' : 'campsite',
+      lat: 48.12, lon: 11.57, tags: { k },
+    })))
+  })
+  const manifest = vi.fn(async () => { if (opts.fail) throw new Error('tiles down'); return MANIFEST })
+  return { manifest, fetchTilePois } satisfies PoiTileSource
+}
+
+describe('createPoiRefresher with static tiles', () => {
+  const setup = (filters: readonly FilterDef[], tiles: PoiTileSource, bounds = CITY) => {
+    const setMarkers = vi.fn<(p: readonly OsmPoi[]) => void>()
+    const setStatus = vi.fn()
+    let current: readonly FilterDef[] = filters
+    const r = createPoiRefresher({ getBounds: () => bounds, setMarkers, setStatus, getOsmFilters: () => current, tiles })
+    return { r, setMarkers, setStatus, setFilters: (f: readonly FilterDef[]) => { current = f } }
+  }
+
+  it('built-ins come from tiles only — no Overpass query', async () => {
+    const tiles = fakeTiles()
+    const { r, setMarkers } = setup(BUILTINS, tiles)
+    await r.refresh(); await flush()
+    expect(fetchPoisMock).not.toHaveBeenCalled()
+    expect(tiles.fetchTilePois).toHaveBeenCalledTimes(1)
+    expect([...tiles.fetchTilePois.mock.calls[0]![0].keys()]).toEqual(['rest', 'parking'])
+    expect(setMarkers.mock.calls.at(-1)![0].length).toBeGreaterThan(0)
+  })
+
+  it('loads no parking layer while the parking filter is off', async () => {
+    const tiles = fakeTiles()
+    const { r } = setup(withParkingOff, tiles)
+    await r.refresh(); await flush()
+    expect([...tiles.fetchTilePois.mock.calls[0]![0].keys()]).toEqual(['rest'])
+  })
+
+  it('switching parking on later loads just the parking layer', async () => {
+    const tiles = fakeTiles()
+    const { r, setFilters } = setup(withParkingOff, tiles)
+    await r.refresh(); await flush()
+    setFilters(BUILTINS)
+    await r.refresh(); await flush()
+    expect([...tiles.fetchTilePois.mock.calls[1]![0].keys()]).toEqual(['parking'])
+  })
+
+  it('already-loaded tiles are not fetched again', async () => {
+    const tiles = fakeTiles()
+    const { r } = setup(BUILTINS, tiles)
+    await r.refresh(); await flush()
+    await r.refresh(); await flush()
+    expect(tiles.fetchTilePois).toHaveBeenCalledTimes(1)
+  })
+
+  it('a node and a way with the same id are both kept (regression)', async () => {
+    const tiles = fakeTiles() // parking → way/1, rest → node/1 for the same tile
+    const { r, setMarkers } = setup(BUILTINS, tiles)
+    await r.refresh(); await flush()
+    const keys = setMarkers.mock.calls.at(-1)![0].map(p => `${p.osmType}/${p.id}`)
+    expect(keys).toContain('node/1')
+    expect(keys).toContain('way/1')
+  })
+
+  it('un-hiding a built-in re-reads the loaded tiles (regression)', async () => {
+    const tiles = fakeTiles()
+    const { r, setFilters } = setup(BUILTINS.filter(f => f.id !== 'hut'), tiles)
+    await r.refresh(); await flush()
+    setFilters(BUILTINS)
+    await r.refresh(); await flush()
+    expect(tiles.fetchTilePois).toHaveBeenCalledTimes(2)
+    expect(tiles.fetchTilePois.mock.calls[1]![1]).toEqual(BUILTINS) // classified with hut now
+  })
+
+  it('reordering built-ins re-reads the tiles (first match depends on order)', async () => {
+    const tiles = fakeTiles()
+    const { r, setFilters } = setup(BUILTINS, tiles)
+    await r.refresh(); await flush()
+    setFilters([...BUILTINS].reverse())
+    await r.refresh(); await flush()
+    expect(tiles.fetchTilePois).toHaveBeenCalledTimes(2)
+  })
+
+  it('user filters go to Overpass with only those filters', async () => {
+    const tiles = fakeTiles()
+    const { r } = setup([...BUILTINS, FUEL], tiles)
+    await r.refresh(); await flush()
+    expect(fetchPoisMock).toHaveBeenCalledTimes(1)
+    expect(fetchPoisMock.mock.calls[0]![1]).toEqual([FUEL])
+  })
+
+  it('a new user filter loads in an already-seen area (regression)', async () => {
+    const tiles = fakeTiles()
+    const { r, setFilters } = setup(BUILTINS, tiles)
+    await r.refresh(); await flush()
+    expect(fetchPoisMock).not.toHaveBeenCalled()
+    setFilters([...BUILTINS, FUEL])
+    await r.refresh(); await flush()
+    expect(fetchPoisMock).toHaveBeenCalledTimes(1)
+    expect(fetchPoisMock.mock.calls[0]![1]).toEqual([FUEL])
+  })
+
+  it('falls back to Overpass for built-ins when the tiles fail, once per area', async () => {
+    const tiles = fakeTiles({ fail: true })
+    const { r, setStatus } = setup(BUILTINS, tiles)
+    await r.refresh(); await flush()
+    expect(fetchPoisMock).toHaveBeenCalledTimes(1)
+    expect(fetchPoisMock.mock.calls[0]![1]).toEqual(BUILTINS)
+    expect(setStatus).not.toHaveBeenCalledWith(expect.any(String), true)
+    await r.refresh(); await flush()
+    expect(fetchPoisMock).toHaveBeenCalledTimes(1) // fallback area is remembered
+  })
+
+  it('falls back when only the tile download fails (manifest ok)', async () => {
+    const tiles = fakeTiles()
+    tiles.fetchTilePois.mockRejectedValueOnce(new Error('tile 500'))
+    const { r } = setup(BUILTINS, tiles)
+    await r.refresh(); await flush()
+    expect(fetchPoisMock).toHaveBeenCalledTimes(1)
+    expect(fetchPoisMock.mock.calls[0]![1]).toEqual(BUILTINS)
+  })
+})
+
+describe('fetchSignature', () => {
+  it('changes when parking is switched on/off or a filter is added', () => {
+    const base = fetchSignature(BUILTINS)
+    expect(fetchSignature(withParkingOff)).not.toBe(base)
+    expect(fetchSignature([...BUILTINS, FUEL])).not.toBe(base)
+  })
+
+  it('ignores cosmetic edits and toggling non-parking filters', () => {
+    const base = fetchSignature(BUILTINS)
+    const cosmetic = BUILTINS.map(f => (f.id === 'camper' ? { ...f, color: '#000', name: 'X', enabled: false } : f))
+    expect(fetchSignature(cosmetic)).toBe(base)
   })
 })
