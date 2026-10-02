@@ -8,7 +8,7 @@
 ```
 npm install       # deps
 npm run dev       # Vite :5173 (API via VITE_API_BASE aus .env oder lokaler Proxy :54321)
-npm test          # unit tests (Vitest, 809 tests)
+npm test          # unit tests (Vitest, 824 tests)
 npm run test:int  # integration tests vs Edge Function
 npm run build     # → dist/client/
 ```
@@ -43,6 +43,7 @@ features/
   info/       InfoPanel (Changelog, Open Source, Datenschutz)
   install/    InstallPrompt
   update/     UpdateBanner
+  whats-new/  WhatsNewOverlay (Release-Overlay mit CSS-Konfetti) + WhatsNewStore
 ```
 Slices importieren keine Interna anderer Slices — Verdrahtung in `app/`. Typen cross-slice ok.
 

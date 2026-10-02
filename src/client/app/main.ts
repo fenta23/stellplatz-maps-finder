@@ -45,6 +45,9 @@ import { DatenschutzPanel } from '@/features/info/DatenschutzPanel.js'
 import { ImpressumPanel } from '@/features/info/ImpressumPanel.js'
 import { HelpPanel } from '@/features/help/HelpPanel.js'
 import { HelpSeenStore } from '@/features/help/HelpSeenStore.js'
+import { WhatsNewOverlay } from '@/features/whats-new/WhatsNewOverlay.js'
+import { WhatsNewStore, shouldShowWhatsNew } from '@/features/whats-new/WhatsNewStore.js'
+import { APP_VERSION } from '@/core/version.js'
 import { ResponsibilityPanel } from '@/features/responsibility/ResponsibilityPanel.js'
 import { createSession } from './session.js'
 import { createSelection } from './selection.js'
@@ -90,6 +93,7 @@ async function init() {
   const favorites = new SyncedFavoritesStore(new LocalFavoritesStore())
   const notes = new SyncedNotesStore(new LocalNotesStore())
   const helpSeenStore = new HelpSeenStore()
+  const whatsNewStore = new WhatsNewStore()
 
   const supabase = getSupabaseClient()
   let auth: Auth | null = null
@@ -449,6 +453,7 @@ async function init() {
     filterStore,
     onDismiss: () => {
       helpSeenStore.markSeen()
+      whatsNewStore.markSeen(APP_VERSION) // neue Nutzer sehen das 2.0-Overlay nie
       if (supabase) {
         void supabase.auth.updateUser({ data: { helpSeen: true } })
           .catch(err => console.warn('[help] metadata sync failed:', err))
@@ -492,7 +497,13 @@ async function init() {
   watchServiceWorkerUpdates(updateBanner)
 
   // ── Help overlay: show once on first visit ──────────────────────────────────
-  if (!helpSeenStore.isSeen()) helpPanel.open()
+  const helpSeen = helpSeenStore.isSeen()
+  const forceWhatsNew = import.meta.env.DEV && new URLSearchParams(location.search).has('whatsnew')
+  if (forceWhatsNew || shouldShowWhatsNew(helpSeen, whatsNewStore.isSeen(APP_VERSION) ? APP_VERSION : null, APP_VERSION)) {
+    new WhatsNewOverlay(document.body, { onDismiss: () => whatsNewStore.markSeen(APP_VERSION) }).open()
+  } else if (!helpSeen) {
+    helpPanel.open()
+  }
 }
 
 init().catch(err => {

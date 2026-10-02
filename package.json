@@ -1,6 +1,6 @@
 {
   "name": "stellplatz-maps-finder",
-  "version": "0.9.1",
+  "version": "2.0.0",
   "description": "Route planning with parking, camper and camping POIs",
   "type": "module",
   "engines": {
