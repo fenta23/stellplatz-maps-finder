@@ -238,3 +238,57 @@ body.ui-collapsed .leaflet-top {
         opacity: 0;
     }
 }
+
+/* Target of a tapped "In der Nähe" entry: badge with kind icon + permanent name. No ring/pulse (that is the selected POI). */
+.target-marker {
+    background: none;
+    border: none;
+    overflow: visible;
+}
+.target-marker-body {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+.target-marker-badge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    background: var(--accent-strong);
+    color: #fff;
+    border: 2px solid #fff;
+    box-shadow: 0 2px 8px rgba(44, 40, 34, 0.45);
+}
+.target-marker-badge svg {
+    width: 20px;
+    height: 20px;
+}
+.target-marker-dot::before {
+    content: '';
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #fff;
+}
+.target-marker-label {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: 160px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: #fff;
+    color: #2c2822;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    box-shadow: 0 1px 5px rgba(44, 40, 34, 0.35);
+}
