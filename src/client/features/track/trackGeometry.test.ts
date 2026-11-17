@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   simplify, cumulativeMeters, trackLengthM, boundsOf, sampleEvery,
-  createSegmentIndex, project,
+  createSegmentIndex, project, pointAtMeters,
 } from './trackGeometry.js'
 import type { TrackPoint } from './trackTypes.js'
 
@@ -189,5 +189,37 @@ describe('project', () => {
   it('does not throw on 0 or 1 points', () => {
     expect(project(createSegmentIndex([], 100), { lat: 0, lon: 0 })).toBeNull()
     expect(project(createSegmentIndex([[0, 0]], 100), { lat: 0, lon: 0 })).toBeNull()
+  })
+})
+
+describe('pointAtMeters', () => {
+  const line = eastLine(11) // 10 segments of 0.001° lon
+  const index = createSegmentIndex(line, 100)
+  const segM = index.cumM[1]!
+
+  it('is null without points and the only point of a single-point line', () => {
+    expect(pointAtMeters({ points: [], cumM: [] }, 5)).toBeNull()
+    expect(pointAtMeters({ points: [[50, 10]], cumM: [0] }, 5)).toEqual([50, 10])
+  })
+
+  it('clamps to start and end', () => {
+    expect(pointAtMeters(index, -5)).toEqual(line[0])
+    expect(pointAtMeters(index, 0)).toEqual(line[0])
+    expect(pointAtMeters(index, 1e9)).toEqual(line[10])
+  })
+
+  it('returns vertices exactly and interpolates inside a segment', () => {
+    expect(pointAtMeters(index, index.cumM[4]!)).toEqual(line[4])
+    const p = pointAtMeters(index, 3.25 * segM)!
+    expect(p[0]).toBeCloseTo(50, 9)
+    expect(p[1]).toBeCloseTo(10.00325, 7)
+  })
+
+  it('is the foot of project(): the point of the line nearest to the projected place', () => {
+    const place = { lat: 50.0005, lon: 10.00437 } // ~55 m north of the line
+    const pos = project(index, place)!
+    const foot = pointAtMeters(index, pos.kmAlong * 1000)!
+    expect(foot[0]).toBeCloseTo(50, 7)
+    expect(foot[1]).toBeCloseTo(place.lon, 5)
   })
 })

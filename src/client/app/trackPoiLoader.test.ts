@@ -525,3 +525,25 @@ describe('reclassify (chip toggles re-assign the loaded POIs)', () => {
     expect(updates).toHaveLength(0)
   })
 })
+
+describe('footOf', () => {
+  it('is null without a track', () => {
+    expect(setup().loader.footOf(poi(1, 48, 11.1))).toBeNull()
+  })
+
+  it('gives the nearest point on the track for a POI off it', async () => {
+    const { loader } = setup({ tiles: fakeTiles().source })
+    await loader.load(mkTrack({ lengthM: 22_000 }))
+    const foot = loader.footOf(poi(1, 48.0009, 11.15))! // ~100 m north of the line
+    expect(foot[0]).toBeCloseTo(48, 4)
+    expect(foot[1]).toBeCloseTo(11.15, 3)
+  })
+
+  it('is null beyond the maximum corridor and after cancel', async () => {
+    const { loader } = setup({ tiles: fakeTiles().source })
+    await loader.load(mkTrack())
+    expect(loader.footOf(poi(1, 48.05, 11.15))).toBeNull() // ~5.5 km off
+    loader.cancel()
+    expect(loader.footOf(poi(1, 48.0009, 11.15))).toBeNull()
+  })
+})

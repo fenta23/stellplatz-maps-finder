@@ -157,6 +157,30 @@ export function createSegmentIndex(points: readonly TrackPoint[], padM: number):
   return { points, cumM, padM, cells, long }
 }
 
+/** The point `m` metres along the line, clamped to its ends; null without points. */
+export function pointAtMeters(
+  line: Pick<SegmentIndex, 'points' | 'cumM'>, m: number,
+): TrackPoint | null {
+  const { points, cumM } = line
+  const n = points.length
+  if (n === 0) return null
+  if (n === 1 || !(m > 0)) return points[0]!
+  if (m >= cumM[n - 1]!) return points[n - 1]!
+  // Invariant: cumM[lo] <= m < cumM[hi]
+  let lo = 0
+  let hi = n - 1
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1
+    if (cumM[mid]! <= m) lo = mid
+    else hi = mid
+  }
+  const len = cumM[hi]! - cumM[lo]!
+  const t = len > 0 ? (m - cumM[lo]!) / len : 0
+  const a = points[lo]!
+  const b = points[hi]!
+  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]
+}
+
 /** Nearest point on the line within the index' pad; null when farther away (or no segments). */
 export function project(
   index: SegmentIndex, p: { lat: number; lon: number },

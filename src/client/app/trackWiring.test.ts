@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { createTrackWiring, RETRY_SUFFIX, type TrackLoaderCallbacks } from './trackWiring.js'
+import { createTrackWiring, RETRY_SUFFIX, CONNECTOR_MIN_OFFSET_M, type TrackLoaderCallbacks } from './trackWiring.js'
 import type { TrackPoiLoader } from './trackPoiLoader.js'
 import { MSG_CHUNKS_FAILED } from './trackPoiLoader.js'
 import type { OsmPoi } from '@/features/pois/OverpassClient.js'
 import type { CorridorHit } from '@/features/track/corridor.js'
 import type { ITrackStore } from '@/features/track/TrackStore.js'
 import type { TrackLayer } from '@/features/track/TrackLayer.js'
-import type { Track, TrackPoint } from '@/features/track/trackTypes.js'
+import type { Track, TrackPoint, TrackPosition } from '@/features/track/trackTypes.js'
 
 const track: Track = {
   name: 'Eifelrunde', source: 'gpx', points: [[50, 7], [50.1, 7.1]], lengthM: 86_432, corridorM: 500,
@@ -27,13 +27,18 @@ function fakeStore(initial: Track | null = null) {
 
 function fakeLayer() {
   const calls: string[] = []
-  const layer: TrackLayer & { shown: readonly TrackPoint[] | null; fitArgs: Array<unknown> } = {
+  const layer: TrackLayer & {
+    shown: readonly TrackPoint[] | null; fitArgs: Array<unknown>; connector: readonly [TrackPoint, TrackPoint] | null
+  } = {
     shown: null,
+    connector: null,
+    showConnector(from, to) { this.connector = [from, to] },
+    clearConnector() { this.connector = null },
     show(p) { this.shown = p; calls.push('show') },
     fitBounds(insets) { calls.push('fit'); this.fitArgs.push(insets) },
     fitArgs: [],
     setSatellite(on) { calls.push(`sat:${on}`) },
-    clear() { this.shown = null; calls.push('clear') },
+    clear() { this.shown = null; this.connector = null; calls.push('clear') },
   }
   return { layer, calls }
 }
@@ -58,7 +63,8 @@ function setup(initial: Track | null = null, fetchFn?: typeof fetch) {
     reload: vi.fn(async () => {}),
     retryFailed: vi.fn(async () => {}),
     cancel: vi.fn(),
-    positionOf: vi.fn(() => ({ kmAlong: 1, kmToEnd: 2, offsetM: 3 })),
+    positionOf: vi.fn((): TrackPosition | null => ({ kmAlong: 1, kmToEnd: 2, offsetM: 3 })),
+    footOf: vi.fn((): TrackPoint | null => [50.05, 7.05]),
   } satisfies TrackPoiLoader
   let cb!: TrackLoaderCallbacks
   const refresher = {
@@ -386,5 +392,79 @@ describe('createTrackWiring: POIs along the route', () => {
     const b = setup(track)
     b.wiring.collapsePanel()
     expect(document.body.classList.contains('track-collapsed')).toBe(true)
+  })
+})
+
+describe('connector to the selected place', () => {
+  const off = (offsetM: number): TrackPosition => ({ kmAlong: 44.1, kmToEnd: 42.3, offsetM })
+  const far = poi(7, 'campsite', 'Jägerhütte')
+
+  it('draws a line from the nearest route point to a place off the route', () => {
+    const s = setup(track)
+    s.loader.positionOf.mockReturnValue(off(620))
+    s.wiring.onPoiSelected(far)
+    expect(s.loader.footOf).toHaveBeenCalledWith(far)
+    expect(s.layer.connector).toEqual([[50.05, 7.05], [far.lat, far.lon]])
+  })
+
+  it('draws none for a place on the route', () => {
+    const s = setup(track)
+    s.loader.positionOf.mockReturnValue(off(CONNECTOR_MIN_OFFSET_M - 1))
+    s.wiring.onPoiSelected(far)
+    expect(s.layer.connector).toBeNull()
+  })
+
+  it('draws none without a route, beyond the corridor limit, or without a foot point', () => {
+    const none = setup(null)
+    none.loader.positionOf.mockReturnValue(off(620))
+    none.wiring.onPoiSelected(far)
+    expect(none.layer.connector).toBeNull()
+
+    const beyond = setup(track)
+    beyond.loader.positionOf.mockReturnValue(null)
+    beyond.wiring.onPoiSelected(far)
+    expect(beyond.layer.connector).toBeNull()
+
+    const noFoot = setup(track)
+    noFoot.loader.positionOf.mockReturnValue(off(620))
+    noFoot.loader.footOf.mockReturnValue(null)
+    noFoot.wiring.onPoiSelected(far)
+    expect(noFoot.layer.connector).toBeNull()
+  })
+
+  it('replaces the line on the next selection and removes it when the selection ends', () => {
+    const s = setup(track)
+    s.loader.positionOf.mockReturnValue(off(620))
+    s.wiring.onPoiSelected(far)
+    s.loader.footOf.mockReturnValue([50.08, 7.08])
+    s.wiring.onPoiSelected(poi(8))
+    expect(s.layer.connector![0]).toEqual([50.08, 7.08])
+    s.wiring.onPoiSelected(null)
+    expect(s.layer.connector).toBeNull()
+  })
+
+  it('keeps the line on a corridor change, drops it when the route is removed', () => {
+    const s = setup(track)
+    s.loader.positionOf.mockReturnValue(off(620))
+    s.wiring.onPoiSelected(far)
+    s.store.setCorridor(1000)
+    expect(s.layer.connector).not.toBeNull()
+    s.store.clear()
+    expect(s.layer.connector).toBeNull()
+  })
+
+  it('re-evaluates the line for a newly imported route', () => {
+    const s = setup(track)
+    s.loader.positionOf.mockReturnValue(off(620))
+    s.wiring.onPoiSelected(far)
+    s.loader.positionOf.mockReturnValue(null) // the place is nowhere near the new route
+    s.store.set({ ...track, name: 'Andere Runde', points: [[51, 8], [51.1, 8.1]] })
+    expect(s.layer.connector).toBeNull()
+  })
+})
+
+describe('mapInsets', () => {
+  it('covers nothing without a route', () => {
+    expect(setup(null).wiring.mapInsets()).toEqual({ left: 0, bottom: 0 })
   })
 })

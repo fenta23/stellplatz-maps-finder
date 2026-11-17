@@ -13,6 +13,9 @@ export const FIT_PADDING_BOTTOM_RIGHT: L.PointTuple = [40, 40]
 /** Stops very short tracks from zooming in to street-corner level. */
 export const FIT_MAX_ZOOM = 16
 
+/** Dash pattern of the connector to a selected place (px: dash, gap). */
+export const CONNECTOR_DASH = '8 7'
+
 const baseLine = { lineCap: 'round', lineJoin: 'round', interactive: false } as const
 const endMarker = (color: string) => ({
   radius: 6, color: '#fff', weight: 2, opacity: 1, fillColor: color, fillOpacity: 1, interactive: false,
@@ -39,16 +42,26 @@ export function createLeafletTrackLayer(
 
   const color = () => (satellite ? LINE_COLOR_SATELLITE : LINE_COLOR)
 
-  const clear = () => {
+  // The connector lives in its own group: redrawing the track (e.g. after a
+  // corridor change) must not take the line to the selected place with it.
+  const connectorGroup = L.layerGroup()
+  let connector: L.Polyline | null = null
+
+  const clearTrack = () => {
     group.clearLayers()
     group.remove()
     line = null
     bounds = null
   }
+  const clearConnector = () => {
+    connectorGroup.clearLayers()
+    connectorGroup.remove()
+    connector = null
+  }
 
   return {
     show(points: readonly TrackPoint[]) {
-      clear()
+      clearTrack()
       if (points.length === 0) return
       const latlngs = points.map(([lat, lon]) => L.latLng(lat, lon))
       bounds = L.latLngBounds(latlngs)
@@ -70,7 +83,22 @@ export function createLeafletTrackLayer(
     setSatellite(on: boolean) {
       satellite = on
       line?.setStyle({ color: color() })
+      connector?.setStyle({ color: color() })
     },
-    clear,
+    showConnector(from: TrackPoint, to: TrackPoint) {
+      clearConnector()
+      const latlngs = [L.latLng(from[0], from[1]), L.latLng(to[0], to[1])]
+      const casing = L.polyline(latlngs, { ...baseLine, renderer, color: '#fff', weight: 6, opacity: 0.9 })
+      connector = L.polyline(latlngs, {
+        ...baseLine, lineCap: 'butt', renderer, color: color(), weight: 3, opacity: 1, dashArray: CONNECTOR_DASH,
+      })
+      connectorGroup.addLayer(casing).addLayer(connector)
+      connectorGroup.addTo(map)
+    },
+    clearConnector,
+    clear() {
+      clearTrack()
+      clearConnector()
+    },
   }
 }

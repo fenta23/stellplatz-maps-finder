@@ -6,7 +6,8 @@ import '@/styles/shell.css'
 import { MapService, getUserLocation } from '@/features/map/MapService.js'
 import { createLeafletMarkerAdapter } from '@/features/map/leafletAdapter.js'
 import { createLocationMarker } from '@/features/map/locationMarker.js'
-import { panPoiIntoView } from '@/features/map/panIntoView.js'
+import { panPoiIntoView, centerPoiInView } from '@/features/map/panIntoView.js'
+import { createLeafletPoiHighlight } from '@/features/map/poiHighlight.js'
 import { PoiMarkerManager } from '@/features/pois/PoiMarkerManager.js'
 import type { OsmPoi } from '@/features/pois/OverpassClient.js'
 import { createPoiTileSource } from '@/features/pois/poiTiles.js'
@@ -239,20 +240,29 @@ async function init() {
   customPois.refreshMarkers()
 
   // ── Selection (now wired after customPois is ready) ──────────────────────────
+  // The selected place gets an enlarged icon with a ring above markers and
+  // clusters; custom POIs (negative ids) have their own icons → ring only.
+  const poiHighlight = createLeafletPoiHighlight(map)
+  /** Viewport y below which the map is visible (bottom of the header/filter bar). */
+  const effectiveMapTop = () => document.body.classList.contains('ui-collapsed')
+    ? 0
+    : document.getElementById('filter-panel')?.getBoundingClientRect().bottom ?? 0
+  const showHighlight = (poi: OsmPoi) =>
+    poiHighlight.show(poi, poi.id < 0 ? undefined : markerManager.iconUrlFor(poi))
   selection = createSelection({
     session, panel: detailPanel, favorites,
-    panIntoView: poi => {
-      const effectiveTop = document.body.classList.contains('ui-collapsed')
-        ? 0
-        : document.getElementById('filter-panel')?.getBoundingClientRect().bottom ?? 0
-      panPoiIntoView(map, mapContainer, poi, effectiveTop)
-    },
+    panIntoView: poi => panPoiIntoView(map, mapContainer, poi, effectiveMapTop()),
+    // Picked from the route list: put it in the middle of what is left of the map
+    // between header, track panel and detail panel. trackWiring is created further down.
+    centerInView: poi => centerPoiInView(map, mapContainer, poi, { top: effectiveMapTop(), ...trackWiring.mapInsets() }),
     loadDetails,
     getNote: poi => notes.get(String(poi.id)),
     onEditCustomPoi: customPois.editCurrent,
     onDeleteCustomPoi: customPois.deleteCurrent,
     isLoggedIn: () => loggedIn,
     getTrackInfo: poi => trackWiring.positionOf(poi), // trackWiring is created further down
+    onSelected: poi => { showHighlight(poi); trackWiring.onPoiSelected(poi) },
+    onCleared: () => { poiHighlight.clear(); trackWiring.onPoiSelected(null) },
   })
 
   // ── Auth sync ───────────────────────────────────────────────────────────────
@@ -306,7 +316,7 @@ async function init() {
     createLoader: callbacks => createTrackPoiLoader({ getOsmFilters, tiles: poiTiles, ...callbacks }),
     refresher,
     setMarkers: pois => markerManager.updatePois(pois),
-    selectPoi: poi => void selection.select(poi),
+    selectPoi: poi => void selection.select(poi, { center: true }),
     isTypeActive: type => osmFilterIds().has(type),
     rowFor: poi => ({
       ...trackRowTexts(poi.tags.name, typeLabel(poi.type), { type: poi.type, now: new Date() }),
@@ -370,11 +380,13 @@ async function init() {
     if (!session.selectedPoi) return
     favorites.toggle(toFavoritePoi(session.selectedPoi))
     markerManager.setFavorites(favorites.getAll())
+    showHighlight(session.selectedPoi) // badge changed
   })
   detailPanel.onNoteSave(text => {
     if (!session.selectedPoi) return
     notes.set(toNoteTarget(session.selectedPoi), text)
     markerManager.setNotes(new Set(notes.list().map(n => n.id)))
+    showHighlight(session.selectedPoi) // badge changed
   })
   detailPanel.onNearbySelect(item => {
     mapService.setCenter(item.lat, item.lon, 17)

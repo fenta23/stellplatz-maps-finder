@@ -260,3 +260,22 @@ describe('PoiMarkerManager type change', () => {
     expect(handle.icon).toBe(svgToDataUrl(buildIcon('campsite', false)))
   })
 })
+
+describe('PoiMarkerManager.iconUrlFor', () => {
+  it('matches the icon of the POI marker, including favourite and note badges', () => {
+    const adapter = makeAdapter()
+    const mgr = new PoiMarkerManager(adapter, vi.fn())
+    const p = poi(1, 'campsite')
+    mgr.updatePois([p])
+    expect(mgr.iconUrlFor(p)).toBe(adapter.handles[0]!.icon)
+    mgr.setFavorites(new Set(['1']))
+    mgr.setNotes(new Set(['1']))
+    expect(mgr.iconUrlFor(p)).toBe(svgToDataUrl(buildIcon('campsite', true, true)))
+    expect(mgr.iconUrlFor(p)).toBe(adapter.handles[0]!.icon)
+  })
+
+  it('renders private parking with the grey lock variant', () => {
+    const mgr = new PoiMarkerManager(makeAdapter(), vi.fn())
+    expect(mgr.iconUrlFor(poi(2, 'parking', 'private'))).toBe(svgToDataUrl(buildIcon('parking', false, false, true)))
+  })
+})
