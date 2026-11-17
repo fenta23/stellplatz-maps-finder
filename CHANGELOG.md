@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Bus-Icon und Vorlage „Bushaltestelle“.** Neues Icon `bus` (Lucide) für eigene und KI-Filter, dazu die Vorlage „Bushaltestelle“ (`highway=bus_stop`) in der Galerie für eigene Filter. Die KI-Suche nimmt es für Haltestellen.
 
 ### Fixed
+- **„In der Nähe“: angeklickter Ort war auf der Karte nicht zu sehen.** Seit dem Wegfall der Fußroute in 3.0 sprang die Karte beim Tipp auf einen Eintrag zwar zum Ziel, markierte es aber nicht; diese Orte gehören zu keinem Filter und haben keinen eigenen Marker. Jetzt setzt die Auswahl einen Ziel-Marker mit Icon und Namen (`features/map/targetMarker.ts`) und rückt ihn in den freien Kartenbereich neben dem Detailpanel bzw. über dem Sheet. Er verschwindet beim Schließen des Panels oder bei einer anderen Auswahl. Die Logik lag ungetestet in `main.ts` und steht jetzt in `app/nearbyWiring.ts` mit Regressionstest.
 - **KI-Filter bekamen unpassende Icons.** Ein per KI-Suche angelegter Filter „Bushaltestellen“ erschien mit dem Toiletten-Icon. Der Prompt verlangte ein `iconId`, nannte aber weder die vorhandenen Icons noch eine Regel für den Fall, dass keines passt; das Modell riet. Der Prompt listet jetzt alle Icons mit ihrer Bedeutung und schreibt „pin“ vor, wenn keines die Sache trifft. Ein Test prüft, dass jedes Icon aus `FILTER_ICONS` im Prompt steht. Wirkt nach dem Deploy der Edge Function; bereits angelegte Filter behalten ihr Icon und lassen sich unter „Filter verwalten“ ändern.
 
 ## [3.0.0] - 2026-11-17

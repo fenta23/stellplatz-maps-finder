@@ -17,7 +17,9 @@ import { collectTagImages, loadMapillaryImages, loadNearby, loadNotes } from '@/
 import { loadPoiSummary } from '@/features/ai/AiClient.js'
 import { AiSearchModal } from '@/features/ai/AiSearchModal.js'
 import type { AiIntent } from '@/features/ai/intentSchema.js'
-import { nearbyMessage } from '@/features/poi-detail/nearbyMessage.js'
+import { nearbyIconSvg } from '@/features/poi-detail/PoiDetailPanel.js'
+import { createLeafletTargetMarker } from '@/features/map/targetMarker.js'
+import { createNearbyWiring } from './nearbyWiring.js'
 import { FilterPanel } from '@/features/filters/FilterPanel.js'
 import { LocalFilterStore } from '@/features/filters/FilterStore.js'
 import { SyncedFilterStore } from '@/features/filters/RemoteFilterStore.js'
@@ -70,6 +72,9 @@ import {
 // Cross-cutting responsive overrides — must load AFTER all feature CSS so the
 // media-query rules win over feature base rules of equal specificity.
 import '@/styles/responsive.css'
+
+/** Zoom for a tapped nearby entry: surroundings recognisable. */
+const NEARBY_ZOOM = 17
 
 const DEFAULT_CENTER: [number, number] = [51.163, 10.447]
 
@@ -246,6 +251,18 @@ async function init() {
   // The selected place gets an enlarged icon with a ring above markers and
   // clusters; custom POIs (negative ids) have their own icons → ring only.
   const poiHighlight = createLeafletPoiHighlight(map)
+  // Marker for a tapped "In der Nähe" entry (those have no marker of their own).
+  // Cleared when the panel closes or another POI is selected (see selection callbacks).
+  const nearbyWiring = createNearbyWiring({
+    target: createLeafletTargetMarker(map),
+    // Close zoom first (no animation), then centre in the part of the map no panel covers.
+    centerOn: pos => {
+      map.setView([pos.lat, pos.lon], Math.max(map.getZoom(), NEARBY_ZOOM), { animate: false })
+      centerPoiInView(map, mapContainer, pos, { top: effectiveMapTop(), ...trackWiring.mapInsets() })
+    },
+    iconFor: nearbyIconSvg,
+    flash: flashInfo,
+  })
   /** Viewport y below which the map is visible (bottom of the header/filter bar). */
   const effectiveMapTop = () => document.body.classList.contains('ui-collapsed')
     ? 0
@@ -264,8 +281,8 @@ async function init() {
     onDeleteCustomPoi: customPois.deleteCurrent,
     isLoggedIn: () => loggedIn,
     getTrackInfo: poi => trackWiring.positionOf(poi), // trackWiring is created further down
-    onSelected: poi => { showHighlight(poi); trackWiring.onPoiSelected(poi) },
-    onCleared: () => { poiHighlight.clear(); trackWiring.onPoiSelected(null) },
+    onSelected: poi => { nearbyWiring.clear(); showHighlight(poi); trackWiring.onPoiSelected(poi) },
+    onCleared: () => { nearbyWiring.clear(); poiHighlight.clear(); trackWiring.onPoiSelected(null) },
   })
 
   // ── Auth sync ───────────────────────────────────────────────────────────────
@@ -392,10 +409,7 @@ async function init() {
     markerManager.setNotes(new Set(notes.list().map(n => n.id)))
     showHighlight(session.selectedPoi) // badge changed
   })
-  detailPanel.onNearbySelect(item => {
-    mapService.setCenter(item.lat, item.lon, 17)
-    flashInfo(nearbyMessage(item))
-  })
+  detailPanel.onNearbySelect(item => nearbyWiring.select(item))
 
   // ── Search ────────────────────────────────────────────────────────
   const searchBar = new SearchBar(document.getElementById('search-bar')!)

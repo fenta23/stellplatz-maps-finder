@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { PoiDetailPanel } from './PoiDetailPanel.js'
+import { PoiDetailPanel, nearbyIconSvg } from './PoiDetailPanel.js'
 import type { OsmPoi } from '@/features/pois/OverpassClient.js'
 
 const poi: OsmPoi = {
@@ -322,5 +322,14 @@ describe('PoiDetailPanel cemetery water hint', () => {
     panel.show(parking)
     expect(hint(container).hidden).toBe(true)
     expect(winterEl(container).hidden).toBe(true)
+  })
+})
+
+describe('nearbyIconSvg', () => {
+  it('returns svg markup for every nearby kind and undefined for unknown ones', () => {
+    for (const k of ['fuel', 'supermarket', 'pharmacy', 'bakery', 'water', 'dump']) {
+      expect(nearbyIconSvg(k)).toMatch(/^<svg/)
+    }
+    expect(nearbyIconSvg('nope')).toBeUndefined()
   })
 })
