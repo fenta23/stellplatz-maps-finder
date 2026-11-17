@@ -184,6 +184,7 @@ export function createTrackWiring(deps: TrackWiringDeps): TrackWiring {
     onFiltersChanged: needsRefetch => {
       if (!current) return
       if (needsRefetch) void loader.reload()
+      else loader.reclassify() // re-assigns the loaded POIs, delivers via onUpdate → markers
       rebuildRows()
     },
     positionOf: poi => loader.positionOf(poi),

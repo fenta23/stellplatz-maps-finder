@@ -54,6 +54,7 @@ function setup(initial: Track | null = null, fetchFn?: typeof fetch) {
   const loader = {
     load: vi.fn(async () => { order.push('load') }),
     setCorridor: vi.fn(),
+    reclassify: vi.fn(),
     reload: vi.fn(async () => {}),
     retryFailed: vi.fn(async () => {}),
     cancel: vi.fn(),
@@ -324,6 +325,22 @@ describe('createTrackWiring: POIs along the route', () => {
     expect(rows()).toHaveLength(1)
     expect(loader.reload).not.toHaveBeenCalled()
     wiring.onFiltersChanged(true)
+    expect(loader.reload).toHaveBeenCalledTimes(1)
+  })
+
+  it('onFiltersChanged without refetch reclassifies the loader (no reload); the rows follow its onUpdate', () => {
+    const { emit, rows, wiring, loader, active, setMarkers } = setup(track)
+    emit([hit(poi(1, 'parking', 'Bäcker-Café'), 1)])
+    expect(rows()[0]!.textContent).toContain('parking')
+    loader.reclassify.mockImplementation(() => { active.add('campsite'); emit([hit(poi(1, 'campsite', 'Bäcker-Café'), 1)]) })
+    wiring.onFiltersChanged(false)
+    expect(loader.reclassify).toHaveBeenCalledTimes(1)
+    expect(loader.reload).not.toHaveBeenCalled()
+    expect(rows()).toHaveLength(1)
+    expect(rows()[0]!.textContent).toContain('campsite')
+    expect(setMarkers.mock.calls.at(-1)![0].map(p => p.type)).toEqual(['campsite'])
+    wiring.onFiltersChanged(true) // refetch → reload instead
+    expect(loader.reclassify).toHaveBeenCalledTimes(1)
     expect(loader.reload).toHaveBeenCalledTimes(1)
   })
 

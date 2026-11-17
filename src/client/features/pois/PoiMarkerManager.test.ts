@@ -241,3 +241,22 @@ describe('PoiMarkerManager.setNotes', () => {
     expect(adapter.handles[0]?.icon).toContain('%234CAF50') // note
   })
 })
+
+describe('PoiMarkerManager type change', () => {
+  // Regression: a POI arriving again under another type kept its stale marker
+  // (old icon/colour, visibility by the old type).
+  it('re-styles and re-evaluates visibility when the same POI arrives with a new type', () => {
+    const adapter = makeAdapter()
+    const onSelect = vi.fn()
+    const mgr = new PoiMarkerManager(adapter, onSelect, new Set(['campsite']))
+    mgr.updatePois([poi(1, 'parking')])
+    const handle = adapter.handles[0]!
+    const oldIcon = handle.icon
+    expect(handle.visible).toBe(false)
+    mgr.updatePois([poi(1, 'campsite')])
+    expect(adapter.handles).toHaveLength(1)
+    expect(handle.visible).toBe(true)
+    expect(handle.icon).not.toBe(oldIcon)
+    expect(handle.icon).toBe(svgToDataUrl(buildIcon('campsite', false)))
+  })
+})

@@ -321,6 +321,9 @@ async function init() {
     if (needsRefetch && !trackWiring.isTrackActive()) refreshDebounced()
     markerManager.setActiveTypes(osmFilterIds())
     markerManager.setStyleResolver(styleResolver)
+    // Chip toggles re-assign already loaded POIs (a bakery-café belongs to the
+    // active chip) — memory only. After setActiveTypes so visibility is current.
+    refresher.reclassify()
     trackWiring.onFiltersChanged(needsRefetch)
     const personal = filterStore.get(PERSONAL_FILTER_ID)
     if (personal) {

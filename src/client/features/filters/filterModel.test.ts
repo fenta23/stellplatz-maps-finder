@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   DEFAULT_FILTERS, PERSONAL_FILTER_ID, FILTER_ICONS, FILTER_TEMPLATES, FILTER_COLORS,
   buildOverpassQuery, buildOverpassAroundQuery, classifyElement, filterIconPath,
-  tileLayerOf, TILE_LAYER_IDS, isFilterActive,
+  tileLayerOf, TILE_LAYER_IDS, isFilterActive, activeFirst,
   isValidTagToken, isValidCondition, isValidSelector, MAX_SELECTOR_CONDITIONS,
   type FilterDef, type OsmSelector,
 } from './filterModel.js'
@@ -456,5 +456,36 @@ describe('tileLayerOf', () => {
   it('lists the layers in order and covers every built-in', () => {
     expect(TILE_LAYER_IDS).toEqual(['parking', 'rest', 'supply', 'food', 'lodging', 'bike'])
     for (const f of DEFAULT_FILTERS) expect(TILE_LAYER_IDS).toContain(tileLayerOf(f.id))
+  })
+})
+
+describe('activeFirst / classification of multi-category elements', () => {
+  const vis = (on: string[], off: string[]): FilterDef[] => DEFAULT_FILTERS
+    .filter(f => on.includes(f.id) || off.includes(f.id))
+    .map(f => ({ ...f, hidden: false, enabled: on.includes(f.id) }))
+  const BAKERY_CAFE = { shop: 'bakery', amenity: 'cafe' }
+
+  it('puts active filters first, both groups in original order (stable)', () => {
+    const fs = vis(['camper', 'cafe', 'parking'], ['bakery', 'hotel'])
+    expect(activeFirst(fs).map(f => f.id)).toEqual(['parking', 'camper', 'cafe', 'bakery', 'hotel'])
+  })
+
+  it('counts hidden filters as inactive and does not mutate the input', () => {
+    const fs = [{ ...byId('parking'), hidden: true }, byId('camper')]
+    const before = fs.map(f => f.id)
+    expect(activeFirst(fs).map(f => f.id)).toEqual(['camper', 'parking'])
+    expect(fs.map(f => f.id)).toEqual(before)
+  })
+
+  it('bakery-café with bakery off and café on → café', () => {
+    expect(classifyElement(BAKERY_CAFE, 'node', activeFirst(vis(['cafe'], ['bakery'])))).toBe('cafe')
+  })
+
+  it('both active → filter order wins (bakery)', () => {
+    expect(classifyElement(BAKERY_CAFE, 'node', activeFirst(vis(['bakery', 'cafe'], [])))).toBe('bakery')
+  })
+
+  it('neither active → first inactive match (bakery), so it stays known', () => {
+    expect(classifyElement(BAKERY_CAFE, 'node', activeFirst(vis([], ['bakery', 'cafe'])))).toBe('bakery')
   })
 })

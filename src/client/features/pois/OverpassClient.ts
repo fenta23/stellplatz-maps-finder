@@ -1,6 +1,6 @@
 import { notNullUndefined } from '@shared/common.js'
 import { fetchFromOverpassMirrors } from '@/core/overpassFetch.js'
-import { buildOverpassQuery, buildOverpassAroundQuery, classifyElement, type FilterDef } from '@/features/filters/filterModel.js'
+import { activeFirst, buildOverpassQuery, buildOverpassAroundQuery, classifyElement, type FilterDef } from '@/features/filters/filterModel.js'
 
 /**
  * A POI's group identity = a filter id. Built-in ids ('parking', 'camper', …)
@@ -87,6 +87,7 @@ function elementToLatLon(el: OsmElement): { lat: number; lon: number } | null {
 
 function parseElements(data: { elements?: OsmElement[] }, filters: readonly FilterDef[]): readonly OsmPoi[] {
   const seen = new Set<string>()
+  const ordered = activeFirst(filters)
   return (data.elements ?? [])
     .filter(el => {
       const key = `${el.type}/${el.id}`
@@ -95,8 +96,8 @@ function parseElements(data: { elements?: OsmElement[] }, filters: readonly Filt
     .map((el): OsmPoi | null => {
       const pos = elementToLatLon(el)
       if (!pos) return null
-      // Classify against the same filters that built the query; first match wins.
-      const type = classifyElement(el.tags, el.type, filters)
+      // Classify against the same filters that built the query; first active match wins.
+      const type = classifyElement(el.tags, el.type, ordered)
       if (type === null) return null
       return { id: el.id, osmType: el.type, type, lat: pos.lat, lon: pos.lon, tags: el.tags }
     })

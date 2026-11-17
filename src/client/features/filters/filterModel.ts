@@ -41,6 +41,16 @@ export function isFilterActive(f: FilterDef): boolean {
   return !f.hidden && f.enabled
 }
 
+/**
+ * Classification order: active filters first (original order), then the
+ * inactive ones (original order). With `classifyElement` an element that fits
+ * several categories thus belongs to the first ACTIVE one and only falls back
+ * to an inactive one (stays known, hidden) if no active one matches.
+ */
+export function activeFirst(filters: readonly FilterDef[]): FilterDef[] {
+  return [...filters.filter(isFilterActive), ...filters.filter(f => !isFilterActive(f))]
+}
+
 export const PERSONAL_FILTER_ID = 'personal'
 export const ALL_ELEMENT_KINDS: readonly OsmElementKind[] = ['node', 'way', 'relation']
 

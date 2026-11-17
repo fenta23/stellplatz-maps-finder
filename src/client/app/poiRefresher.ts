@@ -1,7 +1,7 @@
 import { fetchPois, poiKey, type LatLngBounds, type OsmPoi } from '@/features/pois/OverpassClient.js'
-import { isFilterActive, tileLayerOf, TILE_LAYER_IDS, type FilterDef } from '@/features/filters/filterModel.js'
+import { activeFirst, isFilterActive, tileLayerOf, TILE_LAYER_IDS, type FilterDef } from '@/features/filters/filterModel.js'
 import { markCovered, uncoveredBounds, withinBounds } from '@/features/pois/coverage.js'
-import { planTileFilters, tileKeysFor, tiledFilterIds, type PoiTileSource, type TileLayer } from '@/features/pois/poiTiles.js'
+import { planTileFilters, reclassifyPoi, tileKeysFor, tiledFilterIds, type PoiTileSource, type TileLayer } from '@/features/pois/poiTiles.js'
 import { overpassErrorMessage, poiCountMessage } from '@/features/pois/statusMessages.js'
 
 const MAX_SPAN_DEG = 1.5 // refuse to query an over-wide viewport
@@ -49,6 +49,11 @@ export interface PoiRefresher {
   /** Lifts the suspension; the next refresh() repaints even an unchanged viewport. Does not refresh itself. */
   resume(): void
   isSuspended(): boolean
+  /**
+   * Chips were toggled/reordered: re-assign every loaded POI to the first active
+   * matching filter and repaint. Memory only — no request, no abort.
+   */
+  reclassify(): void
 }
 
 export function createPoiRefresher(deps: PoiRefresherDeps): PoiRefresher {
@@ -66,21 +71,26 @@ export function createPoiRefresher(deps: PoiRefresherDeps): PoiRefresher {
   let lastRenderedKeys: Set<string> | null = new Set<string>()
   let suspended = false
 
-  function render(bounds: LatLngBounds): number {
+  function render(bounds: LatLngBounds, force = false): number {
     const pois: OsmPoi[] = []
     for (const p of store.values()) if (withinBounds(p, bounds)) pois.push(p)
     // Skip redundant re-renders (e.g. the pre-fetch paint on zoom-out shows the
     // same markers already on screen) — re-running setMarkers would churn the
     // marker-cluster layer and make POIs flicker.
     const keys = new Set(pois.map(poiKey))
-    if (!lastRenderedKeys || !sameKeys(keys, lastRenderedKeys)) {
+    if (force || !lastRenderedKeys || !sameKeys(keys, lastRenderedKeys)) {
       lastRenderedKeys = keys
       deps.setMarkers(pois)
     }
     return pois.length
   }
 
-  const addAll = (pois: readonly OsmPoi[]) => { for (const p of pois) store.set(poiKey(p), p) }
+  // A load that started before a chip toggle returns POIs classified with the old
+  // chip state → assign them against the current one when they enter the store.
+  const addAll = (pois: readonly OsmPoi[]) => {
+    const ordered = activeFirst(deps.getOsmFilters())
+    for (const p of pois) store.set(poiKey(p), reclassifyPoi(p, ordered))
+  }
 
   async function refresh(): Promise<void> {
     if (suspended) return
@@ -227,6 +237,16 @@ export function createPoiRefresher(deps: PoiRefresherDeps): PoiRefresher {
       lastRenderedKeys = null // the map was repainted by someone else meanwhile
     },
     isSuspended: () => suspended,
+    reclassify() {
+      const ordered = activeFirst(deps.getOsmFilters())
+      for (const [k, p] of store) {
+        const next = reclassifyPoi(p, ordered)
+        if (next !== p) store.set(k, next)
+      }
+      if (suspended) return
+      const bounds = deps.getBounds()
+      if (bounds) render(bounds, true)
+    },
   }
 }
 

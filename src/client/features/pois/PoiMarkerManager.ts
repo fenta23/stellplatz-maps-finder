@@ -28,9 +28,11 @@ export type StyleResolver = (filterId: string) => FilterStyle
 
 interface TrackedMarker {
   readonly handle: MarkerHandle
-  readonly poiType: PoiType
+  poiType: PoiType
   readonly poiId: number
-  readonly isPrivate: boolean
+  isPrivate: boolean
+  /** Latest POI data for the click handler (the type can change when a chip is toggled). */
+  poi: OsmPoi
 }
 
 // Helper: wrap Lucide paths inside a coloured circle marker.
@@ -118,16 +120,29 @@ export class PoiMarkerManager {
 
     for (const poi of pois) {
       const key = poiKey(poi)
-      if (this.markers.has(key)) continue
       const isPrivate = isPrivateParking(poi)
+      const existing = this.markers.get(key)
+      if (existing) {
+        existing.poi = poi
+        // Same POI, re-assigned to another category → new icon/colour.
+        if (existing.poiType !== poi.type || existing.isPrivate !== isPrivate) {
+          existing.poiType = poi.type
+          existing.isPrivate = isPrivate
+          existing.handle.updateIcon(this.iconFor(existing))
+        }
+        continue
+      }
+      const holder: { tracked?: TrackedMarker } = {}
       const handle = this.adapter.createMarker({
         lat: poi.lat,
         lon: poi.lon,
         title: poi.tags.name ?? poi.type,
         icon: this.iconFor({ poiType: poi.type, poiId: poi.id, isPrivate }),
-        onClick: () => this.onSelect(poi),
+        onClick: () => this.onSelect(holder.tracked?.poi ?? poi),
       })
-      this.markers.set(key, { handle, poiType: poi.type, poiId: poi.id, isPrivate })
+      const tracked: TrackedMarker = { handle, poiType: poi.type, poiId: poi.id, isPrivate, poi }
+      holder.tracked = tracked
+      this.markers.set(key, tracked)
     }
 
     for (const [, tracked] of this.markers) {

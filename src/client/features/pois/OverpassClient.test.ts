@@ -264,3 +264,14 @@ describe('fetchPoisAround', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('fetchPois: multi-category elements', () => {
+  // Regression: first-match classification claimed a bakery-café for the
+  // earlier bakery filter even while its chip was off → the café vanished.
+  it('assigns an element matching two filters to the active one', async () => {
+    stubFetch(200, { elements: [{ type: 'node', id: 5, lat: 48.1, lon: 11.1, tags: { shop: 'bakery', amenity: 'cafe' } }] })
+    const filters = [f('bakery'), f('cafe')].map(x => ({ ...x, hidden: false, enabled: x.id === 'cafe' }))
+    const result = await fetchPois(BOUNDS, filters)
+    expect(result.map(p => p.type)).toEqual(['cafe'])
+  })
+})

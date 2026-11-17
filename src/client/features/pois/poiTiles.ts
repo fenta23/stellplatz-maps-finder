@@ -1,5 +1,5 @@
 import {
-  classifyElement, isFilterActive, tileLayerOf, TILE_LAYER_IDS,
+  activeFirst, classifyElement, isFilterActive, tileLayerOf, TILE_LAYER_IDS,
   type FilterDef, type OsmElementKind, type TileLayerId,
 } from '@/features/filters/filterModel.js'
 import type { LatLngBounds, OsmPoi, OsmTags } from './OverpassClient.js'
@@ -104,16 +104,28 @@ export function tileKeysFor(bounds: LatLngBounds, cellDeg: number): string[] {
   return keys
 }
 
-/** Classify raw tile records against the current filters (store order, first match wins). */
+/** Classify raw tile records against the current filters (first active match in store order wins, see activeFirst). */
 export function recordsToPois(records: readonly TileRecord[], filters: readonly FilterDef[]): OsmPoi[] {
   const out: OsmPoi[] = []
+  const ordered = activeFirst(filters)
   for (const [t, id, lat, lon, tags] of records) {
     const osmType = KIND[t]
     if (!osmType) continue
-    const type = classifyElement(tags, osmType, filters)
+    const type = classifyElement(tags, osmType, ordered)
     if (type !== null) out.push({ id, osmType, type, lat, lon, tags })
   }
   return out
+}
+
+/**
+ * The POI with its category recomputed against `ordered` (use `activeFirst`
+ * order). Unchanged → the same object; no `osmType` (favorites, notes, custom
+ * POIs) or no match at all → keeps its old type.
+ */
+export function reclassifyPoi(poi: OsmPoi, ordered: readonly FilterDef[]): OsmPoi {
+  if (!poi.osmType) return poi
+  const type = classifyElement(poi.tags, poi.osmType, ordered)
+  return type === null || type === poi.type ? poi : { ...poi, type }
 }
 
 /**

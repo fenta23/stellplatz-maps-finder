@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest'
 import { gzipSync } from 'node:zlib'
-import { DEFAULT_FILTERS, type FilterDef } from '@/features/filters/filterModel.js'
+import { activeFirst, DEFAULT_FILTERS, type FilterDef } from '@/features/filters/filterModel.js'
 import {
-  createPoiTileSource, decodeTile, LEGACY_TILED_FILTER_IDS, planTileFilters, recordsToPois, tileKeysFor, tiledFilterIds,
+  createPoiTileSource, decodeTile, LEGACY_TILED_FILTER_IDS, planTileFilters, recordsToPois, reclassifyPoi, tileKeysFor, tiledFilterIds,
   type TileManifest,
 } from './poiTiles.js'
 
@@ -267,5 +267,28 @@ describe('createPoiTileSource with additional layers', () => {
   it('accepts a legacy manifest with only parking and rest tiles', async () => {
     const src = createPoiTileSource('https://tiles.test', fakeServer({ '/manifest.json': json(MANIFEST) }))
     await expect(src.manifest()).resolves.toMatchObject({ version: '2026-10-02' })
+  })
+})
+
+describe('multi-category records follow the active chips', () => {
+  const vis = (on: string[], off: string[]): FilterDef[] => DEFAULT_FILTERS
+    .filter(f => on.includes(f.id) || off.includes(f.id))
+    .map(f => ({ ...f, hidden: false, enabled: on.includes(f.id) }))
+  const REC = [['n', 7, 48.1, 11.1, { shop: 'bakery', amenity: 'cafe' }]]
+
+  it('recordsToPois assigns a bakery-café to the active café, not the earlier inactive bakery', () => {
+    expect(recordsToPois(REC as never, vis(['cafe'], ['bakery'])).map(p => p.type)).toEqual(['cafe'])
+    expect(recordsToPois(REC as never, vis(['bakery', 'cafe'], [])).map(p => p.type)).toEqual(['bakery'])
+    expect(recordsToPois(REC as never, vis([], ['bakery', 'cafe'])).map(p => p.type)).toEqual(['bakery'])
+  })
+
+  it('reclassifyPoi: re-assigns, keeps the object when unchanged, leaves unmatched and osmType-less POIs alone', () => {
+    const poi = { id: 7, osmType: 'node' as const, type: 'bakery', lat: 1, lon: 2, tags: { shop: 'bakery', amenity: 'cafe' } }
+    const asCafe = reclassifyPoi(poi, activeFirst(vis(['cafe'], ['bakery'])))
+    expect(asCafe.type).toBe('cafe')
+    expect(reclassifyPoi(poi, activeFirst(vis(['bakery', 'cafe'], [])))).toBe(poi)
+    expect(reclassifyPoi(poi, [])).toBe(poi)
+    const noType = { id: 8, type: 'bakery', lat: 1, lon: 2, tags: poi.tags }
+    expect(reclassifyPoi(noType, activeFirst(vis(['cafe'], ['bakery'])))).toBe(noType)
   })
 })

@@ -492,3 +492,36 @@ describe('positionOf', () => {
     expect(loader.positionOf(poi(1, 48.0009, 11.15))).toBeNull()
   })
 })
+
+describe('reclassify (chip toggles re-assign the loaded POIs)', () => {
+  const vis = (on: string[], off: string[]): FilterDef[] => DEFAULT_FILTERS
+    .filter(f => on.includes(f.id) || off.includes(f.id))
+    .map(f => ({ ...f, hidden: false, enabled: on.includes(f.id) }))
+  const bakeryCafe = (): OsmPoi =>
+    poi(9, 48.0009, 11.1, { type: 'bakery', tags: { shop: 'bakery', amenity: 'cafe' } })
+  const types = (u: { hits: readonly CorridorHit<OsmPoi>[] }) => u.hits.map(h => h.item.type)
+
+  it('assigns a bakery-café to the active café, re-assigns on reclassify() via onUpdate, no request', async () => {
+    const { loader, updates, fetchAround, setFilters, setStatus } = setup({
+      tiles: null, filters: vis(['cafe'], ['bakery']), fetchAround: async () => [bakeryCafe()],
+    })
+    await loader.load(mkTrack())
+    expect(types(updates.at(-1)!)).toEqual(['cafe'])
+    const n = updates.length
+    const calls = fetchAround.mock.calls.length
+    const statusCalls = setStatus.mock.calls.length
+    setFilters(vis(['bakery', 'cafe'], []))
+    loader.reclassify()
+    expect(updates.length).toBe(n + 1)
+    expect(updates.at(-1)!.done).toBe(true)
+    expect(types(updates.at(-1)!)).toEqual(['bakery'])
+    expect(fetchAround.mock.calls.length).toBe(calls)
+    expect(setStatus.mock.calls.length).toBe(statusCalls)
+  })
+
+  it('is a no-op without a track', () => {
+    const { loader, updates } = setup({ tiles: null })
+    loader.reclassify()
+    expect(updates).toHaveLength(0)
+  })
+})

@@ -5,9 +5,9 @@
 // about the DOM or the map.
 
 import { fetchPoisAround, poiKey, type OsmPoi } from '@/features/pois/OverpassClient.js'
-import type { FilterDef } from '@/features/filters/filterModel.js'
+import { activeFirst, type FilterDef } from '@/features/filters/filterModel.js'
 import type { PoiTileSource, TileLayer } from '@/features/pois/poiTiles.js'
-import { planTileFilters, tileKeysFor, tiledFilterIds } from '@/features/pois/poiTiles.js'
+import { planTileFilters, reclassifyPoi, tileKeysFor, tiledFilterIds } from '@/features/pois/poiTiles.js'
 import { trackPoiCountMessage } from '@/features/pois/statusMessages.js'
 import { createSegmentIndex, type SegmentIndex } from '@/features/track/trackGeometry.js'
 import {
@@ -43,6 +43,8 @@ export interface TrackPoiLoader {
   load(track: Track): Promise<void>
   /** Re-filter what is in memory; network only if the Overpass bucket grew. */
   setCorridor(corridorM: number): void
+  /** Chips changed without needing new data: re-assign the loaded POIs, deliver again. No network. */
+  reclassify(): void
   /** Filters changed → load again for the current track. */
   reload(): Promise<void>
   /** Re-request only the Overpass chunks that failed. */
@@ -99,6 +101,11 @@ export function createTrackPoiLoader(deps: TrackPoiLoaderDeps): TrackPoiLoader {
     const { all, custom } = partition()
     if (fallback) return all
     return tiledIds ? planTileFilters(all, tiledIds).liveFilters : custom
+  }
+
+  function addCandidates(pois: readonly OsmPoi[]): void {
+    const ordered = activeFirst(deps.getOsmFilters())
+    for (const p of pois) candidates.set(poiKey(p), reclassifyPoi(p, ordered))
   }
 
   function stop(): void {
@@ -174,7 +181,7 @@ export function createTrackPoiLoader(deps: TrackPoiLoaderDeps): TrackPoiLoader {
             try {
               const pois = await tiles.fetchTilePois(wanted, plan.tileFilters, signal)
               if (!live()) return
-              for (const p of pois) candidates.set(poiKey(p), p)
+              addCandidates(pois)
               deps.onUpdate(hitsNow(), false)
               deps.setStatus(`${MSG_LOADING} (${b + 1} von ${batches})`)
             } catch (err) {
@@ -222,7 +229,7 @@ export function createTrackPoiLoader(deps: TrackPoiLoaderDeps): TrackPoiLoader {
           }
           if (!live()) return
           if (!pois) { failed.add(i); continue }
-          for (const p of pois) candidates.set(poiKey(p), p)
+          addCandidates(pois)
           deps.onUpdate(hitsNow(), false)
           deps.setStatus(`${MSG_LOADING} (${n} von ${todo.length})`)
         }
@@ -264,6 +271,16 @@ export function createTrackPoiLoader(deps: TrackPoiLoaderDeps): TrackPoiLoader {
         && overpassFilters.length > 0 && track.lengthM <= MAX_OVERPASS_TRACK_M
       if (grew) { void execute('auto'); return }
       deliverIdle()
+    },
+
+    reclassify() {
+      if (!track) return
+      const ordered = activeFirst(deps.getOsmFilters())
+      for (const [k, p] of candidates) {
+        const next = reclassifyPoi(p, ordered)
+        if (next !== p) candidates.set(k, next)
+      }
+      deps.onUpdate(hitsNow(), !running)
     },
 
     reload() {

@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **„In der Nähe“ zeigt die Luftlinie.** Ein Tipp auf einen Eintrag zentriert die Karte auf den Ort und meldet z. B. „Esso · 545 m Luftlinie“ statt einer Fußroute.
 
 ### Fixed
+- **Orte mit zwei Kategorien verschwanden, wenn der Chip der ersten aus war.** Eine Bäckerei mit Café (`shop=bakery` + `amenity=cafe`) galt immer als Bäckerei und war bei „Bäckerei aus, Café an“ unsichtbar; ebenso Hotel mit Restaurant oder Parkplatz mit Toilette. Jetzt gehört ein Ort zur ersten **aktiven** Kategorie, die passt (`activeFirst` in `filterModel.ts`), und erst ersatzweise zur ersten inaktiven. Das Umschalten eines Chips ordnet bereits geladene Orte sofort neu zu, ohne Netzanfrage und ohne laufende Abfragen abzubrechen (`reclassify` im Viewport-Refresher und im Routen-Loader). Dabei mitbehoben: Ein Marker, dessen Kategorie sich ändert, behielt sein altes Icon und öffnete beim Klick den alten Stand.
 - **Datenschutzerklärung beschrieb den Datenfluss falsch.** Dort stand, POI-Abfragen und Adresssuche liefen über unseren Server-Proxy und die IP-Adresse werde nicht übermittelt. Tatsächlich fragt der Browser Overpass und Nominatim direkt an; der Text nennt jetzt die Dienste und dass die IP-Adresse dorthin übermittelt wird. Die Sätze zu Routing/Valhalla sind entfallen.
 
 ## [2.0.0] - 2026-10-03

@@ -467,3 +467,69 @@ describe('fetchSignature', () => {
     expect(fetchSignature(cosmetic)).toBe(base)
   })
 })
+
+describe('createPoiRefresher reclassify (chip toggles re-assign loaded POIs)', () => {
+  const vis = (on: string[], off: string[]): FilterDef[] => DEFAULT_FILTERS
+    .filter(f => on.includes(f.id) || off.includes(f.id))
+    .map(f => ({ ...f, hidden: false, enabled: on.includes(f.id) }))
+  const bakeryCafe = (type: string): OsmPoi =>
+    ({ id: 9, osmType: 'node', type, lat: 48.12, lon: 11.57, tags: { shop: 'bakery', amenity: 'cafe' } })
+
+  function setup() {
+    let filters = vis(['cafe'], ['bakery'])
+    fetchPoisMock.mockImplementation(async () => [bakeryCafe('bakery')])
+    const setMarkers = vi.fn<(p: readonly OsmPoi[]) => void>()
+    const r = createPoiRefresher({ getBounds: () => CITY, setMarkers, setStatus: vi.fn(), getOsmFilters: () => filters })
+    return { r, setMarkers, setFilters: (f: FilterDef[]) => { filters = f } }
+  }
+  const last = (m: ReturnType<typeof setup>['setMarkers']) => m.mock.calls.at(-1)![0].map(p => p.type)
+
+  it('paints a bakery-café as café while the bakery chip is off; switching it on re-assigns without a request', async () => {
+    const { r, setMarkers, setFilters } = setup()
+    await r.refresh(); await flush()
+    expect(last(setMarkers)).toEqual(['cafe'])
+    const calls = setMarkers.mock.calls.length
+    fetchPoisMock.mockClear()
+    setFilters(vis(['bakery', 'cafe'], []))
+    r.reclassify()
+    expect(setMarkers.mock.calls.length).toBe(calls + 1)
+    expect(last(setMarkers)).toEqual(['bakery'])
+    setFilters(vis(['cafe'], ['bakery']))
+    r.reclassify()
+    expect(last(setMarkers)).toEqual(['cafe'])
+    expect(fetchPoisMock).not.toHaveBeenCalled()
+  })
+
+  it('does not abort an in-flight load and classifies its late result with the current chips', async () => {
+    const { r, setMarkers, setFilters } = setup()
+    let release!: () => void
+    let sig: AbortSignal | undefined
+    fetchPoisMock.mockImplementation(async (_b: unknown, _f: unknown, s?: AbortSignal) => {
+      sig = s
+      await new Promise<void>(res => { release = res })
+      return [bakeryCafe('bakery')]
+    })
+    const p = r.refresh()
+    await flush()
+    setFilters(vis(['bakery', 'cafe'], []))
+    r.reclassify()
+    expect(sig?.aborted).toBe(false)
+    release(); await p; await flush()
+    expect(last(setMarkers)).toEqual(['bakery'])
+  })
+
+  it('while suspended it updates the store but does not paint; resume + refresh shows the new assignment', async () => {
+    const { r, setMarkers, setFilters } = setup()
+    await r.refresh(); await flush()
+    r.suspend()
+    const calls = setMarkers.mock.calls.length
+    setFilters(vis(['bakery', 'cafe'], []))
+    r.reclassify()
+    expect(setMarkers.mock.calls.length).toBe(calls)
+    r.resume()
+    fetchPoisMock.mockClear()
+    await r.refresh(); await flush()
+    expect(last(setMarkers)).toEqual(['bakery'])
+    expect(fetchPoisMock).not.toHaveBeenCalled()
+  })
+})
