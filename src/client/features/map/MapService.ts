@@ -8,6 +8,8 @@ const SVG_SATELLITE = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height
 
 // Lucide "locate-fixed" — crosshair with centre dot
 const SVG_LOCATE = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="2" x2="5" y1="12" y2="12"/><line x1="19" x2="22" y1="12" y2="12"/><line x1="12" x2="12" y1="2" y2="5"/><line x1="12" x2="12" y1="19" y2="22"/><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="3"/></svg>'
+// Lucide "route" — import a tour (GPX / Komoot)
+const SVG_ROUTE = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg>'
 
 // Lucide plus / minus — replace Leaflet's default "+"/"−" glyphs so the zoom
 // control matches the icon style of the layer switcher / locate button.
@@ -31,8 +33,8 @@ export function createLocateControl(onClick: () => void): L.Control {
   return control
 }
 
-/** Map-actions control (bottom-left): the locate button. */
-export function createMapActions(onLocate: () => void): L.Control {
+/** Map-actions control (bottom-left): the locate button and the route-import button. */
+export function createMapActions(onLocate: () => void, onTrack: () => void = () => {}): L.Control {
   const control = L.control({ position: 'bottomleft' })
   control.onAdd = () => {
     const container = L.DomUtil.create('div', 'map-actions leaflet-bar')
@@ -43,6 +45,13 @@ export function createMapActions(onLocate: () => void): L.Control {
     locateBtn.title = 'Zu meinem Standort'
     locateBtn.setAttribute('aria-label', 'Zu meinem Standort')
     L.DomEvent.on(locateBtn, 'click', (e: Event) => { L.DomEvent.stop(e); onLocate() })
+
+    const trackBtn = L.DomUtil.create('button', 'locate-btn track-btn', container) as HTMLButtonElement
+    trackBtn.type = 'button'
+    trackBtn.innerHTML = SVG_ROUTE
+    trackBtn.title = 'Route importieren'
+    trackBtn.setAttribute('aria-label', 'Route importieren')
+    L.DomEvent.on(trackBtn, 'click', (e: Event) => { L.DomEvent.stop(e); onTrack() })
 
     L.DomEvent.disableClickPropagation(container)
     return container
@@ -165,6 +174,7 @@ export class MapService {
   private readonly contextMenuListeners: Array<(lat: number, lng: number) => void> = []
   private readonly placementListeners: Array<(lat: number, lng: number) => void> = []
   private readonly locateListeners: Array<() => void> = []
+  private readonly trackActionListeners: Array<() => void> = []
   private readonly dragStartListeners: Array<() => void> = []
   private readonly zoomStartListeners: Array<() => void> = []
   private readonly baseLayerChangeListeners: Array<(key: string) => void> = []
@@ -183,7 +193,10 @@ export class MapService {
     createLayerSwitcher(baseLayers, this.map, key => {
       for (const l of this.baseLayerChangeListeners) l(key)
     }).addTo(this.map)
-    createMapActions(() => { for (const l of this.locateListeners) l() }).addTo(this.map)
+    createMapActions(
+      () => { for (const l of this.locateListeners) l() },
+      () => { for (const l of this.trackActionListeners) l() },
+    ).addTo(this.map)
 
     // Swap Leaflet's "+"/"−" zoom glyphs for Lucide icons (styled like the other controls).
     const c = this.map.getContainer()
@@ -249,6 +262,15 @@ export class MapService {
     return () => {
       const idx = this.locateListeners.indexOf(listener)
       if (idx !== -1) this.locateListeners.splice(idx, 1)
+    }
+  }
+
+  /** Fires when the "import route" control is tapped. */
+  onTrackAction(listener: () => void): () => void {
+    this.trackActionListeners.push(listener)
+    return () => {
+      const idx = this.trackActionListeners.indexOf(listener)
+      if (idx !== -1) this.trackActionListeners.splice(idx, 1)
     }
   }
 

@@ -1,4 +1,4 @@
-/* ── Map actions (locate button) ── */
+/* ── Map actions (locate + route-import buttons) ── */
 .map-actions {
     display: flex;
     align-items: center;
@@ -121,4 +121,6 @@ body.ui-collapsed .leaflet-top {
     body.detail-open .leaflet-top.leaflet-right {
         margin-right: 340px;
     }
+}.map-actions .locate-btn + .locate-btn {
+    border-left: 1px solid var(--border-soft);
 }

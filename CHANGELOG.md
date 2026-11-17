@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Route importieren und auf der Karte anzeigen.** Eine fertige Tour lässt sich per Komoot-Link oder GPX-Datei laden und erscheint als Linie mit Start- und Zielpunkt auf der Karte. Einstieg über den Menüeintrag „Route importieren (GPX/Komoot)“ oder den neuen Knopf neben dem Standort-Knopf. Die aktive Route bleibt über einen Reload erhalten (nur lokal im Gerät) und lässt sich im selben Dialog wieder einpassen oder entfernen. Grundlage für „POIs entlang der Route“.
+  - **Komoot-Link:** Der Browser holt öffentliche Touren direkt bei Komoot ab (eine Anfrage, ohne Cookies). Das ist ein inoffizieller Endpunkt; nicht öffentliche Touren, unbekannte Links und Ausfälle führen mit einer eigenen Meldung zum GPX-Upload. Über `KOMOOT_IMPORT_ENABLED` in `features/track/komoot.ts` lässt sich der Weg abschalten.
+  - **GPX:** `trkpt` über alle Segmente, ersatzweise `rtept`; GPX 1.0 und 1.1 unabhängig vom Namespace. Grenzen: 10 MB, 1000 km. Lange Tracks werden mit Douglas-Peucker (ab 5 m Toleranz) auf höchstens 20.000 Punkte vereinfacht.
+  - **Neuer Slice `features/track/`** (Geometrie, Import, Store, Dialog) plus `features/map/leafletTrackLayer.ts` und `app/trackWiring.ts`. Die Geometrie bringt schon die Projektion eines Punkts auf die Route (Kilometer ab Start, Abstand) für den Folgeschritt mit.
+  - **Datenschutzerklärung** um den Komoot-Abruf ergänzt (IP-Adresse und Tour-ID gehen an Komoot; GPX-Dateien bleiben im Browser).
+
 ### Removed
 - **In-App-Routing entfernt.** Die App berechnet keine Routen mehr: Routenlinie, Routenzusammenfassung (Distanz, Fahrtzeit, Umwegfaktor), der Auto/Rad/Fuß-Umschalter auf der Karte sowie „Route hierhin“ und „Von hier“ im Detailpanel entfallen, ebenso die gestrichelte Fußroute zu „In der Nähe“-Einträgen. Navi-Apps können das besser; die Übergabe bleibt über „Losfahren ↗“ (Google Maps bzw. Apple Maps, nur mit Ziel – Start und Verkehrsmittel wählt die Navi-App) und „Google Maps ↗“.
   - **Frontend:** Slice `features/routing/` gelöscht. Die Link-Builder liegen jetzt in `features/poi-detail/externalLinks.ts`, `haversineMeters` zentral in `core/geo.ts`. `PoiDetailPanel.show(poi, view?)` nimmt ein Options-Objekt statt sieben Positionsargumenten. `selection` kennt nur noch `select` und `clear`.

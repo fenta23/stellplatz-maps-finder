@@ -1,0 +1,57 @@
+/* ── Track import dialog (reuses .fav-panel shell and .import-* blocks) ── */
+.track-form {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.track-form .import-btn {
+    margin-top: 0;
+    flex-shrink: 0;
+}
+.track-input {
+    flex: 1;
+    min-width: 0;
+    padding: 10px 12px;
+    border: 1.5px solid var(--border-soft);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--ink);
+    font-size: 0.9rem;
+}
+.track-input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+.track-active-name {
+    font-weight: 600;
+    color: var(--ink) !important;
+    overflow-wrap: anywhere;
+}
+.track-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.import-btn.track-btn-secondary {
+    background: transparent;
+    color: var(--ink);
+    border-color: var(--border-soft);
+}
+.import-btn.track-btn-secondary:hover {
+    background: var(--surface);
+    color: var(--danger);
+}
+.import-btn:disabled,
+.track-input:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+.track-status {
+    min-height: 1.3em;
+    margin: 4px 0 0;
+    font-size: 0.85rem;
+    color: var(--ink-muted);
+}
+.track-status.track-status-error {
+    color: var(--danger);
+}

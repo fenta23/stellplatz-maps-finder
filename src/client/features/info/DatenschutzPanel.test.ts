@@ -9,6 +9,8 @@ describe('DatenschutzPanel', () => {
     expect(c.textContent).toContain('Supabase')
     expect(c.textContent).toContain('GitHub Pages')
     expect(c.textContent).toContain('netcup')
+    expect(c.textContent).toContain('Komoot')
+    expect(c.textContent).toContain('api.komoot.de')
     expect(c.textContent).not.toContain('Valhalla')
     expect(c.textContent).not.toContain('Routing-Dienst')
     expect(c.textContent).not.toContain('Server-Proxy')

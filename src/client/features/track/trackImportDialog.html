@@ -1,0 +1,34 @@
+<div class="fav-panel track-panel" role="dialog" aria-label="Route importieren">
+  <div class="fav-header">
+    <span class="fav-title"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg> Route importieren</span>
+    <button class="fav-close" type="button" aria-label="Schließen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+  </div>
+  <div class="import-body">
+    <div class="import-variant track-active" data-ref="active" hidden>
+      <div class="import-variant-header"><span>Aktive Route</span></div>
+      <p class="track-active-name" data-ref="activeName"></p>
+      <p class="track-active-length" data-ref="activeLength"></p>
+      <div class="track-actions">
+        <button class="import-btn" type="button" data-ref="show">Auf Karte zeigen</button>
+        <button class="import-btn track-btn-secondary" type="button" data-ref="remove">Route entfernen</button>
+      </div>
+    </div>
+
+    <div class="import-variant" data-ref="komootSection">
+      <div class="import-variant-header"><span>Komoot-Link</span></div>
+      <form class="track-form" data-ref="linkForm">
+        <input class="track-input" type="text" inputmode="url" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="Komoot-Link" placeholder="https://www.komoot.com/de-de/tour/…" data-ref="linkInput" />
+        <button class="import-btn" type="submit" data-ref="linkBtn">Laden</button>
+      </form>
+      <p>Funktioniert mit öffentlichen Touren. Sonst die Tour bei Komoot als GPX exportieren.</p>
+    </div>
+
+    <div class="import-variant">
+      <div class="import-variant-header"><span>GPX-Datei</span></div>
+      <button class="import-btn" type="button" data-ref="fileBtn">GPX-Datei wählen</button>
+      <input type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml" hidden data-ref="fileInput" />
+    </div>
+
+    <p class="track-status" role="status" aria-live="polite" data-ref="status"></p>
+  </div>
+</div>

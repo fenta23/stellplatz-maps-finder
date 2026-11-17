@@ -52,11 +52,14 @@ import { createSession } from './session.js'
 import { createSelection } from './selection.js'
 import { createPoiRefresher, fetchSignature } from './poiRefresher.js'
 import { initImport } from './importWiring.js'
+import { createTrackWiring } from './trackWiring.js'
+import { LocalTrackStore } from '@/features/track/TrackStore.js'
+import { createLeafletTrackLayer } from '@/features/map/leafletTrackLayer.js'
 import { initCustomPois } from './customPoiWiring.js'
 import { initAuthSync } from './authWiring.js'
 import { geocode } from '@/core/nominatim.js'
 import {
-  SVG_STAR, SVG_NOTE, SVG_USER, SVG_TRASH, SVG_INFO, SVG_UPLOAD, SVG_SHIELD, SVG_BUILDING, SVG_HELP, SVG_LEAF,
+  SVG_STAR, SVG_NOTE, SVG_USER, SVG_TRASH, SVG_INFO, SVG_UPLOAD, SVG_SHIELD, SVG_BUILDING, SVG_HELP, SVG_LEAF, SVG_ROUTE,
 } from './icons.js'
 // Cross-cutting responsive overrides — must load AFTER all feature CSS so the
 // media-query rules win over feature base rules of equal specificity.
@@ -418,6 +421,16 @@ async function init() {
     refreshCustomMarkers: customPois.refreshMarkers,
   })
 
+  // ── Track import (GPX / Komoot) ─────────────────────────────────────────────
+  const trackWiring = createTrackWiring({
+    store: new LocalTrackStore(),
+    layer: createLeafletTrackLayer(map),
+    dialogContainer: document.body,
+    flash: flashInfo,
+  })
+  mapService.onBaseLayerChange(key => trackWiring.setSatellite(key === 'Satellit'))
+  mapService.onTrackAction(() => trackWiring.openImport())
+
   // ── Side menu ───────────────────────────────────────────────────────────────
   const infoPanel = new InfoPanel(document.body)
   poiTiles.manifest().then(m => infoPanel.setPoiDataDate(m.date)).catch(() => { /* Overpass fallback, no date */ })
@@ -440,12 +453,13 @@ async function init() {
   const closeAll = () => {
     infoPanel.close(); datenschutzPanel.close(); impressumPanel.close()
     favoritesPanel.close(); notesPanel.close(); helpPanel.close()
-    responsibilityPanel.close()
+    responsibilityPanel.close(); trackWiring.closeImport()
   }
 
   const menuItems: MenuEntry[] = [
     { icon: SVG_STAR, label: 'Favoriten', onSelect: () => { closeAll(); favoritesPanel.open() } },
     { icon: SVG_NOTE, label: 'Notizen', onSelect: () => { closeAll(); notesPanel.open() } },
+    { icon: SVG_ROUTE, label: 'Route importieren (GPX/Komoot)', onSelect: () => { closeAll(); trackWiring.openImport() } },
     { icon: SVG_LEAF, label: 'Verantwortungsvoll unterwegs', onSelect: () => { closeAll(); responsibilityPanel.open() } },
     { icon: SVG_UPLOAD, label: 'Google Maps importieren', onSelect: () => importHandle.open() },
   ]
