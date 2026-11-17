@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { BASE_LAYER_CONFIGS, buildBaseLayers, buildMapLayerConfig, createLocateControl } from './MapService.js'
+import { BASE_LAYER_CONFIGS, buildBaseLayers, buildMapLayerConfig, createLocateControl, createMapActions } from './MapService.js'
 
 type OnAdd = { onAdd: () => HTMLElement }
 
@@ -16,6 +16,18 @@ describe('createLocateControl', () => {
   it('exposes an accessible label', () => {
     const el = (createLocateControl(vi.fn()) as unknown as OnAdd).onAdd()
     expect(el.querySelector('.locate-btn')?.getAttribute('aria-label')).toBe('Zu meinem Standort')
+  })
+})
+
+describe('createMapActions', () => {
+  it('renders only the locate button (no routing-mode toggle)', () => {
+    const onLocate = vi.fn()
+    const el = (createMapActions(onLocate) as unknown as OnAdd).onAdd()
+    expect(el.classList.contains('map-actions')).toBe(true)
+    expect(el.querySelector('.routing-toggle')).toBeNull()
+    expect(el.querySelectorAll('button')).toHaveLength(1)
+    el.querySelector<HTMLButtonElement>('.locate-btn')!.click()
+    expect(onLocate).toHaveBeenCalledOnce()
   })
 })
 

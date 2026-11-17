@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+- **In-App-Routing entfernt.** Die App berechnet keine Routen mehr: Routenlinie, Routenzusammenfassung (Distanz, Fahrtzeit, Umwegfaktor), der Auto/Rad/Fuß-Umschalter auf der Karte sowie „Route hierhin“ und „Von hier“ im Detailpanel entfallen, ebenso die gestrichelte Fußroute zu „In der Nähe“-Einträgen. Navi-Apps können das besser; die Übergabe bleibt über „Losfahren ↗“ (Google Maps bzw. Apple Maps, nur mit Ziel – Start und Verkehrsmittel wählt die Navi-App) und „Google Maps ↗“.
+  - **Frontend:** Slice `features/routing/` gelöscht. Die Link-Builder liegen jetzt in `features/poi-detail/externalLinks.ts`, `haversineMeters` zentral in `core/geo.ts`. `PoiDetailPanel.show(poi, view?)` nimmt ein Options-Objekt statt sieben Positionsargumenten. `selection` kennt nur noch `select` und `clear`.
+  - **Backend:** Endpunkt `/api/route` (OSRM-Proxy) samt Handler und Tests entfernt, dazu die ungenutzten Valhalla-Polyline-Decoder. Die Edge Function muss nach dem Frontend-Deploy neu deployt werden.
+
+### Changed
+- **„In der Nähe“ zeigt die Luftlinie.** Ein Tipp auf einen Eintrag zentriert die Karte auf den Ort und meldet z. B. „Esso · 545 m Luftlinie“ statt einer Fußroute.
+
+### Fixed
+- **Datenschutzerklärung beschrieb den Datenfluss falsch.** Dort stand, POI-Abfragen und Adresssuche liefen über unseren Server-Proxy und die IP-Adresse werde nicht übermittelt. Tatsächlich fragt der Browser Overpass und Nominatim direkt an; der Text nennt jetzt die Dienste und dass die IP-Adresse dorthin übermittelt wird. Die Sätze zu Routing/Valhalla sind entfallen.
+
 ## [2.0.0] - 2026-10-03
 
 ### Added

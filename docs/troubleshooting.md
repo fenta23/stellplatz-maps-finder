@@ -42,7 +42,7 @@ Kommt lokal `200` und über die Edge Function `403`, ist es dieser Block.
 
 `/api/overpass`, `/api/nearby` und `/api/geocode` gibt es serverseitig noch, der Client ruft sie aber nicht mehr auf. Beim Import gilt weiter die Nominatim-Policy von höchstens 1 Anfrage pro Sekunde.
 
-Nicht betroffen sind bisher `/api/route`, `/api/mapillary` und `/api/ai`. Map-Tiles laufen grundsätzlich nie über den Proxy.
+Nicht betroffen sind bisher `/api/mapillary` und `/api/ai`. Map-Tiles laufen grundsätzlich nie über den Proxy.
 
 ---
 

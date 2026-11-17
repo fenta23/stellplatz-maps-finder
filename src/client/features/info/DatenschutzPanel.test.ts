@@ -9,8 +9,12 @@ describe('DatenschutzPanel', () => {
     expect(c.textContent).toContain('Supabase')
     expect(c.textContent).toContain('GitHub Pages')
     expect(c.textContent).toContain('netcup')
-    expect(c.textContent).toContain('Valhalla')
-    expect(c.textContent).not.toContain('selbstgehosteten Routing-Dienst')
+    expect(c.textContent).not.toContain('Valhalla')
+    expect(c.textContent).not.toContain('Routing-Dienst')
+    expect(c.textContent).not.toContain('Server-Proxy')
+    expect(c.textContent).toContain('direkt von deinem Browser an öffentliche')
+    expect(c.textContent).toContain('overpass-api.de')
+    expect(c.textContent).toContain('nominatim.openstreetmap.org')
   })
 
   it('starts closed and opens/closes', () => {

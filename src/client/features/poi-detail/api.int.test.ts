@@ -52,12 +52,6 @@ describe('api edge function', () => {
     expect(await res.json()).toEqual({ error: 'q is required' })
   })
 
-  it('route rejects missing coordinates', async () => {
-    const res = await fetch(`${API}/route`)
-    expect(res.status).toBe(400)
-    expect(await res.json()).toEqual({ error: 'from and to coordinates required (lat,lon)' })
-  })
-
   it('nearby rejects missing coordinates', async () => {
     const res = await fetch(`${API}/nearby`)
     expect(res.status).toBe(400)

@@ -169,51 +169,14 @@
     background: #ffebee;
 }
 
-.route-summary {
-    padding: 11px 18px;
-    background: var(--accent-soft);
-    border-bottom: 1px solid var(--border-soft);
-    font-size: 0.85rem;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    color: var(--ink);
-}
-.route-summary svg {
-    width: 1em;
-    height: 1em;
-    vertical-align: middle;
-}
-.detour {
-    color: var(--ink-muted);
-}
-
-.route-start {
+.btn-go {
     display: flex;
     align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-    padding: 7px 18px;
-    font-size: 0.8rem;
-    color: var(--ink-muted);
-    border-bottom: 1px solid var(--border-soft);
-    background: var(--surface);
+    justify-content: center;
+    gap: 6px;
+    text-decoration: none;
 }
-.route-start strong {
-    color: var(--ink);
-    font-weight: 600;
-}
-.route-start-reset {
-    border: none;
-    background: none;
-    cursor: pointer;
-    padding: 0;
-    color: var(--terracotta);
-    font-size: 0.8rem;
-    text-decoration: underline;
-}
-.btn-go svg,
-.btn-set-start svg {
+.btn-go svg {
     width: 1em;
     height: 1em;
     vertical-align: middle;
@@ -284,7 +247,7 @@
     background: var(--accent-soft);
 }
 
-/* Compact 2-column grid for the secondary actions (the panel grew a lot). */
+/* Secondary actions: Google Maps full width, side by side with park4night when visible. */
 .panel-actions-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;

@@ -1,9 +1,9 @@
 import { fetchFromOverpassMirrors } from '@/core/overpassFetch.js'
+import { haversineMeters } from '@/core/geo.js'
 import type { NearbyItem } from './PoiDetailPanel.js'
 
 const SEARCH_RADIUS_M = 2000
 const MAX_RESULTS = 15
-const EARTH_RADIUS_M = 6_371_000
 
 const KIND_LABELS: Record<string, string> = {
   fuel: 'Tankstelle',
@@ -41,19 +41,6 @@ function buildNearbyQuery(lat: number, lon: number): string {
   return `[out:json][timeout:15];\n(\n  ${filters};\n);\nout center tags;`
 }
 
-function toRad(deg: number): number {
-  return (deg * Math.PI) / 180
-}
-
-function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const dLat = toRad(lat2 - lat1)
-  const dLon = toRad(lon2 - lon1)
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2
-  return EARTH_RADIUS_M * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-}
-
 type OverpassElement = {
   readonly id: number
   readonly lat?: number
@@ -84,7 +71,7 @@ export async function fetchNearby(lat: number, lon: number): Promise<NearbyItem[
       return [{
         kind,
         name: el.tags['name'] ?? label,
-        distance: Math.round(haversineMeters(lat, lon, pos.lat, pos.lon)),
+        distance: Math.round(haversineMeters({ lat, lon }, pos)),
         lat: pos.lat,
         lon: pos.lon,
       }]

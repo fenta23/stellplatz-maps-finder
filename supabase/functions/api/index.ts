@@ -3,7 +3,6 @@ import { corsHeaders, jsonResponse, errorResponse } from '../_shared/utils.ts'
 import { handleHealth } from './healthHandler.ts'
 import { handleOverpass } from './overpassHandler.ts'
 import { handleGeocode } from './geocodeHandler.ts'
-import { handleRoute } from './routeHandler.ts'
 import { handleNearby } from './nearbyHandler.ts'
 import { handleMapillary } from './mapillaryHandler.ts'
 import { handleNotes } from './notesHandler.ts'
@@ -31,11 +30,6 @@ serve(async (req) => {
     if (path === '/api/geocode') {
       if (method !== 'GET') return methodNotAllowed(origin)
       return await handleGeocode(req, origin)
-    }
-
-    if (path === '/api/route') {
-      if (method !== 'GET') return methodNotAllowed(origin)
-      return await handleRoute(req, origin)
     }
 
     if (path === '/api/nearby') {

@@ -15,16 +15,6 @@
   <div class="poi-detail-scroll">
     <div class="oh-badge" data-ref="ohBadge" hidden></div>
 
-    <div class="route-summary" data-ref="routeSummary" hidden>
-      <span data-ref="routeMain"></span>
-      <span class="detour" data-ref="routeDetour"></span>
-    </div>
-
-    <div class="route-start" data-ref="routeStart" hidden>
-      <span class="route-start-label">Start: <strong data-ref="routeStartLabel"></strong></span>
-      <button type="button" class="route-start-reset" data-ref="resetStartBtn" hidden>auf meinen Standort</button>
-    </div>
-
     <div data-section="images"></div>
 
     <div data-section="ai-summary" class="poi-ai-summary" hidden></div>
@@ -57,10 +47,8 @@
   </div>
 
   <div class="panel-actions">
-    <button class="btn-navigate btn-primary" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"/><path d="M15 5.764v15"/><path d="M9 3.236v15"/></svg> Route hierhin</button>
+    <a class="btn-primary btn-go" data-ref="nav" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11 22 2l-9 19-2-8z"/></svg> Losfahren ↗</a>
     <div class="panel-actions-grid" data-ref="actionGrid">
-      <a class="btn-secondary btn-go" data-ref="nav" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11 22 2l-9 19-2-8z"/></svg> Losfahren ↗</a>
-      <button class="btn-secondary btn-set-start" type="button" data-ref="setStartBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/></svg> Von hier</button>
       <a class="btn-secondary btn-maps" data-ref="maps" target="_blank" rel="noopener">Google Maps ↗</a>
       <a class="btn-secondary btn-p4n" data-ref="p4n" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" hidden>park4night ↗</a>
     </div>

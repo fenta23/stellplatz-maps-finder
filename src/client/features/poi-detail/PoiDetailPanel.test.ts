@@ -44,29 +44,58 @@ describe('PoiDetailPanel', () => {
     expect(container.querySelector('.poi-detail-panel')?.classList.contains('hidden')).toBe(true)
   })
 
-  it('fires onNavigate listener on navigate button click', () => {
+  it('sets the Losfahren link to a destination-only nav deeplink', () => {
     const container = document.createElement('div')
-    const panel = new PoiDetailPanel(container)
-    const cb = vi.fn()
-    panel.onNavigate(cb)
-    panel.show(poi)
-    container.querySelector<HTMLButtonElement>('.btn-navigate')?.click()
-    expect(cb).toHaveBeenCalledWith({ poi })
+    new PoiDetailPanel(container).show(poi)
+    const a = container.querySelector<HTMLAnchorElement>('.btn-go')
+    expect(a?.textContent).toContain('Losfahren')
+    expect(a?.getAttribute('href')).toMatch(/destination=48\.1,11\.2|daddr=48\.1,11\.2/)
+    expect(a?.getAttribute('href')).not.toMatch(/origin|saddr|travelmode|dirflg/)
   })
 
-  it('shows route summary when route provided', () => {
+  it('renders no routing UI (route summary, start, Route hierhin, Von hier)', () => {
+    const container = document.createElement('div')
+    new PoiDetailPanel(container).show(poi)
+    expect(container.querySelector('.route-summary')).toBeNull()
+    expect(container.querySelector('.route-start')).toBeNull()
+    expect(container.querySelector('.btn-navigate')).toBeNull()
+    expect(container.querySelector('.btn-set-start')).toBeNull()
+    expect(container.textContent).not.toContain('Route hierhin')
+    expect(container.textContent).not.toContain('Von hier')
+  })
+
+  it('links to Google Maps, park4night only for logged-in users', () => {
     const container = document.createElement('div')
     const panel = new PoiDetailPanel(container)
-    panel.show(poi, {
-      distanceMeters: 15_000,
-      durationSeconds: 900,
-      distanceText: '15,0 km',
-      durationText: '15 min',
-      straightLineMeters: 12_000,
-      detourFactor: 1.25,
-    })
-    expect(container.querySelector('.route-summary')).not.toBeNull()
-    expect(container.querySelector('.route-summary')?.textContent).toContain('15 min')
+    panel.show(poi)
+    expect(container.querySelector<HTMLAnchorElement>('.btn-maps')?.href).toContain('google.com/maps/search')
+    expect(container.querySelector<HTMLElement>('.btn-p4n')?.hidden).toBe(true)
+    panel.show(poi, { config: { isLoggedIn: true } })
+    expect(container.querySelector<HTMLElement>('.btn-p4n')?.hidden).toBe(false)
+    expect(container.querySelector<HTMLAnchorElement>('.btn-p4n')?.href).toContain('park4night.com')
+  })
+
+  it('accepts trackInfo without rendering anything for it yet', () => {
+    const container = document.createElement('div')
+    const a = new PoiDetailPanel(container)
+    a.show(poi)
+    const before = container.innerHTML
+    a.show(poi, { trackInfo: { kmAlong: 12.3, kmToEnd: 45.6, offsetM: 80 } })
+    expect(container.innerHTML).toBe(before)
+  })
+
+  it('marks the favourite state from the view', () => {
+    const container = document.createElement('div')
+    new PoiDetailPanel(container).show(poi, { isFavorite: true })
+    expect(container.querySelector('.btn-favorite')?.getAttribute('aria-pressed')).toBe('true')
+  })
+
+  it('nearby hint no longer promises a route', () => {
+    const container = document.createElement('div')
+    const panel = new PoiDetailPanel(container)
+    panel.show(poi)
+    panel.updateNearby([{ kind: 'bakery', name: 'Bäcker', distance: 300, lat: 48.2, lon: 11.3 }])
+    expect(container.querySelector('[data-section="nearby"]')?.innerHTML).not.toMatch(/Route/)
   })
 
   it('hides on Escape key when panel is open', () => {
@@ -140,7 +169,7 @@ describe('PoiDetailPanel', () => {
 
   it('prefills the personal note textarea', () => {
     const container = document.createElement('div')
-    new PoiDetailPanel(container).show(poi, undefined, undefined, false, 'Tor links')
+    new PoiDetailPanel(container).show(poi, { noteText: 'Tor links' })
     expect(container.querySelector<HTMLTextAreaElement>('.mynote-input')?.value).toBe('Tor links')
   })
 
@@ -171,8 +200,8 @@ describe('PoiDetailPanel', () => {
     const onEdit = vi.fn()
     const onDelete = vi.fn()
     new PoiDetailPanel(container).show(
-      { ...poi, id: -1 }, undefined, undefined, false, '',
-      { isCustom: true, onEdit, onDelete },
+      { ...poi, id: -1 },
+      { config: { isCustom: true, onEdit, onDelete } },
     )
     const wrap = container.querySelector('.poi-menu-wrap')
     expect(wrap).not.toBeNull()

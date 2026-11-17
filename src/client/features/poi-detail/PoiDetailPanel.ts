@@ -1,13 +1,12 @@
 import './poi-detail.css'
 import type { OsmPoi } from '@/features/pois/OverpassClient.js'
-import { buildGoogleMapsPoiLink, buildPark4nightPoiLink, buildNavLink } from '@/features/routing/DirectionsService.js'
-import type { RouteResult, RoutingMode, LatLon } from '@/features/routing/DirectionsService.js'
+import { buildGoogleMapsPoiLink, buildPark4nightPoiLink, buildNavLink } from './externalLinks.js'
 import type { CustomPoi } from '@/features/custom-pois/CustomPoi.js'
 import { customIdToNumber } from '@/features/custom-pois/CustomPoi.js'
 import { clone, ref } from '@/core/template.js'
 import { createEventScope, type EventScope } from '@/core/events.js'
 import { renderList } from '@/core/bind.js'
-import { esc, safeUrl, formatMeters, typeLabel } from './poiLabels.js'
+import { esc, safeUrl, typeLabel } from './poiLabels.js'
 import { buildTags } from './buildTags.js'
 import type { TagRow } from './buildTags.js'
 import { renderImages, showLightbox, hideLightbox } from './imageGallery.js'
@@ -20,8 +19,6 @@ import panelHtml from './poiDetailPanel.html?raw'
 const SVG_MAP_PIN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>'
 
 const SVG_SPARKLE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg>'
-
-export type NavigateRequest = { readonly poi: OsmPoi }
 
 export interface NearbyItem {
   readonly kind: string
@@ -40,12 +37,6 @@ const NEARBY_ICONS: Record<string, string> = {
   dump: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
 }
 
-const MODE_ICON: Record<RoutingMode, string> = {
-  driving: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/></svg>',
-  cycling: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/></svg>',
-  foot: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1"/><path d="m9 20 3-6 3 6"/><path d="m6 8 6 2 6-2"/><path d="M12 10v4"/></svg>',
-}
-
 const HEART_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5"/></svg>'
 
 export interface PanelConfig {
@@ -55,10 +46,13 @@ export interface PanelConfig {
   readonly onDelete?: () => void
 }
 
-export interface PanelRouting {
-  readonly originLabel: string
-  readonly isCustomOrigin: boolean
-  readonly from: LatLon | null
+/** Per-open view state for the panel. */
+export interface PanelView {
+  readonly isFavorite?: boolean
+  readonly noteText?: string
+  readonly config?: PanelConfig
+  /** Position along a track (declared for a later PR; not rendered yet). */
+  readonly trackInfo?: { readonly kmAlong: number; readonly kmToEnd: number; readonly offsetM: number }
 }
 
 // ── Generic listener helper ──────────────────────────────────────────────────
@@ -73,13 +67,10 @@ function subscribe<T>(listeners: T[], listener: T): () => void {
 export class PoiDetailPanel {
   private readonly panel: HTMLElement
   private readonly events: EventScope = createEventScope()
-  private readonly navListeners: Array<(r: NavigateRequest) => void> = []
   private readonly closeListeners: Array<() => void> = []
   private readonly favListeners: Array<() => void> = []
   private readonly noteListeners: Array<(text: string) => void> = []
   private readonly nearbyListeners: Array<(item: NearbyItem) => void> = []
-  private readonly setStartListeners: Array<() => void> = []
-  private readonly resetStartListeners: Array<() => void> = []
   private nearbyItems: NearbyItem[] = []
   private _collapsed = false
 
@@ -96,9 +87,6 @@ export class PoiDetailPanel {
   onFavoriteToggle = (listener: () => void): (() => void) => subscribe(this.favListeners, listener)
   onNoteSave = (listener: (text: string) => void): (() => void) => subscribe(this.noteListeners, listener)
   onNearbySelect = (listener: (item: NearbyItem) => void): (() => void) => subscribe(this.nearbyListeners, listener)
-  onNavigate = (listener: (r: NavigateRequest) => void): (() => void) => subscribe(this.navListeners, listener)
-  onSetStart = (listener: () => void): (() => void) => subscribe(this.setStartListeners, listener)
-  onResetStart = (listener: () => void): (() => void) => subscribe(this.resetStartListeners, listener)
 
   // ── Public collapse/expand (mobile map-drag) ────────────────────────────────
   /** Shrink to header-only strip. No-op when the panel is hidden. */
@@ -159,7 +147,8 @@ export class PoiDetailPanel {
   }
 
   // ── Public render ───────────────────────────────────────────────────────────
-  show(poi: OsmPoi, route?: RouteResult, mode: RoutingMode = 'driving', isFavorite = false, noteText = '', config?: PanelConfig, routing?: PanelRouting): void {
+  show(poi: OsmPoi, panelView: PanelView = {}): void {
+    const { isFavorite = false, noteText = '', config } = panelView
     this.expand()
     this.panel.classList.remove('hidden')
     document.body.classList.add('detail-open')
@@ -174,9 +163,6 @@ export class PoiDetailPanel {
     ref(view, 'name').textContent = t.name ?? typeLabel(poi.type)
     this.renderFav(view, isCustom, isFavorite)
     ref(view, 'close').addEventListener('click', () => this.hide())
-    view.querySelector('.btn-navigate')?.addEventListener('click', () => {
-      for (const l of this.navListeners) l({ poi })
-    })
     // The kebab menu only carries edit/delete for custom POIs. OSM POIs have no
     // such actions, so drop it entirely (the .poi-menu-wrap CSS would otherwise
     // override the template's `hidden` attribute and leave a dead button).
@@ -192,8 +178,8 @@ export class PoiDetailPanel {
       badge.textContent = oh.hint
     }
 
-    // Route
-    this.renderRoute(view, route, mode, routing, poi)
+    // Losfahren: hand-off to the nav app (destination only)
+    ref<HTMLAnchorElement>(view, 'nav').href = buildNavLink({ lat: poi.lat, lon: poi.lon })
 
     // Tags
     this.renderTags(view, poi)
@@ -245,24 +231,6 @@ export class PoiDetailPanel {
     menuBtn.addEventListener('click', (e) => { e.stopPropagation(); setMenu(menu.hidden) })
     ref(view, 'editBtn').addEventListener('click', () => { setMenu(false); config.onEdit?.() })
     ref(view, 'deleteBtn').addEventListener('click', () => { setMenu(false); config.onDelete?.() })
-  }
-
-  private renderRoute(view: DocumentFragment, route: RouteResult | undefined, mode: RoutingMode, routing: PanelRouting | undefined, poi: OsmPoi): void {
-    if (route) {
-      ref(view, 'routeSummary').hidden = false
-      ref(view, 'routeMain').innerHTML = `${MODE_ICON[mode]} ${route.distanceText} · ${route.durationText}`
-      ref(view, 'routeDetour').textContent =
-        `Luftlinie: ${formatMeters(route.straightLineMeters)} (×${route.detourFactor.toFixed(1)})`
-    }
-    if (routing) {
-      ref(view, 'routeStart').hidden = false
-      ref(view, 'routeStartLabel').textContent = routing.originLabel
-      const resetBtn = ref(view, 'resetStartBtn')
-      resetBtn.hidden = !routing.isCustomOrigin
-      resetBtn.addEventListener('click', () => { for (const l of this.resetStartListeners) l() })
-      ref<HTMLAnchorElement>(view, 'nav').href = buildNavLink({ lat: poi.lat, lon: poi.lon }, mode, { from: routing.from })
-    }
-    ref(view, 'setStartBtn').addEventListener('click', () => { for (const l of this.setStartListeners) l() })
   }
 
   private renderTags(view: DocumentFragment, poi: OsmPoi): void {
@@ -332,9 +300,9 @@ export class PoiDetailPanel {
         ? `${it.distance} m`
         : `${(it.distance / 1000).toFixed(1).replace('.', ',')} km`
       const svg = NEARBY_ICONS[it.kind] ?? ''
-      return `<li><button type="button" class="nearby-item" data-nearby-idx="${i}" title="Route von hier zeigen"><span class="nearby-icon">${svg}</span><span class="nearby-name">${esc(it.name)}</span><span class="nearby-dist">${dist}</span></button></li>`
+      return `<li><button type="button" class="nearby-item" data-nearby-idx="${i}" title="Auf der Karte anzeigen"><span class="nearby-icon">${svg}</span><span class="nearby-name">${esc(it.name)}</span><span class="nearby-dist">${dist}</span></button></li>`
     }).join('')
-    section.innerHTML = `<h3 class="nearby-heading">${SVG_MAP_PIN} In der Nähe <span class="nearby-hint">· tippen für Route</span></h3><ul class="nearby-list">${rows}</ul>`
+    section.innerHTML = `<h3 class="nearby-heading">${SVG_MAP_PIN} In der Nähe <span class="nearby-hint">· tippen zum Anzeigen</span></h3><ul class="nearby-list">${rows}</ul>`
   }
 
   updateNotes(notes: OsmNote[]): void {

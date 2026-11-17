@@ -11,7 +11,7 @@ steal space from the absolutely-positioned map. */
         width: auto;
     }
 
-    /* Filter bar stays compact — routing is now on the map. */
+    /* Filter bar stays compact. */
     #filter-panel {
         padding: 8px;
     }
@@ -119,7 +119,7 @@ z-index must beat Leaflet's panes/controls (root stacking context). */
         padding: 9px;
         font-size: 0.85rem;
     }
-    /* On mobile the secondary actions sit in a 2-column grid to save vertical space. */
+    /* On mobile the secondary actions stay compact to save vertical space. */
     .poi-detail-panel .panel-actions-grid {
         grid-template-columns: 1fr 1fr;
         gap: 6px;

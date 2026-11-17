@@ -2,13 +2,13 @@
 
 ## Stack
 - **FE**: Vite + TypeScript + Leaflet, hosted on GitHub Pages
-- **BE**: Supabase Edge Functions (Deno) — Overpass-Proxy, Cache, Routing, Geocode, Mapillary
+- **BE**: Supabase Edge Functions (Deno) — Overpass-Proxy, Cache, Geocode, Mapillary
 
 ## Commands
 ```
 npm install       # deps
 npm run dev       # Vite :5173 (API via VITE_API_BASE aus .env oder lokaler Proxy :54321)
-npm test          # unit tests (Vitest, 824 tests)
+npm test          # unit tests (Vitest, 794 tests)
 npm run test:int  # integration tests vs Edge Function
 npm run build     # → dist/client/
 ```
@@ -33,7 +33,6 @@ features/
   map/        MapService + leafletAdapter + locationMarker
   pois/       OverpassClient + poiTiles (statische Kacheln) + PoiMarkerManager + poiMeta
   poi-detail/ PoiDetailPanel + poiData (Bilder, Nearby, Notes)
-  routing/    DirectionsService
   search/     SearchBar
   filters/    FilterPanel
   favorites/  FavoritesStore (local + Supabase-Sync)

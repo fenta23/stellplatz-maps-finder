@@ -2,7 +2,7 @@
 
 > ⚠️ **Absolute Spielwiese.** Dieses Projekt dient ausschließlich zum Experimentieren und Ausprobieren — kein Produktions-Code, keine Garantien, keine Support-Versprechen. Alles kann sich jederzeit ändern oder wegfallen.
 
-Kartenbasierte Web-App zur Routenplanung mit automatischer Anzeige von **Parkplätzen**, **Camper-Stellplätzen** und **Campingplätzen** im aktuellen Kartenausschnitt — alles auf Basis von OpenStreetMap, ohne proprietäre APIs.
+Kartenbasierte Web-App zur Parkplatz- und Stellplatzsuche mit automatischer Anzeige von **Parkplätzen**, **Camper-Stellplätzen** und **Campingplätzen** im aktuellen Kartenausschnitt — alles auf Basis von OpenStreetMap, ohne proprietäre APIs.
 
 ![Stellpatz Finder Screenshot](https://placehold.co/900x500/4B5640/fff?text=Stellpatz+Finder)
 
@@ -11,8 +11,8 @@ Kartenbasierte Web-App zur Routenplanung mit automatischer Anzeige von **Parkpl�
 - 🗺️ **Interaktive Karte** (Leaflet) mit automatischem POI-Laden beim Scrollen/Zoomen — Kartenstil **CARTO Voyager** (clean, erdig) + umschaltbarer **Satelliten-Layer** (Esri)
 - 🅿️ **Parkplätze** (öffentlich vs. privat unterschieden), 🚐 **Camper-Stellplätze**, ⛺ **Campingplätze**, 🚿 **Entsorgungsstationen**, 🚰 **Frischwasserpunkte**
 - 🔍 **Suche** mit Nominatim-Autocomplete (viewport-basiert)
-- 🧭 **Routing** (Auto / Fahrrad / Fußweg) via Valhalla — mit Distanz, Fahrtzeit und Detour-Faktor
-- ❤️ **Favoriten** — Herz-Button im Panel, Herz-Badge auf dem Marker; paginierte Favoriten-Liste im Menü („⭐ Favoriten") mit Tippen → zentrieren + Route. Lokal in localStorage, bei Login zu Supabase synchronisiert (geräteübergreifend)
+- 🧭 **Navigation** per Deep-Link an Google Maps bzw. Apple Maps — die App plant keine Routen selbst
+- ❤️ **Favoriten** — Herz-Button im Panel, Herz-Badge auf dem Marker; paginierte Favoriten-Liste im Menü („⭐ Favoriten") mit Tippen → zentrieren. Lokal in localStorage, bei Login zu Supabase synchronisiert (geräteübergreifend)
 - 📝 **Persönliche Notizen** — eigenes Notizfeld pro Ort im Detailpanel; paginierte Notizen-Liste im Menü („📝 Notizen"). Lokal + bei Login zu Supabase synchronisiert
 - 📸 **Bilder** aus OSM-Tags, Wikimedia Commons und Mapillary
 - 📍 **In der Nähe**: Tankstelle, Supermarkt, Apotheke, Bäckerei, Frischwasser, Entsorgung (bis 2 km)
@@ -28,7 +28,7 @@ Kartenbasierte Web-App zur Routenplanung mit automatischer Anzeige von **Parkpl�
 | Karte | [Leaflet](https://leafletjs.com) + [markercluster](https://github.com/Leaflet/Leaflet.markercluster) · [CARTO Voyager](https://carto.com) / [Esri](https://www.esri.com) Tiles |
 | POI-Daten | [Overpass API](https://overpass-api.de) (OpenStreetMap) |
 | Geocoding | [Nominatim](https://nominatim.org) |
-| Routing | [Valhalla](https://valhalla.github.io/valhalla/) (openstreetmap.de) |
+| Navigation | Deep-Link an Google Maps / Apple Maps |
 | Frontend | Vanilla TypeScript, [Vite](https://vite.dev), PWA ([vite-plugin-pwa](https://vite-pwa-org.netlify.app)) |
 | Backend | [Supabase Edge Functions](https://supabase.com/edge-functions) (Deno) — Proxy + Cache |
 | Persistenz | [Supabase](https://supabase.com) Postgres — persistenter POI-Cache, Auth (Magic-Link), Favoriten + Notizen (RLS) |
@@ -114,7 +114,6 @@ Browser (GitHub Pages)
   └── GET/POST /api/** → Supabase Edge Function `api`
                             ├── /api/overpass   → Overpass API (gecached via Postgres)
                             ├── /api/geocode    → Nominatim
-                            ├── /api/route      → Valhalla
                             ├── /api/nearby     → Overpass API
                             ├── /api/mapillary  → Mapillary Graph API (20 req/min limitiert)
                             └── /api/notes      → OSM Notes API

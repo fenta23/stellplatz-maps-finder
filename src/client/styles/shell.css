@@ -252,11 +252,6 @@
     height: 1.05rem;
     vertical-align: -0.1em;
 }
-.btn-navigate svg {
-    width: 1em;
-    height: 1em;
-    vertical-align: middle;
-}
 .mynote-heading svg,
 .notes-heading svg,
 .nearby-heading svg {

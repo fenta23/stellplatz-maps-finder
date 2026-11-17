@@ -1,20 +1,19 @@
 import { describe, it, expect } from 'vitest'
-import { nearbyRouteMessage } from './nearbyMessage.js'
+import { nearbyMessage } from './nearbyMessage.js'
 import type { NearbyItem } from './PoiDetailPanel.js'
-import type { RouteResult } from '@/features/routing/DirectionsService.js'
 
 const item: NearbyItem = { kind: 'fuel', name: 'Esso', distance: 545, lat: 48.1, lon: 11.5 }
-const route = {
-  distanceText: '540 m', durationText: '7 min',
-  distanceMeters: 540, durationSeconds: 420, straightLineMeters: 500, detourFactor: 1.1,
-} as RouteResult
 
-describe('nearbyRouteMessage', () => {
-  it('shows name · distance · duration zu Fuß', () => {
-    expect(nearbyRouteMessage(item, route)).toBe('Esso · 540 m · 7 min zu Fuß')
+describe('nearbyMessage', () => {
+  it('shows name · distance Luftlinie', () => {
+    expect(nearbyMessage(item)).toBe('Esso · 545 m Luftlinie')
+  })
+
+  it('formats distances >= 1 km in km', () => {
+    expect(nearbyMessage({ ...item, distance: 1250 })).toBe('Esso · 1.3 km Luftlinie')
   })
 
   it('never contains "undefined" (regression: the old item.icon bug)', () => {
-    expect(nearbyRouteMessage(item, route)).not.toContain('undefined')
+    expect(nearbyMessage(item)).not.toContain('undefined')
   })
 })

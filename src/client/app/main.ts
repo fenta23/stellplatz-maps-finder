@@ -11,13 +11,12 @@ import { PoiMarkerManager } from '@/features/pois/PoiMarkerManager.js'
 import type { OsmPoi } from '@/features/pois/OverpassClient.js'
 import { createPoiTileSource } from '@/features/pois/poiTiles.js'
 import { POI_TILES_BASE } from '@/core/config.js'
-import { DirectionsService, type RoutingMode } from '@/features/routing/DirectionsService.js'
 import { PoiDetailPanel } from '@/features/poi-detail/PoiDetailPanel.js'
 import { collectTagImages, loadMapillaryImages, loadNearby, loadNotes } from '@/features/poi-detail/poiData.js'
 import { loadPoiSummary } from '@/features/ai/AiClient.js'
 import { AiSearchModal } from '@/features/ai/AiSearchModal.js'
 import type { AiIntent } from '@/features/ai/intentSchema.js'
-import { nearbyRouteMessage } from '@/features/poi-detail/nearbyMessage.js'
+import { nearbyMessage } from '@/features/poi-detail/nearbyMessage.js'
 import { FilterPanel } from '@/features/filters/FilterPanel.js'
 import { LocalFilterStore } from '@/features/filters/FilterStore.js'
 import { SyncedFilterStore } from '@/features/filters/RemoteFilterStore.js'
@@ -121,9 +120,6 @@ async function init() {
   // Karte erst, wenn er vorliegt. So bleiben Menü & Interaktionen sofort bedienbar.
   const mapService = new MapService(mapContainer, DEFAULT_CENTER, 6)
   const map = mapService.getMap()
-  const routingToggle = mapService.getRoutingContainer()!
-  const directions = new DirectionsService(map)
-  mapService.onBaseLayerChange(key => directions.setSatelliteMode(key === 'Satellit'))
   const session = createSession(null)
 
   // ── Filters ─────────────────────────────────────────────────────────────────
@@ -236,7 +232,7 @@ async function init() {
 
   // ── Selection (now wired after customPois is ready) ──────────────────────────
   selection = createSelection({
-    session, directions, panel: detailPanel, favorites,
+    session, panel: detailPanel, favorites,
     panIntoView: poi => {
       const effectiveTop = document.body.classList.contains('ui-collapsed')
         ? 0
@@ -244,12 +240,9 @@ async function init() {
       panPoiIntoView(map, mapContainer, poi, effectiveTop)
     },
     loadDetails,
-    onNoLocation: () => flashStatus('Kein Startpunkt – Standort freigeben oder „Von hier starten" wählen'),
     getNote: poi => notes.get(String(poi.id)),
     onEditCustomPoi: customPois.editCurrent,
     onDeleteCustomPoi: customPois.deleteCurrent,
-    onStartSet: label => flashInfo(`Startpunkt: ${label} – jetzt Ziel wählen`),
-    onStartReset: () => flashInfo('Start: mein Standort'),
     isLoggedIn: () => loggedIn,
   })
 
@@ -335,9 +328,6 @@ async function init() {
   floatFilters?.addEventListener('click', () => expandUI())
 
   // ── Detail panel events ─────────────────────────────────────────────────────
-  detailPanel.onNavigate(({ poi }) => void selection.navigate(poi))
-  detailPanel.onSetStart(() => selection.setStart())
-  detailPanel.onResetStart(() => void selection.resetStart())
   detailPanel.onClose(() => selection.clear())
   detailPanel.onFavoriteToggle(() => {
     if (!session.selectedPoi) return
@@ -350,15 +340,11 @@ async function init() {
     markerManager.setNotes(new Set(notes.list().map(n => n.id)))
   })
   detailPanel.onNearbySelect(item => {
-    const poi = session.selectedPoi
-    if (!poi) return
-    void directions
-      .routeSecondary({ lat: poi.lat, lon: poi.lon }, { lat: item.lat, lon: item.lon })
-      .then(r => flashInfo(nearbyRouteMessage(item, r)))
-      .catch(() => flashStatus('Route zum Ziel nicht möglich'))
+    mapService.setCenter(item.lat, item.lon, 17)
+    flashInfo(nearbyMessage(item))
   })
 
-  // ── Search + routing ────────────────────────────────────────────────────────
+  // ── Search ────────────────────────────────────────────────────────
   const searchBar = new SearchBar(document.getElementById('search-bar')!)
   searchBar.onPlaceSelected(({ lat, lng }) => mapService.setCenter(lat, lng, 14))
 
@@ -395,17 +381,6 @@ async function init() {
   } else {
     setAiAccess(false) // ohne konfiguriertes Supabase kein Login → keine KI
   }
-
-  routingToggle.addEventListener('click', (e) => {
-    const btn = (e.target as HTMLElement).closest('.routing-opt') as HTMLButtonElement
-    if (!btn) return
-    const mode = btn.dataset.mode as RoutingMode
-    if (mode === session.routingMode) return
-    session.routingMode = mode
-    routingToggle.querySelector('.active')?.classList.remove('active')
-    btn.classList.add('active')
-    void selection.reroute()
-  })
 
   // ── Favorites & Notes list panels ───────────────────────────────────────────
   const favoritesPanel = new FavoritesListPanel(document.body, {
