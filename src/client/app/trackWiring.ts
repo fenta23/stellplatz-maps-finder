@@ -1,7 +1,9 @@
 import type { ITrackStore } from '@/features/track/TrackStore.js'
-import { TrackPanel, type TrackPanelRow } from '@/features/track/TrackPanel.js'
-import type { CorridorHit } from '@/features/track/corridor.js'
-import type { Track, TrackPosition } from '@/features/track/trackTypes.js'
+import { TrackPanel, formatOffset, formatKmAlong, type TrackPanelRow } from '@/features/track/TrackPanel.js'
+import { withinStretch, type CorridorHit } from '@/features/track/corridor.js'
+import { buildGpxExport, exportFileName, type GpxWaypoint } from '@/features/track/gpxExport.js'
+import { downloadTextFile } from '@/features/track/downloadTextFile.js'
+import type { SavedTrack, TrackPosition } from '@/features/track/trackTypes.js'
 import { poiKey, type OsmPoi } from '@/features/pois/OverpassClient.js'
 import { MSG_CHUNKS_FAILED, type TrackPoiLoader } from './trackPoiLoader.js'
 import type { TrackLayer } from '@/features/track/TrackLayer.js'
@@ -47,19 +49,24 @@ export interface TrackWiringDeps {
   /** Whether the category chip of this POI type is on. */
   readonly isTypeActive: (type: string) => boolean
   readonly panelContainer: HTMLElement
+  /** Hands a text file to the user; default: browser download. Injectable for tests. */
+  readonly downloadFile?: ((filename: string, mime: string, text: string) => void) | undefined
+  /**
+   * Runs `run` once map and panel have a size; used for the one-time fit to a route
+   * that was already active at startup. Default: after two animation frames.
+   */
+  readonly scheduleStartupFit?: ((run: () => void) => void) | undefined
 }
 
 export const RETRY_SUFFIX = ' – erneut versuchen'
 
-/** Same route (points, name, length), regardless of the corridor — a new TrackStore parse yields new arrays. */
-function sameRoute(a: Track, b: Track): boolean {
-  if (a === b) return true
-  if (a.name !== b.name || a.source !== b.source || a.lengthM !== b.lengthM || a.points.length !== b.points.length) return false
-  if (a.points === b.points) return true
-  for (let i = 0; i < a.points.length; i++) {
-    if (a.points[i]![0] !== b.points[i]![0] || a.points[i]![1] !== b.points[i]![1]) return false
-  }
-  return true
+/**
+ * Default for `scheduleStartupFit`: two animation frames, so the freshly created
+ * panel and the map container have been laid out before we measure insets.
+ */
+function afterLayout(run: () => void): void {
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => requestAnimationFrame(run))
+  else setTimeout(run, 0)
 }
 
 export interface TrackWiring {
@@ -84,14 +91,26 @@ export function createTrackWiring(deps: TrackWiringDeps): TrackWiring {
   }
 
   // ── POIs along the active track ──
-  let current: Track | null = null
+  let current: SavedTrack | null = null
   let latestHits: readonly CorridorHit<OsmPoi>[] = []
   let byKey = new Map<string, OsmPoi>()
 
+  /** Stretch ("Abschnitt") of the active track in km; null = whole route. In memory only. */
+  let stretch: { readonly from: number; readonly to: number } | null = null
+
+  /** The hits inside the stretch — what the map shows. */
+  const stretchedHits = (): readonly CorridorHit<OsmPoi>[] =>
+    stretch ? withinStretch(latestHits, stretch.from, stretch.to) : latestHits
+
+  /** What the list shows (and the export contains): stretch + active categories. */
+  const listedHits = (): readonly CorridorHit<OsmPoi>[] =>
+    stretchedHits().filter(h => deps.isTypeActive(h.item.type))
+
+  const publishMarkers = () => deps.setMarkers(stretchedHits().map(h => h.item))
+
   const rebuildRows = () => {
     const rows: TrackPanelRow[] = []
-    for (const h of latestHits) {
-      if (!deps.isTypeActive(h.item.type)) continue
+    for (const h of listedHits()) {
       const info = deps.rowFor(h.item)
       rows.push({
         key: poiKey(h.item), title: info.title, subtitle: info.subtitle, color: info.color,
@@ -107,7 +126,7 @@ export function createTrackWiring(deps: TrackWiringDeps): TrackWiring {
     onUpdate: hits => {
       latestHits = hits
       byKey = new Map(hits.map(h => [poiKey(h.item), h.item]))
-      deps.setMarkers(hits.map(h => h.item))
+      publishMarkers()
       rebuildRows()
     },
     setStatus: (text, isError) => {
@@ -120,12 +139,39 @@ export function createTrackWiring(deps: TrackWiringDeps): TrackWiring {
     onSelectRow: key => { const poi = byKey.get(key); if (poi) deps.selectPoi(poi) },
     onCorridorChange: m => store.setCorridor(m),
     onFit: () => layer.fitBounds(panel.mapInsets()),
-    onRemove: () => { store.clear(); flash('Route entfernt') },
+    onRemove: () => { store.clear(); flash('Route geschlossen – sie bleibt gespeichert') },
+    onStretchChange: (from, to) => {
+      const whole = from <= 0 && current !== null && to >= current.lengthM / 1000
+      stretch = whole ? null : { from, to }
+      publishMarkers()
+      rebuildRows()
+    },
+    onExport: () => exportListed(),
     onStatusClick: () => void loader.retryFailed(),
   })
 
-  const activate = (track: Track) => {
+  const download = deps.downloadFile ?? downloadTextFile
+
+  const exportListed = () => {
+    const hits = listedHits()
+    if (!current || hits.length === 0) return
+    const waypoints: GpxWaypoint[] = hits.map(h => {
+      const info = deps.rowFor(h.item)
+      // Unnamed places carry the category label as title; named ones have it as subtitle.
+      const label = info.subtitle || info.title
+      return {
+        lat: h.item.lat, lon: h.item.lon, name: info.title, type: label,
+        description: `${formatKmAlong(h.kmAlong)} · ${formatOffset(h.offsetM)}`,
+      }
+    })
+    const gpx = buildGpxExport({ name: current.name, points: current.points, waypoints })
+    download(exportFileName(current.name), 'application/gpx+xml', gpx)
+    flash(`${waypoints.length} ${waypoints.length === 1 ? 'Ort' : 'Orte'} als GPX exportiert`)
+  }
+
+  const activate = (track: SavedTrack) => {
     current = track
+    stretch = null // a new route starts with the whole stretch (panel.setTrack resets its control)
     latestHits = []
     byKey = new Map()
     refresher.suspend() // the corridor owns the markers now
@@ -135,6 +181,7 @@ export function createTrackWiring(deps: TrackWiringDeps): TrackWiring {
 
   const deactivate = () => {
     current = null
+    stretch = null
     latestHits = []
     byKey = new Map()
     loader.cancel()
@@ -147,26 +194,37 @@ export function createTrackWiring(deps: TrackWiringDeps): TrackWiring {
     void refresher.refresh() // normal viewport POIs come back
   }
 
+  // Routes have ids: the same id = the same route (corridor change or a list-only change
+  // such as deleting an inactive route) → no panel reset, no reload, no redraw.
   store.onChange(track => {
-    draw(track)
     dialog.refresh()
     if (!track) {
-      if (current) deactivate()
-    } else if (current && sameRoute(current, track)) {
-      current = track // corridor change only: no panel reset, no reload
-      loader.setCorridor(track.corridorM)
+      if (current) { draw(null); deactivate() }
+    } else if (current && current.id === track.id) {
+      const corridorChanged = track.corridorM !== current.corridorM
+      current = track
+      if (corridorChanged) loader.setCorridor(track.corridorM)
     } else {
+      draw(track)
       activate(track)
     }
   })
-  // Startup: draw only, the map keeps its normal start position. Suspending
-  // here (before the first viewport refresh) avoids a flash of viewport POIs.
+  // Startup: draw and load now (suspending before the first viewport refresh avoids a
+  // flash of viewport POIs); fit once map and panel have a size — unless the user has
+  // switched or closed the route by then (that path fits on its own).
   const initial = store.get()
   draw(initial)
-  if (initial) activate(initial)
+  if (initial) {
+    activate(initial)
+    const schedule = deps.scheduleStartupFit ?? afterLayout
+    schedule(() => {
+      if (current && current.id === initial.id) layer.fitBounds(panel.mapInsets())
+    })
+  }
 
   const dialog = new TrackImportDialog(dialogContainer, {
     getActiveTrack: () => store.get(),
+    getSavedTracks: () => store.list(),
     importLink: (input, signal) => importFromKomootLink(input, fetchFn, signal),
     importFile: file => readGpxFile(file),
     onImported: track => {
@@ -177,7 +235,17 @@ export function createTrackWiring(deps: TrackWiringDeps): TrackWiring {
       flash(`Route geladen: ${track.name} · ${formatKm(track.lengthM)}`)
     },
     onShowActive: () => { layer.fitBounds(panel.mapInsets()); dialog.close() },
-    onRemoveActive: () => { store.clear(); flash('Route entfernt'); dialog.close() },
+    onRemoveActive: () => { store.clear(); flash('Route geschlossen – sie bleibt gespeichert'); dialog.close() },
+    onActivate: id => {
+      const saved = store.list().find(t => t.id === id)
+      if (!saved) return
+      store.activate(id)
+      // Like a fresh import: fold the sheet first so the route is fitted above the strip only.
+      panel.collapseOnMobile()
+      layer.fitBounds(panel.mapInsets())
+      flash(`Route geladen: ${saved.name} · ${formatKm(saved.lengthM)}`)
+    },
+    onDelete: id => { store.remove(id); flash('Route gelöscht') },
   })
 
   return {

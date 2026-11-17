@@ -27,7 +27,7 @@ function setup() {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const deps = {
-    onSelectRow: vi.fn(), onCorridorChange: vi.fn(), onFit: vi.fn(), onRemove: vi.fn(), onStatusClick: vi.fn(),
+    onSelectRow: vi.fn(), onCorridorChange: vi.fn(), onFit: vi.fn(), onRemove: vi.fn(), onStatusClick: vi.fn(), onExport: vi.fn(), onStretchChange: vi.fn(),
   }
   const panel = new TrackPanel(container, deps)
   panels.push(panel)
@@ -39,7 +39,7 @@ function setup() {
 describe('formatOffset', () => {
   it('rounds to 10 m below 1 km, else km with decimal comma', () => {
     expect(formatOffset(183)).toBe('180 m abseits')
-    expect(formatOffset(4)).toBe('0 m abseits')
+    expect(formatOffset(4)).toBe('an der Route')
     expect(formatOffset(994)).toBe('990 m abseits')
     expect(formatOffset(996)).toBe('1,0 km abseits')
     expect(formatOffset(1234)).toBe('1,2 km abseits')
@@ -62,7 +62,7 @@ describe('TrackPanel', () => {
     expect(q('name').textContent).toBe('Eifelrunde')
     expect(q('meta').textContent).toBe('86,4 km · 2 Orte')
     expect(q('fit').textContent).toBe('Einpassen')
-    expect(q('remove').textContent).toBe('Route entfernen')
+    expect(q('remove').textContent).toBe('Route schließen')
     expect(document.body.classList.contains('track-open')).toBe(true)
   })
 
@@ -174,6 +174,7 @@ describe('TrackPanel', () => {
     expect(q('strip').textContent).toBe('Eifelrunde · 86,4 km · 3 Orte')
     expect(q('body').hidden).toBe(true)
     expect(q('removeSmall').hidden).toBe(false)
+    expect(q('removeSmall').getAttribute('aria-label')).toBe('Route schließen')
     q('removeSmall').click()
     expect(deps.onRemove).toHaveBeenCalledTimes(1)
     panel.expand()
@@ -351,5 +352,142 @@ describe('TrackPanel collapsed strip', () => {
     // jsdom applies no stylesheets; `.track-sheet-heading { display:flex }` would
     // otherwise override [hidden] and show both summaries side by side.
     expect(trackCss).toMatch(/\.track-sheet-heading\[hidden\][^{]*\{[^}]*display:\s*none/)
+  })
+
+  describe('stretch (Abschnitt)', () => {
+    const long: Track = { ...track, name: 'Lang', lengthM: 86_432 }
+    const short: Track = { ...track, name: 'Kurz', lengthM: 8_450 }
+    const drag = (el: HTMLInputElement, value: number, commit = false) => {
+      el.value = String(value)
+      el.dispatchEvent(new Event('input'))
+      if (commit) el.dispatchEvent(new Event('change'))
+    }
+
+    it('spans the whole route in 1 km steps for routes >= 20 km', () => {
+      const { panel, q } = setup()
+      panel.setTrack(long)
+      const from = q<HTMLInputElement>('stretchFrom')
+      const to = q<HTMLInputElement>('stretchTo')
+      expect([from.min, from.max, from.step, from.value]).toEqual(['0', '87', '1', '0'])
+      expect([to.min, to.max, to.step, to.value]).toEqual(['0', '87', '1', '87'])
+      expect(q<HTMLElement>('stretch').hidden).toBe(false)
+      expect(q('stretchLabel').textContent).toBe('Abschnitt: km 0 – km 87')
+      expect(q<HTMLElement>('stretchReset').hidden).toBe(true)
+    })
+
+    it('uses 0.1 km steps and decimal commas below 20 km', () => {
+      const { panel, q } = setup()
+      panel.setTrack(short)
+      const to = q<HTMLInputElement>('stretchTo')
+      expect([to.max, to.step]).toEqual(['8.5', '0.1'])
+      expect(q('stretchLabel').textContent).toBe('Abschnitt: km 0,0 – km 8,5')
+    })
+
+    it('is hidden for routes shorter than 2 km', () => {
+      const { panel, q } = setup()
+      panel.setTrack({ ...track, lengthM: 1_900 })
+      expect(q<HTMLElement>('stretch').hidden).toBe(true)
+      panel.setTrack({ ...track, lengthM: 2_000 })
+      expect(q<HTMLElement>('stretch').hidden).toBe(false)
+    })
+
+    it('updates the label live on input but calls back only on change', () => {
+      const { panel, q, deps } = setup()
+      panel.setTrack(long)
+      drag(q('stretchFrom'), 12)
+      drag(q('stretchTo'), 45)
+      expect(q('stretchLabel').textContent).toBe('Abschnitt: km 12 – km 45')
+      expect(deps.onStretchChange).not.toHaveBeenCalled()
+      q<HTMLInputElement>('stretchTo').dispatchEvent(new Event('change'))
+      expect(deps.onStretchChange).toHaveBeenCalledTimes(1)
+      expect(deps.onStretchChange).toHaveBeenCalledWith(12, 45)
+    })
+
+    it('exposes aria-valuetext in km and labelled inputs', () => {
+      const { panel, q, container } = setup()
+      panel.setTrack(long)
+      drag(q('stretchFrom'), 12)
+      expect(q('stretchFrom').getAttribute('aria-valuetext')).toBe('12 Kilometer')
+      expect(q('stretchTo').getAttribute('aria-valuetext')).toBe('87 Kilometer')
+      expect(container.querySelector('label[for="track-stretch-from"]')).not.toBeNull()
+      expect(container.querySelector('label[for="track-stretch-to"]')).not.toBeNull()
+    })
+
+    it('never lets from exceed to: the handle not being dragged is pushed along', () => {
+      const { panel, q, deps } = setup()
+      panel.setTrack(long)
+      drag(q('stretchFrom'), 30, true)
+      drag(q('stretchTo'), 20, true) // dragging "to" below "from" pulls "from" down
+      expect(q<HTMLInputElement>('stretchFrom').value).toBe('20')
+      expect(q<HTMLInputElement>('stretchTo').value).toBe('20')
+      expect(deps.onStretchChange).toHaveBeenLastCalledWith(20, 20)
+      drag(q('stretchTo'), 40, true)
+      drag(q('stretchFrom'), 60, true) // dragging "from" above "to" pushes "to" up
+      expect(q<HTMLInputElement>('stretchTo').value).toBe('60')
+      expect(deps.onStretchChange).toHaveBeenLastCalledWith(60, 60)
+    })
+
+    it('shows "Ganze Route" only while a stretch is set; it resets and calls back', () => {
+      const { panel, q, deps } = setup()
+      panel.setTrack(long)
+      drag(q('stretchTo'), 40, true)
+      const reset = q<HTMLButtonElement>('stretchReset')
+      expect(reset.hidden).toBe(false)
+      expect(reset.textContent).toBe('Ganze Route')
+      reset.click()
+      expect(q<HTMLInputElement>('stretchFrom').value).toBe('0')
+      expect(q<HTMLInputElement>('stretchTo').value).toBe('87')
+      expect(reset.hidden).toBe(true)
+      expect(q('stretchLabel').textContent).toBe('Abschnitt: km 0 – km 87')
+      expect(deps.onStretchChange).toHaveBeenLastCalledWith(0, 87)
+    })
+
+    it('resets to the whole route when another track is set', () => {
+      const { panel, q } = setup()
+      panel.setTrack(long)
+      drag(q('stretchFrom'), 10, true)
+      panel.setTrack({ ...long, name: 'Andere', lengthM: 50_000 })
+      expect(q<HTMLInputElement>('stretchFrom').value).toBe('0')
+      expect(q<HTMLInputElement>('stretchTo').value).toBe('50')
+      expect(q<HTMLElement>('stretchReset').hidden).toBe(true)
+    })
+
+    it('setStretch restores a range silently and clamps it to the route', () => {
+      const { panel, q, deps } = setup()
+      panel.setTrack(long)
+      panel.setStretch(12, 45)
+      expect(q('stretchLabel').textContent).toBe('Abschnitt: km 12 – km 45')
+      expect(q<HTMLElement>('stretchReset').hidden).toBe(false)
+      panel.setStretch(-5, 500)
+      expect(q<HTMLInputElement>('stretchFrom').value).toBe('0')
+      expect(q<HTMLInputElement>('stretchTo').value).toBe('87')
+      expect(deps.onStretchChange).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('GPX export button', () => {
+    it('is disabled without rows, enabled with rows, and fires onExport', () => {
+      const { panel, q, deps } = setup()
+      panel.setTrack(track)
+      const btn = q<HTMLButtonElement>('export')
+      expect(btn.textContent).toBe('Als GPX exportieren')
+      expect(btn.disabled).toBe(true)
+      btn.click()
+      expect(deps.onExport).not.toHaveBeenCalled()
+      panel.setRows([row(1)])
+      expect(btn.disabled).toBe(false)
+      btn.click()
+      expect(deps.onExport).toHaveBeenCalledTimes(1)
+      panel.setRows([])
+      expect(btn.disabled).toBe(true)
+    })
+
+    it('is disabled again once the track is removed', () => {
+      const { panel, q } = setup()
+      panel.setTrack(track)
+      panel.setRows([row(1)])
+      panel.setTrack(null)
+      expect(q<HTMLButtonElement>('export').disabled).toBe(true)
+    })
   })
 })

@@ -17,6 +17,8 @@ describe('DatenschutzPanel', () => {
     expect(c.textContent).toContain('direkt von deinem Browser an öffentliche')
     expect(c.textContent).toContain('overpass-api.de')
     expect(c.textContent).toContain('nominatim.openstreetmap.org')
+    expect(c.textContent).toContain('CARTO')
+    expect(c.textContent).toContain('Esri')
     expect(c.textContent).toContain('Thunderforest')
     expect(c.textContent).toContain('CyclOSM')
     expect(c.textContent).toContain('OpenStreetMap France')

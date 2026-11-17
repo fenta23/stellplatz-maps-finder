@@ -1,5 +1,6 @@
 import './track.css'
 import { clone, ref } from '@/core/template.js'
+import { formatRouteOffset } from '@/core/format.js'
 import { renderList } from '@/core/bind.js'
 import { renderPagination } from '@/core/pagination.js'
 import { createEventScope, type EventScope } from '@/core/events.js'
@@ -29,6 +30,10 @@ export interface TrackPanelDeps {
   readonly onCorridorChange: (corridorM: number) => void
   readonly onFit: () => void
   readonly onRemove: () => void
+  /** Click on "Als GPX exportieren" (only enabled while rows are listed). */
+  readonly onExport: () => void
+  /** Fired when a stretch handle is released or "Ganze Route" is clicked: km range to show. */
+  readonly onStretchChange?: (fromKm: number, toKm: number) => void
   /** Click on a status line that was set with `actionable` (e.g. "erneut versuchen"). */
   readonly onStatusClick?: () => void
 }
@@ -50,10 +55,17 @@ const isDesktop = (): boolean =>
 
 const decimal = (n: number) => n.toFixed(1).replace('.', ',')
 
-/** "180 m abseits" (10 m steps below 1 km) or "1,2 km abseits". */
+/** "km 12,4" — the position label of a row (also used for the GPX waypoint description). */
+export const formatKmAlong = (km: number): string => `km ${decimal(km)}`
+
+/** Routes shorter than this get no stretch control. */
+const MIN_STRETCH_ROUTE_M = 2000
+/** From this length on the stretch handles move in whole km, below in 0.1 km. */
+const COARSE_STRETCH_ROUTE_M = 20_000
+
+/** "an der Route", "180 m abseits" or "1,2 km abseits" — shared with the POI detail panel via core/format. */
 export function formatOffset(offsetM: number): string {
-  const rounded = Math.round(offsetM / 10) * 10
-  return rounded < 1000 ? `${rounded} m abseits` : `${decimal(offsetM / 1000)} km abseits`
+  return formatRouteOffset(offsetM)
 }
 
 const countLabel = (n: number) => `${n} ${n === 1 ? 'Ort' : 'Orte'}`
@@ -70,6 +82,12 @@ export class TrackPanel {
   private readonly bodyEl: HTMLElement
   private readonly slider: HTMLInputElement
   private readonly sliderLabel: HTMLElement
+  private readonly stretchEl: HTMLElement
+  private readonly stretchLabel: HTMLElement
+  private readonly stretchReset: HTMLButtonElement
+  private readonly stretchFrom: HTMLInputElement
+  private readonly stretchTo: HTMLInputElement
+  private readonly exportBtn: HTMLButtonElement
   private readonly statusEl: HTMLElement
   private readonly listEl: HTMLElement
   private readonly footer: HTMLElement
@@ -79,6 +97,8 @@ export class TrackPanel {
   private page = 1
   private collapsed = false
   private statusActionable = false
+  private stretchMax = 0
+  private stretchCoarse = false
 
   constructor(container: HTMLElement, private readonly deps: TrackPanelDeps) {
     this.root = clone(panelHtml)
@@ -91,6 +111,12 @@ export class TrackPanel {
     this.bodyEl = ref(this.root, 'body')
     this.slider = ref(this.root, 'corridor')
     this.sliderLabel = ref(this.root, 'corridorLabel')
+    this.stretchEl = ref(this.root, 'stretch')
+    this.stretchLabel = ref(this.root, 'stretchLabel')
+    this.stretchReset = ref(this.root, 'stretchReset')
+    this.stretchFrom = ref(this.root, 'stretchFrom')
+    this.stretchTo = ref(this.root, 'stretchTo')
+    this.exportBtn = ref(this.root, 'export')
     this.statusEl = ref(this.root, 'status')
     this.listEl = ref(this.root, 'list')
     this.footer = ref(this.root, 'footer')
@@ -103,6 +129,26 @@ export class TrackPanel {
     ref(this.root, 'fit').addEventListener('click', () => deps.onFit())
     ref(this.root, 'remove').addEventListener('click', () => deps.onRemove())
     this.removeSmall.addEventListener('click', () => deps.onRemove())
+    this.exportBtn.addEventListener('click', () => { if (!this.exportBtn.disabled) deps.onExport() })
+    // Dragging a handle pushes the other one along (from <= to always holds).
+    this.stretchFrom.addEventListener('input', () => {
+      if (Number(this.stretchFrom.value) > Number(this.stretchTo.value)) this.stretchTo.value = this.stretchFrom.value
+      this.updateStretchLabel()
+    })
+    this.stretchTo.addEventListener('input', () => {
+      if (Number(this.stretchTo.value) < Number(this.stretchFrom.value)) this.stretchFrom.value = this.stretchTo.value
+      this.updateStretchLabel()
+    })
+    const stretchCommit = () => {
+      this.updateStretchLabel()
+      deps.onStretchChange?.(Number(this.stretchFrom.value), Number(this.stretchTo.value))
+    }
+    this.stretchFrom.addEventListener('change', stretchCommit)
+    this.stretchTo.addEventListener('change', stretchCommit)
+    this.stretchReset.addEventListener('click', () => {
+      this.setStretch(0, this.stretchMax)
+      deps.onStretchChange?.(0, this.stretchMax)
+    })
     const statusClick = () => { if (this.statusActionable) deps.onStatusClick?.() }
     this.statusEl.addEventListener('click', statusClick)
     this.statusEl.addEventListener('keydown', e => {
@@ -141,6 +187,8 @@ export class TrackPanel {
       this.root.hidden = true
       this.rows = []
       this.page = 1
+      this.stretchEl.hidden = true
+      this.exportBtn.disabled = true
       this.setStatus('')
       this.renderRows()
       this.syncBodyClasses()
@@ -150,12 +198,25 @@ export class TrackPanel {
     this.nameEl.textContent = track.name
     this.slider.value = String(track.corridorM)
     this.updateSliderLabel()
+    this.configureStretch(track)
     this.renderSummary()
     this.syncBodyClasses()
   }
 
+  /** Restores a stretch (km, clamped to the route); does not fire `onStretchChange`. */
+  setStretch(fromKm: number, toKm: number): void {
+    if (this.stretchEl.hidden) return
+    const clamp = (n: number) => Math.min(this.stretchMax, Math.max(0, Number.isFinite(n) ? n : 0))
+    const from = clamp(Math.min(fromKm, toKm))
+    const to = clamp(Math.max(fromKm, toKm))
+    this.stretchFrom.value = String(from)
+    this.stretchTo.value = String(to)
+    this.updateStretchLabel()
+  }
+
   setRows(rows: readonly TrackPanelRow[]): void {
     this.rows = rows
+    this.exportBtn.disabled = rows.length === 0
     this.renderSummary()
     this.renderRows()
   }
@@ -211,6 +272,33 @@ export class TrackPanel {
     this.sliderLabel.textContent = `Abstand zur Route: ${this.slider.value} m`
   }
 
+  /** Sizes the stretch inputs for the track and resets them to the whole route. */
+  private configureStretch(track: Track): void {
+    const coarse = track.lengthM >= COARSE_STRETCH_ROUTE_M
+    const step = coarse ? 1 : 0.1
+    this.stretchCoarse = coarse
+    this.stretchMax = coarse ? Math.ceil(track.lengthM / 1000) : Math.ceil(track.lengthM / 100) / 10
+    this.stretchEl.hidden = track.lengthM < MIN_STRETCH_ROUTE_M
+    for (const input of [this.stretchFrom, this.stretchTo]) {
+      input.min = '0'
+      input.max = String(this.stretchMax)
+      input.step = String(step)
+    }
+    this.stretchFrom.value = '0'
+    this.stretchTo.value = String(this.stretchMax)
+    this.updateStretchLabel()
+  }
+
+  private updateStretchLabel(): void {
+    const from = Number(this.stretchFrom.value)
+    const to = Number(this.stretchTo.value)
+    const fmt = (n: number) => (this.stretchCoarse ? String(n) : decimal(n))
+    this.stretchLabel.textContent = `Abschnitt: km ${fmt(from)} – km ${fmt(to)}`
+    this.stretchFrom.setAttribute('aria-valuetext', `${fmt(from)} Kilometer`)
+    this.stretchTo.setAttribute('aria-valuetext', `${fmt(to)} Kilometer`)
+    this.stretchReset.hidden = from <= 0 && to >= this.stretchMax
+  }
+
   private renderSummary(): void {
     if (!this.track) return
     const length = formatKm(this.track.lengthM)
@@ -227,7 +315,7 @@ export class TrackPanel {
         title: r.title,
         subtitle: r.subtitle,
         hint: r.hint ?? '',
-        km: `km ${decimal(r.kmAlong)}`,
+        km: formatKmAlong(r.kmAlong),
         offset: formatOffset(r.offsetM),
       }),
       on: { select: r => this.deps.onSelectRow(r.key) },

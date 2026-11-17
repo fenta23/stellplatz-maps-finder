@@ -4,7 +4,7 @@ import type { TrackPoiLoader } from './trackPoiLoader.js'
 import { MSG_CHUNKS_FAILED } from './trackPoiLoader.js'
 import type { OsmPoi } from '@/features/pois/OverpassClient.js'
 import type { CorridorHit } from '@/features/track/corridor.js'
-import type { ITrackStore } from '@/features/track/TrackStore.js'
+import { LocalTrackStore } from '@/features/track/TrackStore.js'
 import type { TrackLayer } from '@/features/track/TrackLayer.js'
 import type { Track, TrackPoint } from '@/features/track/trackTypes.js'
 
@@ -12,16 +12,11 @@ const track: Track = {
   name: 'Eifelrunde', source: 'gpx', points: [[50, 7], [50.1, 7.1]], lengthM: 86_432, corridorM: 500,
 }
 
-function fakeStore(initial: Track | null = null) {
-  let cur = initial
-  const listeners: Array<(t: Track | null) => void> = []
-  const store: ITrackStore = {
-    get: () => cur,
-    set: t => { cur = t; listeners.forEach(l => l(t)) },
-    setCorridor: m => { if (cur) { cur = { ...cur, points: cur.points.map(p => [...p] as TrackPoint), corridorM: m }; listeners.forEach(l => l(cur)) } },
-    clear: () => { cur = null; listeners.forEach(l => l(null)) },
-    onChange: l => { listeners.push(l); return () => {} },
-  }
+function realStore(initial: Track | null = null) {
+  localStorage.clear()
+  let n = 0
+  const store = new LocalTrackStore(localStorage, { newId: () => `id${++n}` })
+  if (initial) store.set(initial)
   return store
 }
 
@@ -47,7 +42,8 @@ function setup(initial: Track | null = null, fetchFn?: typeof fetch) {
   const container = document.createElement('div')
   const panelBox = document.createElement('div')
   document.body.append(container, panelBox)
-  const store = fakeStore(initial)
+  const store = realStore(initial)
+  const scheduled: Array<() => void> = []
   const { layer, calls } = fakeLayer()
   const flash = vi.fn()
   const order: string[] = []
@@ -68,6 +64,7 @@ function setup(initial: Track | null = null, fetchFn?: typeof fetch) {
   }
   const setMarkers = vi.fn<(p: readonly OsmPoi[]) => void>()
   const selectPoi = vi.fn<(p: OsmPoi) => void>()
+  const downloadFile = vi.fn<(filename: string, mime: string, text: string) => void>()
   const active = new Set(['campsite', 'parking', 'cemetery'])
   const wiring = createTrackWiring({
     store, layer, dialogContainer: container, flash, fetchFn,
@@ -76,12 +73,15 @@ function setup(initial: Track | null = null, fetchFn?: typeof fetch) {
     rowFor: p => ({ title: p.tags.name ?? 'Ort', subtitle: p.type, color: '#2e7d32', iconSvg: '<svg data-i></svg>', ...(p.type === 'cemetery' ? { hint: 'Wasser im Winter oft abgestellt' } : {}) }),
     isTypeActive: t => active.has(t),
     panelContainer: panelBox,
+    downloadFile,
+    scheduleStartupFit: run => { scheduled.push(run) },
   })
   const q = <T extends HTMLElement>(r: string) => container.querySelector<T>(`[data-ref="${r}"]`)!
   const pq = <T extends HTMLElement>(r: string) => panelBox.querySelector<T>(`[data-ref="${r}"]`)!
   const rows = () => [...panelBox.querySelectorAll<HTMLElement>('.track-row')]
   return {
-    container, store, layer, calls, flash, wiring, q, pq, loader, refresher, order, setMarkers, selectPoi, active, rows,
+    container, store, layer, calls, flash, wiring, q, pq, loader, refresher, order, setMarkers, selectPoi, active, rows, downloadFile, scheduled,
+    runStartupFit: () => scheduled.splice(0).forEach(r => r()),
     emit: (hits: readonly CorridorHit<OsmPoi>[], done = true) => cb.onUpdate(hits, done),
     status: (t: string, e?: boolean) => cb.setStatus(t, e),
   }
@@ -91,7 +91,7 @@ function stubViewport(desktop: boolean) {
   vi.stubGlobal('matchMedia', (q: string) => ({ matches: desktop && q.includes('min-width'), media: q }))
 }
 const flush = () => new Promise(r => setTimeout(r, 0))
-afterEach(() => { document.body.innerHTML = ''; document.body.className = ''; vi.unstubAllGlobals() })
+afterEach(() => { localStorage.clear(); document.body.innerHTML = ''; document.body.className = ''; vi.unstubAllGlobals() })
 
 describe('createTrackWiring', () => {
   it('draws a stored track on startup without fitting bounds', () => {
@@ -191,14 +191,65 @@ describe('createTrackWiring', () => {
     expect(wiring.isImportOpen()).toBe(false)
   })
 
-  it('"Route entfernen" clears store and layer, flashes and closes', () => {
+  it('"Route schließen" deactivates, keeps the route saved, flashes and closes', () => {
     const { wiring, store, layer, flash, q } = setup(track)
     wiring.openImport()
     q<HTMLButtonElement>('remove').click()
     expect(store.get()).toBeNull()
+    expect(store.list()).toHaveLength(1)
     expect(layer.shown).toBeNull()
-    expect(flash).toHaveBeenCalledWith('Route entfernt')
+    expect(flash).toHaveBeenCalledWith('Route geschlossen – sie bleibt gespeichert')
     expect(wiring.isImportOpen()).toBe(false)
+  })
+
+  it('"Löschen" of the active route removes it from the library', () => {
+    const { wiring, store, layer, flash, q } = setup(track)
+    wiring.openImport()
+    q<HTMLButtonElement>('deleteActive').click()
+    expect(store.get()).toBeNull()
+    expect(store.list()).toEqual([])
+    expect(layer.shown).toBeNull()
+    expect(flash).toHaveBeenCalledWith('Route gelöscht')
+    expect(wiring.isImportOpen()).toBe(false)
+  })
+
+  it('"Anzeigen" on a saved route behaves like an import: activate, load, fit, flash', () => {
+    const { wiring, store, layer, loader, flash, calls, refresher, container } = setup(track)
+    store.set({ ...track, name: 'Zweite', points: [[51, 8], [51.1, 8.1]], lengthM: 12_000 })
+    const firstId = store.list()[1]!.id
+    loader.load.mockClear()
+    refresher.suspend.mockClear()
+    calls.length = 0
+    wiring.openImport()
+    container.querySelector<HTMLButtonElement>('.track-saved-show')!.click()
+    expect(store.get()?.id).toBe(firstId)
+    expect(layer.shown).toEqual(track.points)
+    expect(loader.load).toHaveBeenCalledWith(expect.objectContaining({ id: firstId }))
+    expect(calls.filter(c => c === 'fit')).toHaveLength(1)
+    expect(flash).toHaveBeenCalledWith('Route geladen: Eifelrunde · 86,4 km')
+    expect(wiring.isImportOpen()).toBe(false)
+  })
+
+  it('deleting an inactive saved route does not reload or redraw the active one, nor reset its stretch', () => {
+    const { wiring, store, layer, loader, flash, calls, container, setMarkers } = setup(track)
+    const other = store.set({ ...track, name: 'Zweite', points: [[51, 8], [51.1, 8.1]] })
+    store.activate(store.list()[1]!.id)
+    loader.load.mockClear()
+    loader.cancel.mockClear()
+    loader.setCorridor.mockClear()
+    calls.length = 0
+    setMarkers.mockClear()
+    wiring.openImport()
+    container.querySelector<HTMLButtonElement>('.track-saved-delete')!.click()
+    expect(store.list().some(t => t.id === other.id)).toBe(false)
+    expect(flash).toHaveBeenCalledWith('Route gelöscht')
+    expect(loader.load).not.toHaveBeenCalled()
+    expect(loader.cancel).not.toHaveBeenCalled()
+    expect(loader.setCorridor).not.toHaveBeenCalled()
+    expect(calls).toEqual([])
+    expect(setMarkers).not.toHaveBeenCalled()
+    expect(wiring.isImportOpen()).toBe(true)
+    expect(layer.shown).toEqual(track.points)
   })
 
   it('an external store change while the dialog is open refreshes the active block', () => {
@@ -210,12 +261,50 @@ describe('createTrackWiring', () => {
   })
 })
 
+describe('createTrackWiring: startup fit', () => {
+  it('fits once, with the panel insets, when a route is active at startup', () => {
+    const { layer, runStartupFit, scheduled } = setup(track)
+    expect(scheduled).toHaveLength(1)
+    expect(layer.fitArgs).toEqual([])
+    runStartupFit()
+    expect(layer.fitArgs).toHaveLength(1)
+    expect(layer.fitArgs[0]).toEqual({ left: expect.any(Number), bottom: expect.any(Number) })
+  })
+
+  it('does nothing at startup without a route', () => {
+    const { scheduled, layer } = setup()
+    expect(scheduled).toHaveLength(0)
+    expect(layer.fitArgs).toEqual([])
+  })
+
+  it('does not fit a second time when another route is activated before it runs', () => {
+    const { store, layer, runStartupFit } = setup(track)
+    store.set({ ...track, name: 'Zweite', points: [[51, 8], [51.1, 8.1]] })
+    runStartupFit()
+    expect(layer.fitArgs).toEqual([])
+  })
+
+  it('does not fit when the route was closed before it runs', () => {
+    const { store, layer, runStartupFit } = setup(track)
+    store.clear()
+    runStartupFit()
+    expect(layer.fitArgs).toEqual([])
+  })
+
+  it('a route that becomes active later schedules no startup fit', () => {
+    const { store, scheduled, layer } = setup()
+    store.set(track)
+    expect(scheduled).toHaveLength(0)
+    expect(layer.fitArgs).toEqual([])
+  })
+})
+
 describe('createTrackWiring: POIs along the route', () => {
   it('a stored track suspends the refresher, shows the panel and loads — in that order, at startup', () => {
     const { order, refresher, loader, pq, wiring } = setup(track)
     expect(order).toEqual(['suspend', 'load'])
     expect(refresher.refresh).not.toHaveBeenCalled()
-    expect(loader.load).toHaveBeenCalledWith(track)
+    expect(loader.load).toHaveBeenCalledWith(expect.objectContaining(track))
     expect(pq('name').textContent).toBe('Eifelrunde')
     expect(wiring.isTrackActive()).toBe(true)
   })
@@ -231,7 +320,7 @@ describe('createTrackWiring: POIs along the route', () => {
     const { store, order, loader } = setup()
     store.set(track)
     expect(order).toEqual(['suspend', 'load'])
-    expect(loader.load).toHaveBeenCalledWith(track)
+    expect(loader.load).toHaveBeenCalledWith(expect.objectContaining(track))
   })
 
   it('replacing the track with a different one reloads', () => {
@@ -362,7 +451,8 @@ describe('createTrackWiring: POIs along the route', () => {
     expect(calls).toEqual(['fit'])
     pq<HTMLButtonElement>('remove').click()
     expect(store.get()).toBeNull()
-    expect(flash).toHaveBeenCalledWith('Route entfernt')
+    expect(flash).toHaveBeenCalledWith('Route geschlossen – sie bleibt gespeichert')
+    expect(store.list()).toHaveLength(1)
   })
 
   it('failed chunks: the status gets the retry suffix and clicking it calls retryFailed', () => {
@@ -386,5 +476,140 @@ describe('createTrackWiring: POIs along the route', () => {
     const b = setup(track)
     b.wiring.collapsePanel()
     expect(document.body.classList.contains('track-collapsed')).toBe(true)
+  })
+
+  describe('stretch (Abschnitt)', () => {
+    const ids = (els: readonly HTMLElement[]) => els.map(e => e.querySelector('.track-row-title')!.textContent)
+    const hits = () => [
+      hit(poi(1, 'campsite', 'A'), 5), hit(poi(2, 'parking', 'B'), 15),
+      hit(poi(3, 'campsite', 'C'), 30), hit(poi(4, 'parking', 'D'), 60),
+    ]
+    const dragStretch = (pq: (r: string) => HTMLElement, from: number, to: number) => {
+      const f = pq('stretchFrom') as HTMLInputElement
+      const t = pq('stretchTo') as HTMLInputElement
+      f.value = String(from); f.dispatchEvent(new Event('input'))
+      t.value = String(to); t.dispatchEvent(new Event('input'))
+      t.dispatchEvent(new Event('change'))
+    }
+    const markerNames = (m: ReturnType<typeof vi.fn<(p: readonly OsmPoi[]) => void>>) =>
+      m.mock.calls.at(-1)![0].map(p => p.tags.name)
+
+    it('restricts rows, markers and the count to the stretch', () => {
+      const { emit, pq, rows, setMarkers } = setup(track)
+      emit(hits())
+      dragStretch(pq, 10, 40)
+      expect(ids(rows())).toEqual(['B', 'C'])
+      expect(markerNames(setMarkers)).toEqual(['B', 'C'])
+      expect(pq('meta').textContent).toBe('86,4 km · 2 Orte')
+    })
+
+    it('"Ganze Route" brings everything back', () => {
+      const { emit, pq, rows, setMarkers } = setup(track)
+      emit(hits())
+      dragStretch(pq, 10, 40)
+      pq('stretchReset').click()
+      expect(ids(rows())).toEqual(['A', 'B', 'C', 'D'])
+      expect(markerNames(setMarkers)).toEqual(['A', 'B', 'C', 'D'])
+    })
+
+    it('is kept when new hits arrive (corridor change) and when the filters change', () => {
+      const { emit, pq, rows, setMarkers, active, wiring } = setup(track)
+      emit(hits())
+      dragStretch(pq, 10, 40)
+      emit([hit(poi(1, 'campsite', 'A'), 5), hit(poi(2, 'parking', 'B'), 15), hit(poi(5, 'campsite', 'E'), 20), hit(poi(3, 'campsite', 'C'), 30), hit(poi(4, 'parking', 'D'), 60)])
+      expect(ids(rows())).toEqual(['B', 'E', 'C'])
+      expect(markerNames(setMarkers)).toEqual(['B', 'E', 'C'])
+      active.delete('parking')
+      wiring.onFiltersChanged(false)
+      expect(ids(rows())).toEqual(['E', 'C'])
+      expect((pq('stretchTo') as HTMLInputElement).value).toBe('40')
+    })
+
+    it('a corridor change of the same route keeps the stretch', () => {
+      const { emit, pq, rows, store } = setup(track)
+      emit(hits())
+      dragStretch(pq, 10, 40)
+      store.setCorridor(1000)
+      emit(hits())
+      expect(ids(rows())).toEqual(['B', 'C'])
+      expect((pq('stretchFrom') as HTMLInputElement).value).toBe('10')
+    })
+
+    it('a new track resets the stretch (panel control and filter)', () => {
+      const { emit, pq, rows, store } = setup(track)
+      emit(hits())
+      dragStretch(pq, 10, 40)
+      store.set({ ...track, name: 'Andere', lengthM: 50_000 })
+      emit(hits())
+      expect(ids(rows())).toEqual(['A', 'B', 'C', 'D'])
+      expect((pq('stretchFrom') as HTMLInputElement).value).toBe('0')
+      expect((pq('stretchTo') as HTMLInputElement).value).toBe('50')
+    })
+  })
+
+  describe('GPX export', () => {
+    const hits = () => [
+      hit(poi(1, 'campsite', 'Camping <Eifel> & Co'), 5.25),
+      hit(poi(2, 'parking'), 15),
+      hit(poi(3, 'cemetery', 'Friedhof'), 30),
+      hit(poi(4, 'campsite', 'Weit weg'), 70),
+    ]
+    const parsed = (text: string) => new DOMParser().parseFromString(text, 'application/xml')
+
+    it('exports exactly the listed places with km/offset text and flashes the count', () => {
+      const { emit, pq, downloadFile, flash } = setup(track)
+      emit(hits())
+      ;(pq('export') as HTMLButtonElement).click()
+      expect(downloadFile).toHaveBeenCalledTimes(1)
+      const [name, mime, text] = downloadFile.mock.calls[0]!
+      expect(name).toBe('Eifelrunde-orte.gpx')
+      expect(mime).toBe('application/gpx+xml')
+      const doc = parsed(text)
+      expect(doc.getElementsByTagName('parsererror')).toHaveLength(0)
+      const wpts = [...doc.getElementsByTagName('wpt')]
+      expect(wpts).toHaveLength(4)
+      expect(wpts[0]!.querySelector('name')!.textContent).toBe('Camping <Eifel> & Co')
+      expect(wpts[0]!.querySelector('type')!.textContent).toBe('campsite')
+      expect(wpts[0]!.querySelector('desc')!.textContent).toBe('km 5,3 · 120 m abseits')
+      // unnamed place: the row title (here the fake's 'Ort'); type = category label (the row's subtitle)
+      expect(wpts[1]!.querySelector('name')!.textContent).toBe('Ort')
+      expect(wpts[1]!.querySelector('type')!.textContent).toBe('parking')
+      expect(doc.querySelectorAll('trkpt')).toHaveLength(2)
+      expect(doc.querySelector('trk > name')!.textContent).toBe('Eifelrunde')
+      expect(flash).toHaveBeenLastCalledWith('4 Orte als GPX exportiert')
+    })
+
+    it('respects the active chips and the stretch', () => {
+      const { emit, pq, active, wiring, downloadFile, flash } = setup(track)
+      emit(hits())
+      active.delete('parking')
+      wiring.onFiltersChanged(false)
+      const f = pq('stretchFrom') as HTMLInputElement
+      const t = pq('stretchTo') as HTMLInputElement
+      f.value = '4'; f.dispatchEvent(new Event('input'))
+      t.value = '40'; t.dispatchEvent(new Event('input')); t.dispatchEvent(new Event('change'))
+      ;(pq('export') as HTMLButtonElement).click()
+      const names = [...parsed(downloadFile.mock.calls[0]![2]).querySelectorAll('wpt > name')].map(n => n.textContent)
+      expect(names).toEqual(['Camping <Eifel> & Co', 'Friedhof'])
+      expect(flash).toHaveBeenLastCalledWith('2 Orte als GPX exportiert')
+    })
+
+    it('uses the singular for one place', () => {
+      const { emit, pq, flash } = setup(track)
+      emit([hit(poi(1, 'campsite', 'A'), 5)])
+      ;(pq('export') as HTMLButtonElement).click()
+      expect(flash).toHaveBeenLastCalledWith('1 Ort als GPX exportiert')
+    })
+
+    it('does not export when nothing is listed', () => {
+      const { emit, pq, downloadFile, flash } = setup(track)
+      flash.mockClear()
+      emit([])
+      const btn = pq('export') as HTMLButtonElement
+      expect(btn.disabled).toBe(true)
+      btn.click()
+      expect(downloadFile).not.toHaveBeenCalled()
+      expect(flash).not.toHaveBeenCalled()
+    })
   })
 })

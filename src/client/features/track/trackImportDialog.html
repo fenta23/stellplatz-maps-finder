@@ -10,8 +10,14 @@
       <p class="track-active-length" data-ref="activeLength"></p>
       <div class="track-actions">
         <button class="import-btn" type="button" data-ref="show">Auf Karte zeigen</button>
-        <button class="import-btn track-btn-secondary" type="button" data-ref="remove">Route entfernen</button>
+        <button class="import-btn track-btn-secondary" type="button" data-ref="remove">Route schließen</button>
+        <button class="import-btn track-btn-secondary" type="button" data-ref="deleteActive">Löschen</button>
       </div>
+    </div>
+
+    <div class="import-variant" data-ref="saved" hidden>
+      <div class="import-variant-header"><span>Gespeicherte Routen</span></div>
+      <ul class="track-saved-list" data-ref="savedList"></ul>
     </div>
 
     <div class="import-variant" data-ref="komootSection">
@@ -28,6 +34,8 @@
       <button class="import-btn" type="button" data-ref="fileBtn">GPX-Datei wählen</button>
       <input type="file" accept=".gpx,application/gpx+xml,application/xml,text/xml" hidden data-ref="fileInput" />
     </div>
+
+    <p class="track-hint">Bis zu 10 Routen bleiben auf diesem Gerät gespeichert.</p>
 
     <p class="track-status" role="status" aria-live="polite" data-ref="status"></p>
   </div>

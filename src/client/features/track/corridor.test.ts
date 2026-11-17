@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { haversineMeters } from '../../core/geo.js'
-import { chunkForOverpass, corridorBoxes, matchCorridor, overpassRadiusBucket } from './corridor.js'
+import { chunkForOverpass, corridorBoxes, matchCorridor, overpassRadiusBucket, withinStretch } from './corridor.js'
 import { createSegmentIndex, trackLengthM } from './trackGeometry.js'
 import type { TrackPoint } from './trackTypes.js'
 
@@ -175,5 +175,26 @@ describe('overpassRadiusBucket', () => {
     expect(overpassRadiusBucket(1000)).toBe(1000)
     expect(overpassRadiusBucket(1001)).toBe(2000)
     expect(overpassRadiusBucket(2000)).toBe(2000)
+  })
+})
+
+describe('withinStretch', () => {
+  const h = (kmAlong: number) => ({ kmAlong, id: kmAlong })
+  const hits = [h(0), h(5), h(12), h(12.5), h(45), h(80)]
+
+  it('keeps hits inside the range, bounds inclusive, order preserved', () => {
+    expect(withinStretch(hits, 12, 45).map(x => x.id)).toEqual([12, 12.5, 45])
+  })
+
+  it('returns everything for the whole route and nothing for an empty stretch', () => {
+    expect(withinStretch(hits, 0, 80)).toHaveLength(6)
+    expect(withinStretch(hits, 50, 60)).toEqual([])
+    expect(withinStretch([], 0, 10)).toEqual([])
+  })
+
+  it('does not mutate its input', () => {
+    const copy = [...hits]
+    withinStretch(hits, 1, 2)
+    expect(hits).toEqual(copy)
   })
 })

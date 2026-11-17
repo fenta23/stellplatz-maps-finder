@@ -114,3 +114,14 @@ export function matchCorridor<T extends { readonly lat: number; readonly lon: nu
 export function overpassRadiusBucket(corridorM: number): 500 | 1000 | 2000 {
   return corridorM <= 500 ? 500 : corridorM <= 1000 ? 1000 : 2000
 }
+
+/**
+ * Hits whose position along the route lies within [fromKm, toKm] (inclusive),
+ * order preserved. Pure filter for the "Abschnitt" control: list and markers
+ * both go through it so they always agree.
+ */
+export function withinStretch<T extends { readonly kmAlong: number }>(
+  hits: readonly T[], fromKm: number, toKm: number,
+): T[] {
+  return hits.filter(h => h.kmAlong >= fromKm && h.kmAlong <= toKm)
+}

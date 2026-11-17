@@ -8,7 +8,7 @@
 ```
 npm install       # deps
 npm run dev       # Vite :5173 (API via VITE_API_BASE aus .env oder lokaler Proxy :54321)
-npm test          # unit tests (Vitest, 1249 tests)
+npm test          # unit tests (Vitest, 1334 tests)
 npm run test:int  # integration tests vs Edge Function
 npm run build     # → dist/client/
 ```
@@ -33,7 +33,7 @@ features/
   map/        MapService + leafletAdapter + locationMarker + leafletTrackLayer; Basiskarten (Karte, Satellit, Fahrradkarte, Topo) mit Ebenen-Umschalter
   pois/       OverpassClient + poiTiles (statische Kacheln) + PoiMarkerManager + poiMeta
   poi-detail/ PoiDetailPanel + poiData (Bilder, Nearby, Notes)
-  track/      Route-Import (GPX, Komoot-Link) + Geometrie + TrackStore + TrackImportDialog + corridor + TrackPanel (POIs entlang der Route)
+  track/      Route-Import (GPX, Komoot-Link) + Geometrie + TrackStore + TrackImportDialog + corridor + TrackPanel (POIs entlang der Route) + gpxExport; bis zu 10 gespeicherte Routen in `stellplatz:tracks`
   search/     SearchBar
   filters/    FilterPanel
   profile/    Profile Wandern/Radfahren/Camping (Presets, ProfileStore, ProfileDialog)

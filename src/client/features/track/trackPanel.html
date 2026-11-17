@@ -8,16 +8,27 @@
       </span>
       <span class="track-sheet-strip" data-ref="strip" hidden></span>
     </button>
-    <button class="track-sheet-x" type="button" data-ref="removeSmall" aria-label="Route entfernen" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+    <button class="track-sheet-x" type="button" data-ref="removeSmall" aria-label="Route schließen" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
   </div>
   <div class="track-sheet-body" data-ref="body">
     <div class="track-sheet-actions">
       <button class="track-sheet-btn" type="button" data-ref="fit">Einpassen</button>
-      <button class="track-sheet-btn track-sheet-btn-danger" type="button" data-ref="remove">Route entfernen</button>
+      <button class="track-sheet-btn track-sheet-btn-danger" type="button" data-ref="remove">Route schließen</button>
+      <button class="track-sheet-btn" type="button" data-ref="export" disabled>Als GPX exportieren</button>
     </div>
     <div class="track-corridor">
       <label class="track-corridor-label" for="track-corridor-range" data-ref="corridorLabel"></label>
       <input id="track-corridor-range" class="track-corridor-range" type="range" data-ref="corridor" />
+    </div>
+    <div class="track-stretch" data-ref="stretch" role="group" aria-labelledby="track-stretch-label" hidden>
+      <div class="track-stretch-head">
+        <span class="track-stretch-label" id="track-stretch-label" data-ref="stretchLabel"></span>
+        <button class="track-stretch-reset" type="button" data-ref="stretchReset" hidden>Ganze Route</button>
+      </div>
+      <label class="track-sr-only" for="track-stretch-from">Abschnitt ab Kilometer</label>
+      <input id="track-stretch-from" class="track-corridor-range" type="range" data-ref="stretchFrom" />
+      <label class="track-sr-only" for="track-stretch-to">Abschnitt bis Kilometer</label>
+      <input id="track-stretch-to" class="track-corridor-range" type="range" data-ref="stretchTo" />
     </div>
     <p class="track-status" role="status" aria-live="polite" data-ref="status"></p>
     <ul class="track-rows" data-list data-ref="list">

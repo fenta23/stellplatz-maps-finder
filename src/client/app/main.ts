@@ -54,6 +54,7 @@ import { createSelection } from './selection.js'
 import { createPoiRefresher, fetchSignature } from './poiRefresher.js'
 import { initImport } from './importWiring.js'
 import { createTrackWiring } from './trackWiring.js'
+import { shouldCenterOnUser } from './startupCenter.js'
 import { createProfileWiring } from './profileWiring.js'
 import { LocalProfileStore } from '@/features/profile/ProfileStore.js'
 import { createTrackPoiLoader } from './trackPoiLoader.js'
@@ -149,13 +150,15 @@ async function init() {
   // Erst-Standort nicht blockierend ermitteln und Karte zentrieren – aber nur,
   // solange der Nutzer die Karte noch nicht selbst bewegt hat (kein Ruck/Sprung).
   let userMovedMap = false
+  // Bound once trackWiring exists (created further down); the location fix arrives later.
+  let isTrackActive: () => boolean = () => false
   mapService.onDragStart(() => { userMovedMap = true })
   void requestLocation(statusEl).then(userPos => {
     setStatus('')
     if (userPos) {
       session.userPos = { lat: userPos[0], lon: userPos[1] }
       locationMarker.update(userPos)
-      if (!userMovedMap) mapService.setCenter(userPos[0], userPos[1], 13)
+      if (shouldCenterOnUser({ userMovedMap, trackActive: isTrackActive() })) mapService.setCenter(userPos[0], userPos[1], 13)
     } else {
       flashStatus('Standort nicht verfügbar – Karte auf Deutschland zentriert')
     }
@@ -314,6 +317,7 @@ async function init() {
       iconSvg: typeIcon(poi.type), // our own icon set, not user data
     }),
   })
+  isTrackActive = () => trackWiring.isTrackActive()
 
   filterStore.onChange(() => {
     // A new/edited filter or parking switched on needs data not loaded yet.

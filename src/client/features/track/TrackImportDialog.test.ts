@@ -1,13 +1,14 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { TrackImportDialog, formatKm, type TrackImportDialogDeps } from './TrackImportDialog.js'
 import { TrackImportError } from './trackErrors.js'
-import type { ImportedTrack, Track } from './trackTypes.js'
+import type { ImportedTrack, SavedTrack, Track } from './trackTypes.js'
 
 const imported: ImportedTrack = {
   name: 'Eifelrunde', source: 'komoot',
   points: [[50.0, 7.0], [50.01, 7.01], [50.02, 7.0]],
 }
-const active: Track = { ...imported, lengthM: 86_432, corridorM: 500 }
+const active: SavedTrack = { ...imported, lengthM: 86_432, corridorM: 500, id: 'a1', addedAt: 1 }
+const other = (id: string, over: Partial<SavedTrack> = {}): SavedTrack => ({ ...active, id, name: `Tour ${id}`, source: 'gpx', lengthM: 12_340, ...over })
 
 const flush = () => new Promise(r => setTimeout(r, 0))
 
@@ -15,12 +16,15 @@ function setup(over: Partial<TrackImportDialogDeps> = {}) {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const deps = {
-    getActiveTrack: vi.fn(() => null as Track | null),
+    getActiveTrack: vi.fn(() => null as SavedTrack | null),
+    getSavedTracks: vi.fn(() => [] as readonly SavedTrack[]),
     importLink: vi.fn(async (_input: string, _signal: AbortSignal): Promise<ImportedTrack> => imported),
     importFile: vi.fn(async (_file: File): Promise<ImportedTrack> => ({ ...imported, source: 'gpx' as const })),
     onImported: vi.fn((_track: Track) => {}),
     onShowActive: vi.fn(),
     onRemoveActive: vi.fn(),
+    onActivate: vi.fn((_id: string) => {}),
+    onDelete: vi.fn((_id: string) => {}),
   }
   const dialog = new TrackImportDialog(container, { ...deps, ...over })
   const q = <T extends HTMLElement>(ref: string) => container.querySelector<T>(`[data-ref="${ref}"]`)!
@@ -171,7 +175,7 @@ describe('TrackImportDialog', () => {
   })
 
   it('shows the active track block only when a track is active', () => {
-    const getActiveTrack = vi.fn((): Track | null => active)
+    const getActiveTrack = vi.fn((): SavedTrack | null => active)
     const { dialog, q } = setup({ getActiveTrack })
     dialog.open()
     expect(q('active').hidden).toBe(false)
@@ -190,6 +194,84 @@ describe('TrackImportDialog', () => {
     expect(deps.onShowActive).toHaveBeenCalledOnce()
     q<HTMLButtonElement>('remove').click()
     expect(deps.onRemoveActive).toHaveBeenCalledOnce()
+    expect(q('remove').textContent).toBe('Route schließen')
+  })
+
+  it('"Löschen" deletes the active route by id and closes', () => {
+    const { deps, dialog, q } = setup({ getActiveTrack: () => active })
+    dialog.open()
+    q<HTMLButtonElement>('deleteActive').click()
+    expect(deps.onDelete).toHaveBeenCalledWith('a1')
+    expect(deps.onRemoveActive).not.toHaveBeenCalled()
+    expect(dialog.isOpen()).toBe(false)
+  })
+
+  it('shows the 10-routes hint', () => {
+    const { container } = setup()
+    expect(container.textContent).toContain('Bis zu 10 Routen bleiben auf diesem Gerät gespeichert.')
+  })
+
+  describe('saved routes', () => {
+    const items = (c: HTMLElement) => [...c.querySelectorAll<HTMLElement>('.track-saved-item')]
+
+    it('is hidden without inactive saved routes (the active one is not listed)', () => {
+      const { dialog, q } = setup({ getActiveTrack: () => active, getSavedTracks: () => [active] })
+      dialog.open()
+      expect(q('saved').hidden).toBe(true)
+    })
+
+    it('lists inactive routes with name, length and source', () => {
+      const { container, dialog, q } = setup({
+        getActiveTrack: () => active,
+        getSavedTracks: () => [active, other('b'), other('c', { source: 'komoot', lengthM: 86_432 })],
+      })
+      dialog.open()
+      expect(q('saved').hidden).toBe(false)
+      const rows = items(container)
+      expect(rows).toHaveLength(2)
+      expect(rows[0]!.querySelector('.track-saved-name')!.textContent).toBe('Tour b')
+      expect(rows[0]!.querySelector('.track-saved-meta')!.textContent).toBe('12,3 km · GPX')
+      expect(rows[1]!.querySelector('.track-saved-meta')!.textContent).toBe('86,4 km · Komoot')
+    })
+
+    it('renders names as text, never as markup', () => {
+      const { container, dialog } = setup({ getSavedTracks: () => [other('b', { name: '<img src=x onerror=alert(1)>' })] })
+      dialog.open()
+      expect(container.querySelector('.track-saved-item img')).toBeNull()
+      expect(container.querySelector('.track-saved-name')!.textContent).toBe('<img src=x onerror=alert(1)>')
+    })
+
+    it('"Anzeigen" activates and closes the dialog', () => {
+      const { container, deps, dialog } = setup({ getSavedTracks: () => [other('b')] })
+      dialog.open()
+      ;[...container.querySelectorAll<HTMLButtonElement>('.track-saved-show')][0]!.click()
+      expect(deps.onActivate).toHaveBeenCalledWith('b')
+      expect(dialog.isOpen()).toBe(false)
+    })
+
+    it('the delete button re-renders the list and keeps the dialog open', () => {
+      let saved = [other('b'), other('c')]
+      const onDelete = vi.fn((id: string) => { saved = saved.filter(t => t.id !== id) })
+      const { container, dialog, q } = setup({ getSavedTracks: () => saved, onDelete })
+      dialog.open()
+      const del = container.querySelector<HTMLButtonElement>('.track-saved-delete')!
+      expect(del.getAttribute('aria-label')).toBe('Route löschen')
+      del.click()
+      expect(onDelete).toHaveBeenCalledWith('b')
+      expect(dialog.isOpen()).toBe(true)
+      expect(items(container)).toHaveLength(1)
+      container.querySelector<HTMLButtonElement>('.track-saved-delete')!.click()
+      expect(q('saved').hidden).toBe(true)
+    })
+
+    it('refresh() re-renders the list while open', () => {
+      let saved: SavedTrack[] = []
+      const { container, dialog } = setup({ getSavedTracks: () => saved })
+      dialog.open()
+      saved = [other('b')]
+      dialog.refresh()
+      expect(items(container)).toHaveLength(1)
+    })
   })
 
   it('closes on Escape, close button and backdrop click', () => {

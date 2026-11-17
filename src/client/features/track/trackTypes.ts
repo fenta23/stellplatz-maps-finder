@@ -19,6 +19,16 @@ export interface Track extends ImportedTrack {
   readonly corridorM: number
 }
 
+/** A route in the on-device library. */
+export interface SavedTrack extends Track {
+  readonly id: string
+  /** Epoch ms of the last save/re-activation; the library lists newest first. */
+  readonly addedAt: number
+}
+
+/** How many routes stay on the device; beyond that the oldest inactive ones are dropped. */
+export const MAX_SAVED_TRACKS = 10
+
 export const MAX_FILE_BYTES = 10 * 1024 * 1024
 export const MAX_LENGTH_M = 1_000_000
 export const MAX_POINTS = 20_000

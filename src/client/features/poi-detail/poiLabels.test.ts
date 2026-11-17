@@ -103,12 +103,12 @@ describe('trackInfoText', () => {
     expect(trackInfoText({ kmAlong: 12.4, kmToEnd: 73.6, offsetM: 180 }))
       .toBe('Route: km 12,4 · noch 73,6 km · 180 m abseits')
   })
-  it('rounds metres and switches to km from 1000 m', () => {
+  it('rounds to 10 m and switches to km from 1000 m', () => {
     expect(trackInfoText({ kmAlong: 0, kmToEnd: 5, offsetM: 10.4 })).toBe('Route: km 0,0 · noch 5,0 km · 10 m abseits')
     expect(trackInfoText({ kmAlong: 1, kmToEnd: 2, offsetM: 1234 })).toBe('Route: km 1,0 · noch 2,0 km · 1,2 km abseits')
   })
-  it('says "an der Route" below 10 m', () => {
-    expect(trackInfoText({ kmAlong: 3.04, kmToEnd: 1, offsetM: 9.9 })).toBe('Route: km 3,0 · noch 1,0 km · an der Route')
+  it('says "an der Route" when the offset rounds to less than 10 m', () => {
+    expect(trackInfoText({ kmAlong: 3.04, kmToEnd: 1, offsetM: 4.9 })).toBe('Route: km 3,0 · noch 1,0 km · an der Route')
     expect(trackInfoText({ kmAlong: 3, kmToEnd: 1, offsetM: 0 })).toContain('an der Route')
   })
 })
