@@ -55,3 +55,317 @@
 .track-status.track-status-error {
     color: var(--danger);
 }
+.track-status.track-status-action {
+    cursor: pointer;
+    text-decoration: underline;
+}
+
+/* ── Track panel: docked sheet with the places along the active route ──
+   Mobile (≤600px, the app's breakpoint): bottom sheet, 45dvh, own scroll.
+   Desktop (≥601px): 340px column on the left, below topbar/filter chrome.
+   Body classes: track-open (sheet visible), track-collapsed (strip only). */
+.track-sheet {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    /* Below the mobile detail panel (z 1100), above Leaflet controls/#status. */
+    z-index: 1050;
+    display: flex;
+    flex-direction: column;
+    height: 45dvh;
+    max-height: 45vh;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    border-radius: var(--radius) var(--radius) 0 0;
+    box-shadow: 0 -4px 16px rgba(44, 40, 34, 0.18);
+    padding-bottom: env(safe-area-inset-bottom);
+    overflow: hidden;
+}
+.track-sheet[hidden] {
+    display: none;
+}
+.track-sheet.collapsed {
+    height: auto;
+}
+.track-sheet-bar {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    border-bottom: 1px solid var(--border-soft);
+}
+.track-sheet.collapsed .track-sheet-bar {
+    border-bottom: none;
+}
+.track-sheet-toggle {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border: none;
+    background: none;
+    color: var(--ink);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.track-sheet-chevron {
+    width: 1.1rem;
+    height: 1.1rem;
+    flex-shrink: 0;
+    color: var(--ink-muted);
+    transition: transform 0.2s;
+}
+.track-sheet.collapsed .track-sheet-chevron {
+    transform: rotate(180deg);
+}
+.track-sheet-heading {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+.track-sheet-heading[hidden],
+.track-sheet-strip[hidden] {
+    display: none;
+}
+.track-sheet-name,
+.track-sheet-strip {
+    font-weight: 600;
+    font-size: 0.92rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.track-sheet-strip {
+    flex: 1;
+    min-width: 0;
+}
+.track-sheet-meta {
+    font-size: 0.78rem;
+    color: var(--ink-muted);
+}
+.track-sheet-x {
+    flex-shrink: 0;
+    margin-right: 6px;
+    padding: 8px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: none;
+    color: var(--ink-muted);
+    cursor: pointer;
+}
+.track-sheet-x[hidden] {
+    display: none;
+}
+.track-sheet-x:hover {
+    color: var(--danger);
+    background: var(--surface-2);
+}
+.track-sheet-x svg {
+    display: block;
+    width: 1.1rem;
+    height: 1.1rem;
+}
+.track-sheet-body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+.track-sheet-body[hidden] {
+    display: none;
+}
+.track-sheet-actions {
+    display: flex;
+    gap: 8px;
+    padding: 8px 12px 0;
+}
+.track-sheet-btn {
+    flex: 1;
+    padding: 7px 10px;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--accent);
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+.track-sheet-btn:hover {
+    background: var(--accent-soft);
+}
+.track-sheet-btn.track-sheet-btn-danger {
+    color: var(--ink);
+}
+.track-sheet-btn.track-sheet-btn-danger:hover {
+    color: var(--danger);
+    background: var(--surface-2);
+}
+.track-corridor {
+    padding: 8px 12px 0;
+}
+.track-corridor-label {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--ink-muted);
+}
+.track-corridor-range {
+    display: block;
+    width: 100%;
+    margin: 4px 0 0;
+    accent-color: var(--accent);
+}
+.track-sheet .track-status {
+    margin: 0;
+    padding: 4px 12px 0;
+}
+.track-rows {
+    list-style: none;
+    margin: 0;
+    padding: 4px 0;
+}
+.track-rows-empty {
+    padding: 24px 20px;
+    text-align: center;
+    color: var(--ink-muted);
+    font-size: 0.88rem;
+    line-height: 1.45;
+}
+.track-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    width: 100%;
+    padding: 9px 12px;
+    border: none;
+    border-bottom: 1px solid var(--border-soft);
+    background: none;
+    color: var(--ink);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.track-row:hover,
+.track-row:focus-visible {
+    background: var(--surface-2);
+}
+.track-row-icon {
+    --track-row-color: var(--accent);
+    flex-shrink: 0;
+    width: 12px;
+    height: 12px;
+    margin-top: 4px;
+    border-radius: 50%;
+    background: var(--track-row-color);
+}
+.track-row-icon.has-svg {
+    width: 20px;
+    height: 20px;
+    margin-top: 0;
+    background: none;
+    color: var(--track-row-color);
+}
+.track-row-icon svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+.track-row-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+.track-row-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+.track-row-sub {
+    font-size: 0.78rem;
+    color: var(--ink-muted);
+}
+.track-row-hint {
+    margin-top: 2px;
+    font-size: 0.76rem;
+    color: var(--danger);
+}
+.track-row-hint[hidden] {
+    display: none;
+}
+.track-row-pos {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    font-size: 0.78rem;
+    white-space: nowrap;
+}
+.track-row-km {
+    font-weight: 600;
+}
+.track-row-off {
+    color: var(--ink-muted);
+}
+.track-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 8px;
+    flex-shrink: 0;
+    border-top: 1px solid var(--border-soft);
+}
+.track-pagination:empty {
+    display: none;
+}
+
+/* Mobile: lift Leaflet's bottom controls + attribution above the sheet. */
+@media (max-width: 600px) {
+    body.track-open .leaflet-bottom {
+        bottom: 45dvh;
+    }
+    body.track-open.track-collapsed .leaflet-bottom {
+        bottom: calc(52px + env(safe-area-inset-bottom));
+    }
+    /* The POI detail panel (bottom sheet, z 1100) takes over the same slot. */
+    body.track-open.detail-open .track-sheet {
+        display: none;
+    }
+    body.track-open.detail-open .leaflet-bottom {
+        bottom: 0;
+    }
+}
+
+/* Desktop: left column below the search/filter chrome (Leaflet's top
+   controls start at 105px). The detail panel lives on the right (340px). */
+@media (min-width: 601px) {
+    .track-sheet {
+        left: 12px;
+        right: auto;
+        top: 120px;
+        bottom: 28px;
+        width: 340px;
+        height: auto;
+        max-height: none;
+        z-index: 900;
+        padding-bottom: 0;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow-lg);
+    }
+    .track-sheet.collapsed {
+        bottom: auto;
+    }
+    /* Make room: move Leaflet's left-hand controls (zoom, locate/map buttons)
+       to the right of the column instead of hiding them under it. */
+    body.track-open .leaflet-top.leaflet-left,
+    body.track-open .leaflet-bottom.leaflet-left {
+        margin-left: 364px;
+    }
+}

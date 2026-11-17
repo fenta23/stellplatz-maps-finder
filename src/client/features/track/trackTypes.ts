@@ -27,3 +27,13 @@ export const SIMPLIFY_TOLERANCE_M = 5
 export const DEFAULT_CORRIDOR_M = 500
 export const MIN_CORRIDOR_M = 50
 export const MAX_CORRIDOR_M = 2000
+
+/** Where something sits relative to the active track. */
+export interface TrackPosition {
+  /** Distance from the start to the nearest point on the track, in kilometres. */
+  readonly kmAlong: number
+  /** Remaining distance from that point to the end, in kilometres. */
+  readonly kmToEnd: number
+  /** Straight-line distance off the track, in metres. */
+  readonly offsetM: number
+}

@@ -21,7 +21,8 @@ import { FilterPanel } from '@/features/filters/FilterPanel.js'
 import { LocalFilterStore } from '@/features/filters/FilterStore.js'
 import { SyncedFilterStore } from '@/features/filters/RemoteFilterStore.js'
 import { FilterConfigPanel } from '@/features/filters/FilterConfigPanel.js'
-import { setPoiMetaRegistry } from '@/features/pois/poiMeta.js'
+import { trackRowTexts } from './trackRows.js'
+import { setPoiMetaRegistry, typeLabel, typeIcon } from '@/features/pois/poiMeta.js'
 import { filterIconPath, PERSONAL_FILTER_ID } from '@/features/filters/filterModel.js'
 import { DEFAULT_PERSONAL_COLOR } from '@/features/custom-pois/CustomPoiMarkerManager.js'
 import { type StyleResolver } from '@/features/pois/PoiMarkerManager.js'
@@ -53,6 +54,7 @@ import { createSelection } from './selection.js'
 import { createPoiRefresher, fetchSignature } from './poiRefresher.js'
 import { initImport } from './importWiring.js'
 import { createTrackWiring } from './trackWiring.js'
+import { createTrackPoiLoader } from './trackPoiLoader.js'
 import { LocalTrackStore } from '@/features/track/TrackStore.js'
 import { createLeafletTrackLayer } from '@/features/map/leafletTrackLayer.js'
 import { initCustomPois } from './customPoiWiring.js'
@@ -247,6 +249,7 @@ async function init() {
     onEditCustomPoi: customPois.editCurrent,
     onDeleteCustomPoi: customPois.deleteCurrent,
     isLoggedIn: () => loggedIn,
+    getTrackInfo: poi => trackWiring.positionOf(poi), // trackWiring is created further down
   })
 
   // ── Auth sync ───────────────────────────────────────────────────────────────
@@ -266,13 +269,14 @@ async function init() {
   // Built-in filters from static tiles, user/AI filters live via Overpass.
   const poiTiles = createPoiTileSource(POI_TILES_BASE)
   const getOsmFilters = () => filterStore.list().filter(f => f.kind === 'osm' && !f.hidden && f.selectors.length > 0)
-  const { refresh } = createPoiRefresher({
+  const refresher = createPoiRefresher({
     getBounds: () => mapService.getBounds(),
     setMarkers: pois => markerManager.updatePois(pois),
     setStatus,
     getOsmFilters,
     tiles: poiTiles,
   })
+  const { refresh } = refresher
   let lastFetchSignature = fetchSignature(getOsmFilters())
 
   let refreshTimer: ReturnType<typeof setTimeout> | undefined
@@ -286,15 +290,38 @@ async function init() {
   })
   setTimeout(() => void refresh(), 800)
 
+  // ── Track import (GPX / Komoot) + POIs along the route ─────────────────────
+  // Created before the filter/collapse hooks below, which talk to it. While a
+  // track is active the refresher is suspended and the map shows only the
+  // corridor POIs.
+  const trackWiring = createTrackWiring({
+    store: new LocalTrackStore(),
+    layer: createLeafletTrackLayer(map),
+    dialogContainer: document.body,
+    panelContainer: document.body,
+    flash: flashInfo,
+    createLoader: callbacks => createTrackPoiLoader({ getOsmFilters, tiles: poiTiles, ...callbacks }),
+    refresher,
+    setMarkers: pois => markerManager.updatePois(pois),
+    selectPoi: poi => void selection.select(poi),
+    isTypeActive: type => osmFilterIds().has(type),
+    rowFor: poi => ({
+      ...trackRowTexts(poi.tags.name, typeLabel(poi.type)),
+      color: styleResolver(poi.type).color,
+      iconSvg: typeIcon(poi.type), // our own icon set, not user data
+    }),
+  })
+
   filterStore.onChange(() => {
     // A new/edited filter or parking switched on needs data not loaded yet.
     const sig = fetchSignature(getOsmFilters())
-    if (sig !== lastFetchSignature) {
-      lastFetchSignature = sig
-      refreshDebounced()
-    }
+    const needsRefetch = sig !== lastFetchSignature
+    lastFetchSignature = sig
+    // With an active track the refresher is suspended; the track wiring reloads the corridor instead.
+    if (needsRefetch && !trackWiring.isTrackActive()) refreshDebounced()
     markerManager.setActiveTypes(osmFilterIds())
     markerManager.setStyleResolver(styleResolver)
+    trackWiring.onFiltersChanged(needsRefetch)
     const personal = filterStore.get(PERSONAL_FILTER_ID)
     if (personal) {
       customPois.markerManager.setVisible(!personal.hidden && personal.enabled)
@@ -311,6 +338,7 @@ async function init() {
     if (!isMobile() || !mapReady) return
     document.body.classList.add('ui-collapsed')
     detailPanel.collapse()
+    trackWiring.collapsePanel()
   }
   const expandUI = () => document.body.classList.remove('ui-collapsed')
 
@@ -421,13 +449,6 @@ async function init() {
     refreshCustomMarkers: customPois.refreshMarkers,
   })
 
-  // ── Track import (GPX / Komoot) ─────────────────────────────────────────────
-  const trackWiring = createTrackWiring({
-    store: new LocalTrackStore(),
-    layer: createLeafletTrackLayer(map),
-    dialogContainer: document.body,
-    flash: flashInfo,
-  })
   mapService.onBaseLayerChange(key => trackWiring.setSatellite(key === 'Satellit'))
   mapService.onTrackAction(() => trackWiring.openImport())
 

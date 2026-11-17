@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { readFileSync } from 'node:fs'
 import L from 'leaflet'
-import { createLeafletTrackLayer, FIT_MAX_ZOOM } from './leafletTrackLayer.js'
+import { createLeafletTrackLayer, FIT_MAX_ZOOM, FIT_PADDING_TOP_LEFT, FIT_PADDING_BOTTOM_RIGHT } from './leafletTrackLayer.js'
 import type { TrackPoint } from '@/features/track/trackTypes.js'
 
 const POINTS: readonly TrackPoint[] = [[48.0, 9.0], [48.1, 9.1], [48.2, 9.05]]
@@ -82,6 +82,20 @@ describe('createLeafletTrackLayer', () => {
     expect((b as L.LatLngBounds).getNorthEast()).toEqual(L.latLng(48.2, 9.1))
     expect(opts?.maxZoom).toBe(FIT_MAX_ZOOM)
     expect(opts?.paddingTopLeft).toBeDefined()
+  })
+
+  it('fitBounds adds the insets to the default paddings', () => {
+    const spy = vi.spyOn(map, 'fitBounds')
+    const t = make()
+    t.show(POINTS)
+    t.fitBounds({ left: 364, bottom: 52 })
+    t.fitBounds()
+    const [, withInsets] = spy.mock.calls[0]!
+    const [, plain] = spy.mock.calls[1]!
+    expect(plain?.paddingTopLeft).toEqual(FIT_PADDING_TOP_LEFT)
+    expect(plain?.paddingBottomRight).toEqual(FIT_PADDING_BOTTOM_RIGHT)
+    expect(withInsets?.paddingTopLeft).toEqual([FIT_PADDING_TOP_LEFT[0] + 364, FIT_PADDING_TOP_LEFT[1]])
+    expect(withInsets?.paddingBottomRight).toEqual([FIT_PADDING_BOTTOM_RIGHT[0], FIT_PADDING_BOTTOM_RIGHT[1] + 52])
   })
 
   it('fitBounds is a no-op without a track and after clear', () => {

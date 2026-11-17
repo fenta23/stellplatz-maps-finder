@@ -8,7 +8,7 @@
 ```
 npm install       # deps
 npm run dev       # Vite :5173 (API via VITE_API_BASE aus .env oder lokaler Proxy :54321)
-npm test          # unit tests (Vitest, 967 tests)
+npm test          # unit tests (Vitest, 1083 tests)
 npm run test:int  # integration tests vs Edge Function
 npm run build     # → dist/client/
 ```
@@ -26,14 +26,14 @@ Bekannte Störungen (OSM-Cloud-IP-Block, KI-Provider, Migrationen): `docs/troubl
 
 ## Frontend (`src/client/`) — vertical slices
 ```
-app/        main.ts (Wiring), session.ts (State), selection.ts, poiRefresher.ts
+app/        main.ts (Wiring), session.ts (State), selection.ts, poiRefresher.ts, trackWiring.ts, trackPoiLoader.ts
 core/       config.ts (apiUrl), template.ts (clone/ref), bind.ts (renderList)
 features/
   menu/       SideMenu + clearAppCache
   map/        MapService + leafletAdapter + locationMarker
   pois/       OverpassClient + poiTiles (statische Kacheln) + PoiMarkerManager + poiMeta
   poi-detail/ PoiDetailPanel + poiData (Bilder, Nearby, Notes)
-  track/      Route-Import (GPX, Komoot-Link) + Geometrie + TrackStore + TrackImportDialog
+  track/      Route-Import (GPX, Komoot-Link) + Geometrie + TrackStore + TrackImportDialog + corridor + TrackPanel (POIs entlang der Route)
   search/     SearchBar
   filters/    FilterPanel
   favorites/  FavoritesStore (local + Supabase-Sync)

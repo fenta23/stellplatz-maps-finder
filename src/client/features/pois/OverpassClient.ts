@@ -1,6 +1,6 @@
 import { notNullUndefined } from '@shared/common.js'
 import { fetchFromOverpassMirrors } from '@/core/overpassFetch.js'
-import { buildOverpassQuery, classifyElement, type FilterDef } from '@/features/filters/filterModel.js'
+import { buildOverpassQuery, buildOverpassAroundQuery, classifyElement, type FilterDef } from '@/features/filters/filterModel.js'
 
 /**
  * A POI's group identity = a filter id. Built-in ids ('parking', 'camper', …)
@@ -103,6 +103,15 @@ function parseElements(data: { elements?: OsmElement[] }, filters: readonly Filt
     .filter(notNullUndefined)
 }
 
+async function fetchAndParse(
+  query: string,
+  filters: readonly FilterDef[],
+  signal?: AbortSignal,
+): Promise<readonly OsmPoi[]> {
+  const data = await fetchFromOverpassMirrors(query, signal) as { elements?: OsmElement[] }
+  return parseElements(data, filters)
+}
+
 export async function fetchPois(
   bounds: LatLngBounds,
   filters: readonly FilterDef[],
@@ -110,7 +119,17 @@ export async function fetchPois(
 ): Promise<readonly OsmPoi[]> {
   if (!filters.some(f => f.kind === 'osm' && f.selectors.length > 0)) return []
 
-  const query = buildQuery(bounds, filters)
-  const data = await fetchFromOverpassMirrors(query, signal) as { elements?: OsmElement[] }
-  return parseElements(data, filters)
+  return fetchAndParse(buildQuery(bounds, filters), filters, signal)
+}
+
+/** Like `fetchPois`, but for a corridor of `radiusM` metres around a polyline. */
+export async function fetchPoisAround(
+  line: readonly (readonly [number, number])[],
+  radiusM: number,
+  filters: readonly FilterDef[],
+  signal?: AbortSignal,
+): Promise<readonly OsmPoi[]> {
+  const query = buildOverpassAroundQuery(line, radiusM, filters)
+  if (query === '') return []
+  return fetchAndParse(query, filters, signal)
 }

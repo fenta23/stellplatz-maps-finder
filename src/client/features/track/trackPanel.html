@@ -1,0 +1,44 @@
+<section class="track-sheet" aria-label="Route und Orte entlang der Route" hidden>
+  <div class="track-sheet-bar">
+    <button class="track-sheet-toggle" type="button" data-ref="toggle" aria-expanded="true" aria-label="Routenliste einklappen">
+      <svg class="track-sheet-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+      <span class="track-sheet-heading" data-ref="heading">
+        <span class="track-sheet-name" data-ref="name"></span>
+        <span class="track-sheet-meta" data-ref="meta"></span>
+      </span>
+      <span class="track-sheet-strip" data-ref="strip" hidden></span>
+    </button>
+    <button class="track-sheet-x" type="button" data-ref="removeSmall" aria-label="Route entfernen" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+  </div>
+  <div class="track-sheet-body" data-ref="body">
+    <div class="track-sheet-actions">
+      <button class="track-sheet-btn" type="button" data-ref="fit">Einpassen</button>
+      <button class="track-sheet-btn track-sheet-btn-danger" type="button" data-ref="remove">Route entfernen</button>
+    </div>
+    <div class="track-corridor">
+      <label class="track-corridor-label" for="track-corridor-range" data-ref="corridorLabel"></label>
+      <input id="track-corridor-range" class="track-corridor-range" type="range" data-ref="corridor" />
+    </div>
+    <p class="track-status" role="status" aria-live="polite" data-ref="status"></p>
+    <ul class="track-rows" data-list data-ref="list">
+      <template data-row>
+        <li class="track-row-item">
+          <button class="track-row" type="button" data-on="select">
+            <span class="track-row-icon" data-ref="icon" aria-hidden="true"></span>
+            <span class="track-row-text">
+              <span class="track-row-title" data-text="title"></span>
+              <span class="track-row-sub" data-text="subtitle" data-ref="sub"></span>
+              <span class="track-row-hint" data-text="hint" data-ref="hint"></span>
+            </span>
+            <span class="track-row-pos">
+              <span class="track-row-km" data-text="km"></span>
+              <span class="track-row-off" data-text="offset"></span>
+            </span>
+          </button>
+        </li>
+      </template>
+      <li class="track-rows-empty" data-empty hidden>Keine Orte im Korridor – Abstand vergrößern oder weitere Kategorien einblenden.</li>
+    </ul>
+    <div class="track-pagination" data-ref="footer"></div>
+  </div>
+</section>

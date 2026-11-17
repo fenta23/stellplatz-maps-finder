@@ -1,5 +1,5 @@
 import L from 'leaflet'
-import type { TrackLayer } from '@/features/track/TrackLayer.js'
+import type { TrackLayer, MapInsets } from '@/features/track/TrackLayer.js'
 import type { TrackPoint } from '@/features/track/trackTypes.js'
 
 const LINE_COLOR = '#2F6FB5'
@@ -59,11 +59,11 @@ export function createLeafletTrackLayer(
       group.addLayer(L.circleMarker(latlngs[latlngs.length - 1]!, { ...endMarker(END_COLOR), renderer }))
       group.addTo(map)
     },
-    fitBounds() {
+    fitBounds(insets: MapInsets = {}) {
       if (!bounds) return
       map.fitBounds(bounds, {
-        paddingTopLeft: FIT_PADDING_TOP_LEFT,
-        paddingBottomRight: FIT_PADDING_BOTTOM_RIGHT,
+        paddingTopLeft: [FIT_PADDING_TOP_LEFT[0] + (insets.left ?? 0), FIT_PADDING_TOP_LEFT[1] + (insets.top ?? 0)],
+        paddingBottomRight: [FIT_PADDING_BOTTOM_RIGHT[0] + (insets.right ?? 0), FIT_PADDING_BOTTOM_RIGHT[1] + (insets.bottom ?? 0)],
         maxZoom: FIT_MAX_ZOOM,
       })
     },

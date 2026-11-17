@@ -48,6 +48,19 @@ describe('createSelection.select', () => {
     expect(view.config.isCustom).toBeUndefined()
   })
 
+  it('forwards getTrackInfo to the panel view; null or absent → no trackInfo key', () => {
+    const info = { kmAlong: 12.4, kmToEnd: 73.6, offsetM: 180 }
+    const a = makeDeps({ getTrackInfo: () => info })
+    createSelection(a.deps).select(poi)
+    expect(a.panel.show.mock.calls[0]![1].trackInfo).toBe(info)
+    const b = makeDeps({ getTrackInfo: vi.fn().mockReturnValue(null) })
+    createSelection(b.deps).select(poi)
+    expect('trackInfo' in b.panel.show.mock.calls[0]![1]).toBe(false)
+    const c = makeDeps()
+    createSelection(c.deps).select(poi)
+    expect('trackInfo' in c.panel.show.mock.calls[0]![1]).toBe(false)
+  })
+
   it('custom POIs: marked custom, wired edit/delete, no detail loading', () => {
     const onEdit = vi.fn()
     const onDelete = vi.fn()

@@ -1,5 +1,5 @@
 import type { OsmPoi } from '@/features/pois/OverpassClient.js'
-import type { PoiDetailPanel, PanelConfig } from '@/features/poi-detail/PoiDetailPanel.js'
+import type { PoiDetailPanel, PanelConfig, PanelView } from '@/features/poi-detail/PoiDetailPanel.js'
 import type { IFavoritesStore } from '@/features/favorites/FavoritesStore.js'
 import type { Session } from './session.js'
 
@@ -16,6 +16,8 @@ export interface SelectionDeps {
   readonly onDeleteCustomPoi?: () => void
   /** Whether the user is logged in (gates premium features like park4night). */
   readonly isLoggedIn?: () => boolean
+  /** Position of a POI along the active imported route; null/absent → not shown. */
+  readonly getTrackInfo?: (poi: OsmPoi) => PanelView['trackInfo'] | null
 }
 
 export interface Selection {
@@ -43,7 +45,11 @@ export function createSelection(deps: SelectionDeps): Selection {
     select(poi) {
       session.selectedPoi = poi
       deps.panIntoView(poi)
-      panel.show(poi, { isFavorite: isFav(poi), noteText: noteOf(poi), config: buildConfig(poi) })
+      const trackInfo = deps.getTrackInfo?.(poi)
+      panel.show(poi, {
+        isFavorite: isFav(poi), noteText: noteOf(poi), config: buildConfig(poi),
+        ...(trackInfo ? { trackInfo } : {}),
+      })
       if (!isCustom(poi)) deps.loadDetails(poi)
     },
 

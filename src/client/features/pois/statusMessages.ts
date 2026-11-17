@@ -14,3 +14,7 @@ export function overpassErrorMessage(err: unknown): string {
 export function poiCountMessage(count: number): string {
   return count > 0 ? `${count} Orte gefunden` : 'Keine Orte in diesem Bereich'
 }
+
+export function trackPoiCountMessage(count: number): string {
+  return `${count} ${count === 1 ? 'Ort' : 'Orte'} entlang der Route`
+}

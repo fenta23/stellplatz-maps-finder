@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   DEFAULT_FILTERS, PERSONAL_FILTER_ID, FILTER_ICONS, FILTER_TEMPLATES, FILTER_COLORS,
-  buildOverpassQuery, classifyElement, filterIconPath,
+  buildOverpassQuery, buildOverpassAroundQuery, classifyElement, filterIconPath,
   isValidTagToken, isValidCondition, isValidSelector, MAX_SELECTOR_CONDITIONS,
   type FilterDef, type OsmSelector,
 } from './filterModel.js'
@@ -42,6 +42,73 @@ describe('DEFAULT_FILTERS', () => {
     for (const id of ['hut', 'shelter']) {
       expect(byId(id).hidden).toBeUndefined()
     }
+  })
+})
+
+describe('buildOverpassAroundQuery', () => {
+  const LINE = [[48.123456, 11.0], [48.2, 11.987654], [48.3, 12.5]] as const
+  const mk = (selectors: OsmSelector[], over: Partial<FilterDef> = {}): FilterDef => ({
+    id: 'x', name: 'X', iconId: 'pin', color: '#000', enabled: true, kind: 'osm', builtin: false, order: 9,
+    selectors, ...over,
+  })
+  const AROUND = 'around:500,48.12346,11,48.2,11.98765,48.3,12.5'
+
+  it('emits one statement per element kind with the polyline clause', () => {
+    const q = buildOverpassAroundQuery(LINE, 500, [byId('climbing')])
+    expect(q).toContain(`node["sport"="climbing"](${AROUND});`)
+    expect(q).toContain(`way["sport"="climbing"](${AROUND});`)
+    expect(q).toContain(`relation["sport"="climbing"](${AROUND});`)
+  })
+
+  it('uses a 60s timeout and the bbox-style frame', () => {
+    const q = buildOverpassAroundQuery(LINE, 500, [byId('dump')])
+    expect(q.startsWith('[out:json][timeout:60];\n(\n  ')).toBe(true)
+    expect(q.endsWith('\n);\nout center tags;')).toBe(true)
+  })
+
+  it('renders negated and key-presence conditions like the bbox variant', () => {
+    const f = mk([{ elements: ['node'], tags: [{ key: 'amenity', value: '' }, { key: 'access', value: 'private', negate: true }] }])
+    expect(buildOverpassAroundQuery(LINE, 500, [f]))
+      .toContain(`node["amenity"]["access"!="private"](${AROUND});`)
+  })
+
+  it('shares tag syntax with the bbox query', () => {
+    const f = byId('parking')
+    const bbox = buildOverpassQuery(BOUNDS, [f]).match(/way(\[.*\])\(/)![1]
+    expect(buildOverpassAroundQuery(LINE, 500, [f])).toContain(`way${bbox}(${AROUND});`)
+  })
+
+  it('covers multiple filters and selectors', () => {
+    const q = buildOverpassAroundQuery(LINE, 500, [byId('camper'), byId('water')])
+    expect(q.match(/\(around:/g)).toHaveLength(10) // camper: 3+2+3, water: 2
+    expect(q).toContain('"amenity"="water_point"')
+    expect(q).toContain('"tourism"="caravan_site"')
+  })
+
+  it('rounds coordinates to 5 decimals, keeps lat before lon and order', () => {
+    const q = buildOverpassAroundQuery([[1.0000049, -2.123456], [3, 4]], 10, [byId('dump')])
+    expect(q).toContain('(around:10,1,-2.12346,3,4)')
+  })
+
+  it('formats the radius as an integer', () => {
+    expect(buildOverpassAroundQuery(LINE, 249.6, [byId('dump')])).toContain('(around:250,')
+  })
+
+  it('skips non-osm filters, invalid selectors and filters without selectors', () => {
+    const personal = byId(PERSONAL_FILTER_ID)
+    const bad = mk([{ elements: ['node'], tags: [{ key: 'a b', value: 'x' }] }])
+    const q = buildOverpassAroundQuery(LINE, 500, [personal, bad, byId('dump')])
+    expect(q).not.toContain('a b')
+    expect(q).toContain('amenity"="sanitary_dump_station')
+  })
+
+  it('returns an empty string when there is nothing to query', () => {
+    expect(buildOverpassAroundQuery(LINE, 500, [])).toBe('')
+    expect(buildOverpassAroundQuery(LINE, 500, [byId(PERSONAL_FILTER_ID)])).toBe('')
+    expect(buildOverpassAroundQuery([], 500, [byId('dump')])).toBe('')
+    expect(buildOverpassAroundQuery([[48, 11]], 500, [byId('dump')])).toBe('')
+    expect(buildOverpassAroundQuery(LINE, 0, [byId('dump')])).toBe('')
+    expect(buildOverpassAroundQuery(LINE, Number.NaN, [byId('dump')])).toBe('')
   })
 })
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { overpassErrorMessage, poiCountMessage } from './statusMessages.js'
+import { overpassErrorMessage, poiCountMessage, trackPoiCountMessage } from './statusMessages.js'
 
 describe('overpassErrorMessage', () => {
   it('maps 429 to a rate-limit hint', () => {
@@ -22,4 +22,12 @@ describe('overpassErrorMessage', () => {
 describe('poiCountMessage', () => {
   it('reports a count', () => expect(poiCountMessage(5)).toBe('5 Orte gefunden'))
   it('reports empty', () => expect(poiCountMessage(0)).toBe('Keine Orte in diesem Bereich'))
+})
+
+describe('trackPoiCountMessage', () => {
+  it('uses singular and plural', () => {
+    expect(trackPoiCountMessage(1)).toBe('1 Ort entlang der Route')
+    expect(trackPoiCountMessage(42)).toBe('42 Orte entlang der Route')
+    expect(trackPoiCountMessage(0)).toBe('0 Orte entlang der Route')
+  })
 })

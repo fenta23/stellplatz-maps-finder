@@ -307,6 +307,26 @@
     border-color: var(--danger-soft);
 }
 
+/* ── Position along the imported route ── */
+.track-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 18px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--accent-strong);
+    border-bottom: 1px solid var(--border-soft);
+}
+.track-info[hidden] {
+    display: none;
+}
+.track-info svg {
+    width: 16px;
+    height: 16px;
+    flex: none;
+}
+
 /* ── Nearby amenities ── */
 .nearby-heading {
     font-size: 0.72rem;

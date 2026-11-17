@@ -125,6 +125,88 @@ describe('createPoiRefresher (single-query + accumulation)', () => {
   })
 })
 
+describe('createPoiRefresher suspend / resume', () => {
+  it('refresh while suspended does nothing', async () => {
+    const { deps, setMarkers, setStatus } = makeDeps(CITY)
+    const r = createPoiRefresher(deps)
+    r.suspend()
+    expect(r.isSuspended()).toBe(true)
+    await r.refresh(); await flush()
+    expect(fetchPoisMock).not.toHaveBeenCalled()
+    expect(setMarkers).not.toHaveBeenCalled()
+    expect(setStatus).not.toHaveBeenCalled()
+  })
+
+  it('suspend during an in-flight refresh drops its result', async () => {
+    let release!: () => void
+    fetchPoisMock.mockImplementationOnce((b: { south: number; west: number }) =>
+      new Promise(res => { release = () => res(poiAt(b)) })) // ignores the abort signal
+    const { deps, setMarkers, setStatus } = makeDeps(CITY)
+    const r = createPoiRefresher(deps)
+    const p = r.refresh()
+    await flush()
+    setMarkers.mockClear(); setStatus.mockClear()
+    r.suspend()
+    release()
+    await p; await flush()
+    expect(setMarkers).not.toHaveBeenCalled()
+    expect(setStatus).not.toHaveBeenCalled()
+  })
+
+  it('suspend cancels the pending status-clear timers of a finished refresh', async () => {
+    vi.useFakeTimers()
+    try {
+      const { deps, setStatus } = makeDeps(CITY)
+      const r = createPoiRefresher(deps)
+      await r.refresh()
+      setStatus.mockClear()
+      r.suspend()
+      vi.advanceTimersByTime(10000)
+      expect(setStatus).not.toHaveBeenCalled()
+    } finally { vi.useRealTimers() }
+  })
+
+  it('after resume the same viewport is repainted without a new request (regression)', async () => {
+    const { deps, setMarkers } = makeDeps(CITY)
+    const r = createPoiRefresher(deps)
+    await r.refresh(); await flush()
+    const calls = setMarkers.mock.calls.length
+    const fetches = fetchPoisMock.mock.calls.length
+    r.suspend()
+    r.resume()
+    expect(setMarkers.mock.calls.length).toBe(calls) // resume itself does not paint
+    await r.refresh(); await flush()
+    expect(setMarkers.mock.calls.length).toBe(calls + 1) // same POI set, still repainted
+    expect(fetchPoisMock.mock.calls.length).toBe(fetches) // caches survived
+  })
+
+  it('after resume an empty viewport is repainted too', async () => {
+    fetchPoisMock.mockImplementation(async () => [])
+    const { deps, setMarkers } = makeDeps(CITY)
+    const r = createPoiRefresher(deps)
+    await r.refresh(); await flush()
+    const calls = setMarkers.mock.calls.length
+    r.suspend(); r.resume()
+    await r.refresh(); await flush()
+    expect(setMarkers.mock.calls.length).toBe(calls + 1)
+    expect(setMarkers.mock.calls.at(-1)![0]).toEqual([])
+  })
+
+  it('suspend/resume are idempotent', async () => {
+    const { deps, setMarkers } = makeDeps(CITY)
+    const r = createPoiRefresher(deps)
+    r.resume() // not suspended → harmless
+    expect(r.isSuspended()).toBe(false)
+    r.suspend(); r.suspend()
+    expect(r.isSuspended()).toBe(true)
+    r.resume(); r.resume()
+    expect(r.isSuspended()).toBe(false)
+    await r.refresh(); await flush()
+    expect(fetchPoisMock).toHaveBeenCalledTimes(1)
+    expect(setMarkers).toHaveBeenCalled()
+  })
+})
+
 // ── Static tiles for built-in filters ────────────────────────────────────────
 
 const BUILTINS = DEFAULT_FILTERS.filter(f => f.kind === 'osm')
@@ -138,7 +220,7 @@ const MANIFEST: TileManifest = {
 }
 
 function fakeTiles(opts: { fail?: boolean } = {}) {
-  const fetchTilePois = vi.fn(async (wanted: ReadonlyMap<TileLayer, readonly string[]>): Promise<readonly OsmPoi[]> => {
+  const fetchTilePois = vi.fn(async (wanted: ReadonlyMap<TileLayer, readonly string[]>, _filters?: readonly FilterDef[]): Promise<readonly OsmPoi[]> => {
     if (opts.fail) throw new Error('tiles down')
     return [...wanted].flatMap(([layer, keys]) => keys.map((k, i): OsmPoi => ({
       id: i + 1, osmType: layer === 'parking' ? 'way' : 'node', type: layer === 'parking' ? 'parking' : 'campsite',

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { typeLabel, bool, formatMeters, esc, safeUrl, TYPE_LABELS, ACCESS_LABELS } from './poiLabels.js'
+import { typeLabel, bool, formatMeters, trackInfoText, esc, safeUrl, TYPE_LABELS, ACCESS_LABELS } from './poiLabels.js'
 
 describe('typeLabel', () => {
   it('returns the German label for known types', () => {
@@ -81,5 +81,20 @@ describe('label maps', () => {
 
   it('TYPE_LABELS has all types', () => {
     expect(Object.keys(TYPE_LABELS)).toEqual(['parking', 'camper', 'campsite', 'dump', 'water'])
+  })
+})
+
+describe('trackInfoText', () => {
+  it('formats km with German decimal comma and offset in metres', () => {
+    expect(trackInfoText({ kmAlong: 12.4, kmToEnd: 73.6, offsetM: 180 }))
+      .toBe('Route: km 12,4 · noch 73,6 km · 180 m abseits')
+  })
+  it('rounds metres and switches to km from 1000 m', () => {
+    expect(trackInfoText({ kmAlong: 0, kmToEnd: 5, offsetM: 10.4 })).toBe('Route: km 0,0 · noch 5,0 km · 10 m abseits')
+    expect(trackInfoText({ kmAlong: 1, kmToEnd: 2, offsetM: 1234 })).toBe('Route: km 1,0 · noch 2,0 km · 1,2 km abseits')
+  })
+  it('says "an der Route" below 10 m', () => {
+    expect(trackInfoText({ kmAlong: 3.04, kmToEnd: 1, offsetM: 9.9 })).toBe('Route: km 3,0 · noch 1,0 km · an der Route')
+    expect(trackInfoText({ kmAlong: 3, kmToEnd: 1, offsetM: 0 })).toContain('an der Route')
   })
 })

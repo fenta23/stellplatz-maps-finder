@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { fetchPois, buildQuery, isPrivateParking, poiKey } from './OverpassClient.js'
+import { fetchPois, fetchPoisAround, buildQuery, isPrivateParking, poiKey } from './OverpassClient.js'
 import type { LatLngBounds, OsmPoi } from './OverpassClient.js'
 import { DEFAULT_FILTERS, type FilterDef } from '@/features/filters/filterModel.js'
 
@@ -211,5 +211,56 @@ describe('poiKey', () => {
   it('distinguishes element types, defaults to node', () => {
     expect(poiKey({ id: 1, osmType: 'way' })).toBe('way/1')
     expect(poiKey({ id: 1 })).toBe('node/1')
+  })
+})
+
+describe('fetchPoisAround', () => {
+  const LINE = [[48.0, 11.0], [48.1, 11.1], [48.2, 11.3]] as const
+
+  it('returns [] without a request when the query is empty', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    expect(await fetchPoisAround(LINE, 500, [])).toEqual([])
+    expect(await fetchPoisAround([[48, 11]], 500, [f('parking')])).toEqual([])
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('posts the around query', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(mockResponse(200, PARKING_RESPONSE))
+    vi.stubGlobal('fetch', fetchMock)
+    await fetchPoisAround(LINE, 500, [f('parking')])
+    const body = (fetchMock.mock.calls[0]![1] as { body: string }).body
+    const query = decodeURIComponent(body.replace(/^data=/, ''))
+    expect(query).toContain('(around:500,48,11,48.1,11.1,48.2,11.3)')
+    expect(query).toContain('[timeout:60]')
+  })
+
+  it('parses and classifies elements (node lat/lon, way center)', async () => {
+    stubFetch(200, {
+      elements: [
+        ...PARKING_RESPONSE.elements,
+        { type: 'way', id: 7, center: { lat: 48.05, lon: 11.05 }, tags: { amenity: 'parking' } },
+        { type: 'node', id: 8, lat: 48.0, lon: 11.0, tags: { shop: 'bakery' } },
+      ],
+    })
+    const result = await fetchPoisAround(LINE, 500, [f('parking')])
+    expect(result.map(p => `${p.osmType}/${p.id}:${p.type}`)).toEqual(['node/42:parking', 'way/7:parking'])
+    expect(result[1]).toMatchObject({ lat: 48.05, lon: 11.05 })
+  })
+
+  it('throws when every mirror responds with an error', async () => {
+    stubFetch(429, { error: 'rate limited' })
+    await expect(fetchPoisAround(LINE, 500, [f('parking')])).rejects.toThrow('429')
+  })
+
+  it('propagates AbortError without trying more mirrors', async () => {
+    const controller = new AbortController()
+    const fetchMock = vi.fn().mockImplementation(() => {
+      controller.abort()
+      return Promise.reject(new DOMException('The operation was aborted', 'AbortError'))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(fetchPoisAround(LINE, 500, [f('parking')], controller.signal)).rejects.toThrow()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })

@@ -6,7 +6,7 @@ import { customIdToNumber } from '@/features/custom-pois/CustomPoi.js'
 import { clone, ref } from '@/core/template.js'
 import { createEventScope, type EventScope } from '@/core/events.js'
 import { renderList } from '@/core/bind.js'
-import { esc, safeUrl, typeLabel } from './poiLabels.js'
+import { esc, safeUrl, trackInfoText, typeLabel } from './poiLabels.js'
 import { buildTags } from './buildTags.js'
 import type { TagRow } from './buildTags.js'
 import { renderImages, showLightbox, hideLightbox } from './imageGallery.js'
@@ -51,7 +51,7 @@ export interface PanelView {
   readonly isFavorite?: boolean
   readonly noteText?: string
   readonly config?: PanelConfig
-  /** Position along a track (declared for a later PR; not rendered yet). */
+  /** Position along the active imported route; shown as a summary line. */
   readonly trackInfo?: { readonly kmAlong: number; readonly kmToEnd: number; readonly offsetM: number }
 }
 
@@ -148,7 +148,7 @@ export class PoiDetailPanel {
 
   // ── Public render ───────────────────────────────────────────────────────────
   show(poi: OsmPoi, panelView: PanelView = {}): void {
-    const { isFavorite = false, noteText = '', config } = panelView
+    const { isFavorite = false, noteText = '', config, trackInfo } = panelView
     this.expand()
     this.panel.classList.remove('hidden')
     document.body.classList.add('detail-open')
@@ -176,6 +176,12 @@ export class PoiDetailPanel {
       badge.hidden = false
       badge.classList.add(oh.open ? 'oh-open' : 'oh-closed')
       badge.textContent = oh.hint
+    }
+
+    // Position along the active route
+    if (trackInfo) {
+      ref(view, 'trackInfo').hidden = false
+      ref(view, 'trackInfoText').textContent = trackInfoText(trackInfo)
     }
 
     // Losfahren: hand-off to the nav app (destination only)

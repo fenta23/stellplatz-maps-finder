@@ -218,9 +218,23 @@ function tagConditionToString(c: TagCondition): string {
   return c.negate ? `["${c.key}"!="${c.value}"]` : `["${c.key}"="${c.value}"]`
 }
 
-function selectorToStatements(sel: OsmSelector, bbox: string): string[] {
+/** `area` is the content of the trailing clause: a bbox (`s,w,n,e`) or `around:R,lat,lon,…`. */
+function selectorToStatements(sel: OsmSelector, area: string): string[] {
   const tagStr = sel.tags.map(tagConditionToString).join('')
-  return sel.elements.map(el => `${el}${tagStr}(${bbox});`)
+  return sel.elements.map(el => `${el}${tagStr}(${area});`)
+}
+
+/** Statements for all usable (osm, valid-selector) filters, in filter/selector order. */
+function filtersToStatements(filters: readonly FilterDef[], area: string): string[] {
+  const parts: string[] = []
+  for (const f of filters) {
+    if (f.kind !== 'osm') continue
+    for (const sel of f.selectors) {
+      if (!isValidSelector(sel)) continue
+      parts.push(...selectorToStatements(sel, area))
+    }
+  }
+  return parts
 }
 
 /** True if a tag condition is structurally valid (keys/values grammar-conform). */
@@ -249,15 +263,34 @@ export function isValidSelector(sel: OsmSelector): boolean {
 export function buildOverpassQuery(bounds: LatLngBounds, filters: readonly FilterDef[]): string {
   const { south, west, north, east } = bounds
   const bbox = `${south},${west},${north},${east}`
-  const parts: string[] = []
-  for (const f of filters) {
-    if (f.kind !== 'osm') continue
-    for (const sel of f.selectors) {
-      if (!isValidSelector(sel)) continue
-      parts.push(...selectorToStatements(sel, bbox))
-    }
-  }
+  const parts = filtersToStatements(filters, bbox)
   return `[out:json][timeout:30];\n(\n  ${parts.join('\n  ')}\n);\nout center tags;`
+}
+
+const roundCoord = (n: number): string => String(Number(n.toFixed(5)))
+
+/**
+ * Overpass query for POIs within `radiusM` metres of a polyline (route corridor),
+ * using the polyline form `(around:R,lat1,lon1,lat2,lon2,…)` (Overpass >= 0.7.55).
+ * The coordinate list is repeated in every statement: Overpass QL has no way to
+ * reference a polyline by name, and collecting all objects near the line first
+ * (`nwr(around…)->.a; node.a[…]`) would pull in everything, not just matches.
+ *
+ * Returns '' ("nothing to query", callers must skip the request) when the line
+ * has fewer than 2 points, the radius is not a positive number, or no filter
+ * contributes a statement. (The bbox variant has no such guard; its caller checks.)
+ */
+export function buildOverpassAroundQuery(
+  line: readonly (readonly [lat: number, lon: number])[],
+  radiusM: number,
+  filters: readonly FilterDef[],
+): string {
+  const r = Math.round(radiusM)
+  if (line.length < 2 || !(r > 0)) return ''
+  const coords = line.map(([lat, lon]) => `${roundCoord(lat)},${roundCoord(lon)}`).join(',')
+  const parts = filtersToStatements(filters, `around:${r},${coords}`)
+  if (parts.length === 0) return ''
+  return `[out:json][timeout:60];\n(\n  ${parts.join('\n  ')}\n);\nout center tags;`
 }
 
 // ── Classification (OSM element → filter id) ─────────────────────────────────

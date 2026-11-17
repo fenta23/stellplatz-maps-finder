@@ -29,6 +29,13 @@ export function fetchSignature(filters: readonly FilterDef[]): string {
   return JSON.stringify(filters.map(f => [f.id, f.selectors, f.id === PARKING_FILTER_ID && isFilterActive(f)]))
 }
 
+/** Tile layers wanted for these built-in filters: `rest` always, the big `parking` layer only while that filter is active. */
+export function tileLayersFor(builtins: readonly FilterDef[]): TileLayer[] {
+  const layers: TileLayer[] = ['rest']
+  if (builtins.some(f => f.id === PARKING_FILTER_ID && isFilterActive(f))) layers.push('parking')
+  return layers
+}
+
 /**
  * Two sources, each with its own coverage, accumulated into one store:
  *   • built-in filters → static tiles (fast). Loaded tiles are remembered per
@@ -40,7 +47,16 @@ export function fetchSignature(filters: readonly FilterDef[]): string {
  * A refresh renders the store clipped to the viewport. The previous in-flight
  * refresh is aborted when a newer one starts.
  */
-export function createPoiRefresher(deps: PoiRefresherDeps): { refresh(): Promise<void> } {
+export interface PoiRefresher {
+  refresh(): Promise<void>
+  /** Aborts an in-flight refresh and turns every later refresh() into a no-op until resume(). */
+  suspend(): void
+  /** Lifts the suspension; the next refresh() repaints even an unchanged viewport. Does not refresh itself. */
+  resume(): void
+  isSuspended(): boolean
+}
+
+export function createPoiRefresher(deps: PoiRefresherDeps): PoiRefresher {
   const store = new Map<string, OsmPoi>()
   const loadedTiles: Record<TileLayer, Set<string>> = { parking: new Set(), rest: new Set() }
   const fallbackCovered = new Set<string>() // built-ins via Overpass after a tile failure
@@ -49,7 +65,10 @@ export function createPoiRefresher(deps: PoiRefresherDeps): { refresh(): Promise
   let builtinSignature = ''
   let inFlight: AbortController | null = null
   let generation = 0
-  let lastRenderedKeys = new Set<string>()
+  // null = unknown what is on the map (initially, or after a suspension during
+  // which someone else owned the markers) → the next render always paints.
+  let lastRenderedKeys: Set<string> | null = new Set<string>()
+  let suspended = false
 
   function render(bounds: LatLngBounds): number {
     const pois: OsmPoi[] = []
@@ -58,7 +77,7 @@ export function createPoiRefresher(deps: PoiRefresherDeps): { refresh(): Promise
     // same markers already on screen) — re-running setMarkers would churn the
     // marker-cluster layer and make POIs flicker.
     const keys = new Set(pois.map(poiKey))
-    if (!sameKeys(keys, lastRenderedKeys)) {
+    if (!lastRenderedKeys || !sameKeys(keys, lastRenderedKeys)) {
       lastRenderedKeys = keys
       deps.setMarkers(pois)
     }
@@ -68,6 +87,7 @@ export function createPoiRefresher(deps: PoiRefresherDeps): { refresh(): Promise
   const addAll = (pois: readonly OsmPoi[]) => { for (const p of pois) store.set(poiKey(p), p) }
 
   async function refresh(): Promise<void> {
+    if (suspended) return
     const bounds = deps.getBounds()
     if (!bounds) return
 
@@ -102,8 +122,7 @@ export function createPoiRefresher(deps: PoiRefresherDeps): { refresh(): Promise
     const wanted = new Map<TileLayer, string[]>()
     let cellDeg = 0
     if (tiles && builtins.length > 0) {
-      const layers: TileLayer[] = ['rest']
-      if (builtins.some(f => f.id === PARKING_FILTER_ID && isFilterActive(f))) layers.push('parking')
+      const layers = tileLayersFor(builtins)
       try {
         cellDeg = (await tiles.manifest()).cellDeg
       } catch { /* handled below: no cellDeg → fallback */ }
@@ -179,7 +198,21 @@ export function createPoiRefresher(deps: PoiRefresherDeps): { refresh(): Promise
     setTimeout(() => { if (generation === myGen) deps.setStatus('') }, 3000)
   }
 
-  return { refresh }
+  return {
+    refresh,
+    suspend() {
+      if (suspended) return
+      suspended = true
+      generation++ // in-flight refresh and its pending status timers become stale
+      inFlight?.abort()
+      inFlight = null
+    },
+    resume() {
+      suspended = false
+      lastRenderedKeys = null // the map was repainted by someone else meanwhile
+    },
+    isSuspended: () => suspended,
+  }
 }
 
 function sameKeys(a: ReadonlySet<string>, b: ReadonlySet<string>): boolean {

@@ -38,6 +38,17 @@ export function formatMeters(m: number): string {
   return m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`
 }
 
+const deKm = (km: number): string => km.toFixed(1).replace('.', ',')
+
+/** Position of a POI along an imported route, e.g. "Route: km 12,4 · noch 73,6 km · 180 m abseits". */
+export function trackInfoText(info: { readonly kmAlong: number; readonly kmToEnd: number; readonly offsetM: number }): string {
+  const off = info.offsetM
+  const offset = off < 10 ? 'an der Route'
+    : off < 1000 ? `${Math.round(off)} m abseits`
+    : `${deKm(off / 1000)} km abseits`
+  return `Route: km ${deKm(info.kmAlong)} · noch ${deKm(info.kmToEnd)} km · ${offset}`
+}
+
 export function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
