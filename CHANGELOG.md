@@ -7,7 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-11-17
+
+Die App richtet sich jetzt an Wanderer, Radfahrer und Camper.
+
 ### Added
+- **Profile: Wandern, Radfahren, Camping.** Ein oder mehrere Profile wählen, und die App blendet die passenden Filter ein und die übrigen eingebauten aus. Wandern zeigt u. a. Hütte, Schutzhütte, Trinkwasser, Friedhof (Wasser), Einkehr, Unterkunft und Klettergebiet; Radfahren zusätzlich Fahrrad-Service und E-Bike-Laden; Camping Parkplatz, Stellplatz, Campingplatz, Entsorgung und Wasser. Eigene Filter und eigene POIs bleiben immer unberührt.
+  - **Neuer Einstieg:** Schritt 2 des Wizards fragt „Wofür nutzt du die App?“ mit Profilkarten; das Filterraster liegt eingeklappt unter „Einzeln anpassen“. Gespeichert wird erst mit „Übernehmen“. Die Startseite des Wizards beschreibt die App für alle drei Gruppen.
+  - **Später umstellen:** Menüeintrag „Profil“ und ein Knopf oben in „Filter verwalten“. Der Dialog zeigt vorab, was ein- und ausgeblendet wird.
+  - **Bestandsnutzer** sehen einmalig das Overlay zu Version 3.0 mit „Profil wählen“ und „Später“; ohne Klick ändert sich an ihren Filtern nichts.
+  - Neuer Slice `features/profile/` (Presets, `planProfileChange`, `LocalProfileStore` unter `stellplatz:profiles`, `ProfileDialog`), Verdrahtung in `app/profileWiring.ts`. Die Auswahl liegt nur lokal im Gerät.
 - **Kartenebenen: Fahrradkarte und Topografische Karte.** Der Umschalter oben rechts ist jetzt ein „Ebenen“-Knopf mit Auswahlliste: Karte, Satellit, Fahrradkarte, Topografische Karte. Die Wahl bleibt über einen Reload erhalten (`stellplatz:base-layer`).
   - **Fahrradkarte:** mit `VITE_THUNDERFOREST_API_KEY` (GitHub-Repo-Secret, kostenloser Thunderforest-Account) OpenCycleMap, ohne Key CyclOSM – nie eine Karte mit Wasserzeichen. Der Deploy-Workflow reicht das Secret durch.
   - **Topografische Karte:** OpenTopoMap, ohne Key. Kacheln gibt es bis Zoom 17; darüber vergrößert die Karte die letzte Stufe, statt grau zu werden. Das gilt jetzt für alle Ebenen, der maximale Zoom ändert sich beim Umschalten nicht mehr.

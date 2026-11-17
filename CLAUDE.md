@@ -8,7 +8,7 @@
 ```
 npm install       # deps
 npm run dev       # Vite :5173 (API via VITE_API_BASE aus .env oder lokaler Proxy :54321)
-npm test          # unit tests (Vitest, 1186 tests)
+npm test          # unit tests (Vitest, 1249 tests)
 npm run test:int  # integration tests vs Edge Function
 npm run build     # → dist/client/
 ```
@@ -36,6 +36,7 @@ features/
   track/      Route-Import (GPX, Komoot-Link) + Geometrie + TrackStore + TrackImportDialog + corridor + TrackPanel (POIs entlang der Route)
   search/     SearchBar
   filters/    FilterPanel
+  profile/    Profile Wandern/Radfahren/Camping (Presets, ProfileStore, ProfileDialog)
   favorites/  FavoritesStore (local + Supabase-Sync)
   notes/      NotesStore (local + Supabase-Sync)
   custom-pois/ CustomPoiStore (Editor, MarkerManager)

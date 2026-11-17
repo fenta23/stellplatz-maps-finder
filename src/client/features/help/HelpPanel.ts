@@ -18,6 +18,24 @@ export interface HelpPanelDeps {
   readonly filterStore: IFilterStore
   readonly onDismiss: () => void
   readonly onOpenAuth?: () => void
+  readonly profiles?: HelpProfiles
+}
+
+export interface HelpProfileOption {
+  readonly id: string
+  readonly label: string
+  readonly description: string
+  /** Vertrauenswuerdiges Markup aus dem eigenen Icon-Set der App. */
+  readonly iconSvg: string
+}
+
+export interface HelpProfiles {
+  readonly options: readonly HelpProfileOption[]
+  readonly getSelected: () => readonly string[]
+  /** Filter-IDs, die die gegebenen Profile sichtbar haben wollen. */
+  readonly presetFor: (ids: readonly string[]) => ReadonlySet<string>
+  /** Wird beim Uebernehmen von Schritt 2 mit der endgueltigen Auswahl aufgerufen. */
+  readonly onChosen: (ids: readonly string[]) => void
 }
 
 export class HelpPanel {
@@ -26,6 +44,9 @@ export class HelpPanel {
   private readonly events: EventScope = createEventScope()
   private step = 1
   private filterEnabled = new Map<string, boolean>()
+  private selectedProfiles: string[] = []
+  private lastChosen: string | null = null
+  private manualOpen = false
 
   constructor(container: HTMLElement, private readonly deps: HelpPanelDeps) {
     this.panel = clone(panelHtml)
@@ -41,6 +62,9 @@ export class HelpPanel {
   open(): void {
     this.step = 1
     this.resetFilterState()
+    this.selectedProfiles = this.deps.profiles ? [...this.deps.profiles.getSelected()] : []
+    this.lastChosen = null
+    this.manualOpen = false
     this.render()
     this.panel.classList.add('open')
     this.scroll.scrollTop = 0
@@ -67,7 +91,10 @@ export class HelpPanel {
   }
 
   private advance(): void {
-    if (this.step === 2) this.applyFilters()
+    if (this.step === 2) {
+      this.applyFilters()
+      this.notifyChosen()
+    }
     if (this.step < TOTAL_STEPS) {
       this.step++
       this.render()
@@ -100,6 +127,21 @@ export class HelpPanel {
       // blendet aus und laesst den Chip-Zustand in Ruhe.
       if (visible && !cur.enabled) this.deps.filterStore.setEnabled(id, true)
     }
+  }
+
+  /**
+   * Meldet die Profilwahl genau dann, wenn Schritt 2 uebernommen wird — im
+   * Gleichschritt mit applyFilters(). Ueberspringen/Schliessen vorher meldet
+   * nichts (Filter bleiben ja auch unangetastet). Zurueck und erneut uebernehmen
+   * meldet nur bei geaenderter Auswahl.
+   */
+  private notifyChosen(): void {
+    const profiles = this.deps.profiles
+    if (!profiles) return
+    const key = this.selectedProfiles.join(',')
+    if (key === this.lastChosen) return
+    this.lastChosen = key
+    profiles.onChosen([...this.selectedProfiles])
   }
 
   private handleSignIn(): void {
@@ -160,40 +202,40 @@ export class HelpPanel {
           <h1 class="help-title">Camp Finder</h1>
           <span class="help-badge">Beta</span>
         </div>
-        <p class="help-tagline">Stellplätze, Campingplätze und mehr – kostenlos auf einer Karte.</p>
+        <p class="help-tagline">Wasser, Einkehr, Unterkunft und Stellplätze – für Wanderer, Radfahrer und Camper. Kostenlos auf einer Karte.</p>
       </div>
       <section class="help-section">
         <h2 class="help-section-title">Was du findest</h2>
         <div class="help-features">
           <div class="help-feature">
-            <span class="help-feature-icon" style="background:var(--accent-soft);color:var(--accent)">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17V7h4a3 3 0 0 1 0 6H9"/></svg>
+            <span class="help-feature-icon" style="background:#e6f0f5;color:#2d6a8a">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 C8 6 4 9 4 13a8 8 0 0 0 16 0c0-4-4-7-8-11z"/></svg>
             </span>
-            <span class="help-feature-label">Parkplätze</span>
+            <span class="help-feature-label">Wasser &amp; Toiletten</span>
           </div>
           <div class="help-feature">
             <span class="help-feature-icon" style="background:#f0ebe0;color:#7a6846">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 6v5a1 1 0 0 0 1 1h6.102a1 1 0 0 1 .712.298l.898.91a1 1 0 0 1 .288.702V17a1 1 0 0 1-1 1h-3"/><path d="M5 18H3a1 1 0 0 1-1-1V8a2 2 0 0 1 2-2h12c1.1 0 2.1.8 2.4 1.8l1.176 4.2"/><path d="M9 18h5"/><circle cx="16" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
             </span>
-            <span class="help-feature-label">Camper-Stellplätze</span>
+            <span class="help-feature-label">Einkehr &amp; Einkaufen</span>
           </div>
           <div class="help-feature">
             <span class="help-feature-icon" style="background:#edf2e6;color:#4b5640">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 21 14 3"/><path d="M20.5 21 10 3"/><path d="M15.5 21 12 15l-3.5 6"/><path d="M2 21h20"/></svg>
             </span>
-            <span class="help-feature-label">Campingplätze</span>
+            <span class="help-feature-label">Unterkunft &amp; Camping</span>
           </div>
           <div class="help-feature">
-            <span class="help-feature-icon" style="background:#e6f0f5;color:#2d6a8a">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 C8 6 4 9 4 13a8 8 0 0 0 16 0c0-4-4-7-8-11z"/></svg>
+            <span class="help-feature-icon" style="background:var(--accent-soft);color:var(--accent)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 6v5a1 1 0 0 0 1 1h6.102a1 1 0 0 1 .712.298l.898.91a1 1 0 0 1 .288.702V17a1 1 0 0 1-1 1h-3"/><path d="M5 18H3a1 1 0 0 1-1-1V8a2 2 0 0 1 2-2h12c1.1 0 2.1.8 2.4 1.8l1.176 4.2"/><path d="M9 18h5"/><circle cx="16" cy="18" r="2"/><circle cx="7" cy="18" r="2"/></svg>
             </span>
-            <span class="help-feature-label">Wasserversorgung</span>
+            <span class="help-feature-label">Stellplätze &amp; Parkplätze</span>
           </div>
           <div class="help-feature">
             <span class="help-feature-icon" style="background:#f0e8e6;color:#8a3d2d">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18.5" cy="17.5" r="3.5"/><circle cx="5.5" cy="17.5" r="3.5"/><circle cx="15" cy="5" r="1"/><path d="M12 17.5V14l-3-3 4-3 2 3h2"/></svg>
             </span>
-            <span class="help-feature-label">Entsorgung</span>
+            <span class="help-feature-label">Fahrrad-Service &amp; E-Bike</span>
           </div>
           <div class="help-feature">
             <span class="help-feature-icon" style="background:#ede8f5;color:#5c3d8a">
@@ -204,8 +246,8 @@ export class HelpPanel {
         </div>
         <div class="help-extras">
           <span class="help-extra-chip">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-            Suche &amp; Geocoding
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg>
+            Orte entlang deiner Route (Komoot/GPX)
           </span>
           <span class="help-extra-chip">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18"/><path d="m15 6 6 6-6 6"/></svg>
@@ -231,14 +273,108 @@ export class HelpPanel {
 
   private buildStep2(): HTMLElement {
     const wrap = el('div', 'help-step')
+    const profiles = this.deps.profiles
 
     const hdr = el('div', 'help-step-header')
-    hdr.innerHTML = `
+    hdr.innerHTML = profiles
+      ? `
+      <h2 class="help-step-title">Wofür nutzt du die App?</h2>
+      <p class="help-step-desc">Wähle ein oder mehrere Profile – wir zeigen dir dazu passende Orte. Du kannst das jederzeit ändern.</p>
+    `
+      : `
       <h2 class="help-step-title">Was willst du sehen?</h2>
       <p class="help-step-desc">Wähle deine Standard-Ansicht. Du kannst Filter jederzeit über die Leiste unten an- und abschalten.</p>
     `
     wrap.appendChild(hdr)
 
+    const cards = new Map<string, HTMLButtonElement>()
+    const grid = this.buildFilterGrid(cards)
+
+    if (profiles) {
+      wrap.appendChild(this.buildProfileCards(profiles, cards))
+      const disclosure = el('button', 'help-disclosure')
+      disclosure.type = 'button'
+      disclosure.dataset['ref'] = 'manual-toggle'
+      disclosure.setAttribute('aria-controls', 'help-manual-filters')
+      const setOpen = (open: boolean): void => {
+        this.manualOpen = open
+        disclosure.setAttribute('aria-expanded', String(open))
+        grid.hidden = !open
+        hint.hidden = !open
+        disclosure.classList.toggle('open', open)
+      }
+      disclosure.innerHTML = `<span>Einzeln anpassen</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>`
+      grid.id = 'help-manual-filters'
+      const hint = this.buildFilterHint()
+      disclosure.addEventListener('click', () => setOpen(!this.manualOpen))
+      wrap.appendChild(disclosure)
+      wrap.appendChild(grid)
+      wrap.appendChild(hint)
+      setOpen(this.manualOpen)
+    } else {
+      wrap.appendChild(grid)
+      wrap.appendChild(this.buildFilterHint())
+    }
+
+    return wrap
+  }
+
+  private buildProfileCards(profiles: HelpProfiles, filterCards: ReadonlyMap<string, HTMLButtonElement>): HTMLElement {
+    const list = el('div', 'help-profile-list')
+    list.setAttribute('role', 'group')
+    list.setAttribute('aria-label', 'Profile')
+    for (const opt of profiles.options) {
+      const isOn = this.selectedProfiles.includes(opt.id)
+      const card = el('button', `help-profile-card${isOn ? ' selected' : ''}`)
+      card.type = 'button'
+      card.dataset['profileId'] = opt.id
+      card.setAttribute('aria-pressed', String(isOn))
+
+      const icon = el('span', 'help-profile-card-icon')
+      icon.setAttribute('aria-hidden', 'true')
+      icon.innerHTML = opt.iconSvg
+
+      const text = el('span', 'help-profile-card-text')
+      const label = el('strong', 'help-profile-card-label')
+      label.textContent = opt.label
+      const desc = el('span', 'help-profile-card-desc')
+      desc.textContent = opt.description
+      text.append(label, desc)
+
+      const check = el('span', 'help-filter-card-check')
+      check.setAttribute('aria-hidden', 'true')
+      check.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`
+
+      card.append(icon, text, check)
+      card.addEventListener('click', () => {
+        const next = !this.selectedProfiles.includes(opt.id)
+        // Reihenfolge der Optionen beibehalten, unabhaengig von der Klickreihenfolge.
+        this.selectedProfiles = profiles.options.map(o => o.id)
+          .filter(id => id === opt.id ? next : this.selectedProfiles.includes(id))
+        card.classList.toggle('selected', next)
+        card.setAttribute('aria-pressed', String(next))
+        this.reseedFromProfiles(profiles, filterCards)
+      })
+      list.appendChild(card)
+    }
+    return list
+  }
+
+  /** Setzt das Raster auf das Preset der Profile; ohne Profil bleibt es wie es ist. */
+  private reseedFromProfiles(profiles: HelpProfiles, cards: ReadonlyMap<string, HTMLButtonElement>): void {
+    if (this.selectedProfiles.length === 0) return
+    const preset = profiles.presetFor(this.selectedProfiles)
+    for (const f of WIZARD_FILTERS) {
+      const on = preset.has(f.id)
+      this.filterEnabled.set(f.id, on)
+      const card = cards.get(f.id)
+      if (!card) continue
+      card.classList.toggle('selected', on)
+      card.setAttribute('aria-pressed', String(on))
+    }
+  }
+
+  private buildFilterGrid(cards: Map<string, HTMLButtonElement>): HTMLElement {
     const grid = el('div', 'help-filter-grid')
     for (const f of WIZARD_FILTERS) {
       const isOn = this.filterEnabled.get(f.id) ?? f.enabled
@@ -268,18 +404,19 @@ export class HelpPanel {
         card.classList.toggle('selected', next)
         card.setAttribute('aria-pressed', String(next))
       })
+      cards.set(f.id, card)
       grid.appendChild(card)
     }
-    wrap.appendChild(grid)
+    return grid
+  }
 
+  private buildFilterHint(): HTMLElement {
     const hint = el('p', 'help-filter-hint')
     hint.innerHTML = `
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
       Eigene Filter (z. B. Toiletten, Duschen) lassen sich über das ⚙-Symbol in der Filter-Leiste anlegen.
     `
-    wrap.appendChild(hint)
-
-    return wrap
+    return hint
   }
 
   private buildStep3(): HTMLElement {
@@ -437,7 +574,7 @@ export class HelpPanel {
   private nextLabel(): string {
     switch (this.step) {
       case 1: return 'Los geht\'s'
-      case 2: return 'Filter übernehmen'
+      case 2: return this.deps.profiles ? 'Übernehmen' : 'Filter übernehmen'
       case 3: return 'Verstanden, weiter'
       default: return 'Weiter'
     }

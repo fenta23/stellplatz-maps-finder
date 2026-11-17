@@ -15,6 +15,7 @@ const PENCIL = ICON('<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2
 const TRASH = ICON('<path d="M10 11v6"/><path d="M14 11v6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>')
 const RESET = ICON('<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>')
 const XMARK = ICON('<path d="M18 6 6 18"/><path d="m6 6 12 12"/>')
+const PROFILE_ICON = ICON('<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>')
 const PLUS = ICON('<path d="M5 12h14"/><path d="M12 5v14"/>')
 
 const ELEMENT_LABEL: Record<OsmElementKind, string> = { node: 'Punkt', way: 'Fläche', relation: 'Relation' }
@@ -34,7 +35,11 @@ export class FilterConfigPanel {
   private readonly events: EventScope = createEventScope()
   private mode: 'list' | 'editor' = 'list'
 
-  constructor(container: HTMLElement, private readonly store: IFilterStore) {
+  constructor(
+    container: HTMLElement,
+    private readonly store: IFilterStore,
+    private readonly deps: { readonly onOpenProfiles?: () => void } = {},
+  ) {
     this.panel = clone(panelHtml)
     this.body = ref(this.panel, 'body')
     this.panel.querySelector('.fav-close')?.addEventListener('click', () => this.close())
@@ -55,6 +60,12 @@ export class FilterConfigPanel {
   private renderList(): void {
     this.mode = 'list'
     this.body.innerHTML = ''
+    const { onOpenProfiles } = this.deps
+    if (onOpenProfiles) {
+      const profileBtn = el('button', 'fc-add-btn fc-profile-btn', `${PROFILE_ICON} <span>Profil wählen: Wandern, Radfahren, Camping</span>`)
+      profileBtn.addEventListener('click', () => { this.close(); onOpenProfiles() })
+      this.body.appendChild(profileBtn)
+    }
     const list = document.createElement('div')
     list.className = 'fc-list'
     for (const f of this.store.list()) list.appendChild(this.buildListRow(f))

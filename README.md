@@ -2,12 +2,13 @@
 
 > ⚠️ **Absolute Spielwiese.** Dieses Projekt dient ausschließlich zum Experimentieren und Ausprobieren — kein Produktions-Code, keine Garantien, keine Support-Versprechen. Alles kann sich jederzeit ändern oder wegfallen.
 
-Kartenbasierte Web-App zur Parkplatz- und Stellplatzsuche mit automatischer Anzeige von **Parkplätzen**, **Camper-Stellplätzen** und **Campingplätzen** im aktuellen Kartenausschnitt — alles auf Basis von OpenStreetMap, ohne proprietäre APIs.
+Kartenbasierte Web-App für **Wandernde**, **Radfahrende** und **Camper**: Parkplätze, Stellplätze, Campingplätze, Hütten, Trinkwasser, Einkehr und mehr im aktuellen Kartenausschnitt — alles auf Basis von OpenStreetMap, ohne proprietäre APIs. Ein **Profil** (Wandern, Radfahren, Camping) blendet genau die Filter ein, die du brauchst.
 
 ![Stellpatz Finder Screenshot](https://placehold.co/900x500/4B5640/fff?text=Stellpatz+Finder)
 
 ## Features
 
+- 🧑‍🤝‍🧑 **Profile** (ab 3.0) — Wandern, Radfahren und Camping einzeln oder kombiniert wählen: die passenden eingebauten Filter werden eingeblendet, die übrigen ausgeblendet. Beim ersten Start im Willkommens-Assistenten, später über „Profil“ im Menü oder in „Filter verwalten“; eigene Filter bleiben unberührt
 - 🗺️ **Interaktive Karte** (Leaflet) mit automatischem POI-Laden beim Scrollen/Zoomen — Kartenstil **CARTO Voyager** (clean, erdig) + wählbare Kartenebenen über „Ebenen“: **Satellit** (Esri), **Fahrradkarte** (OpenCycleMap bzw. CyclOSM) und **Topografische Karte** (OpenTopoMap); die Auswahl wird gemerkt
 - 🅿️ **Parkplätze** (öffentlich vs. privat unterschieden), 🚐 **Camper-Stellplätze**, ⛺ **Campingplätze**, 🚿 **Entsorgungsstationen**, 🚰 **Frischwasserpunkte**
 - 🔍 **Suche** mit Nominatim-Autocomplete (viewport-basiert)

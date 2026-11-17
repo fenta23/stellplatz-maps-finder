@@ -68,6 +68,12 @@
     cursor: pointer;
 }
 
+.whats-new-btn--secondary {
+    background: transparent;
+    color: var(--accent-strong);
+    margin-top: -8px;
+}
+
 /* Konfetti: nur transform/opacity, läuft einmal */
 .whats-new-confetti {
     position: absolute;

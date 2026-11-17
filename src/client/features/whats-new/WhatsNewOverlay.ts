@@ -10,6 +10,8 @@ export interface WhatsNewOptions {
   readonly onDismiss?: () => void
   readonly random?: () => number
   readonly confettiCount?: number
+  /** Optionaler Hauptknopf: schliesst das Overlay (onDismiss feuert) und ruft danach onSelect. */
+  readonly action?: { readonly label: string; readonly onSelect: () => void }
 }
 
 export class WhatsNewOverlay {
@@ -24,7 +26,20 @@ export class WhatsNewOverlay {
     this.root = clone(overlayHtml)
     this.confetti = ref(this.root, 'confetti')
     this.button = ref<HTMLButtonElement>(this.root, 'close')
-    this.button.addEventListener('click', () => this.dismiss())
+    const action = opts.action
+    if (action) {
+      this.button.textContent = action.label
+      this.button.addEventListener('click', () => { if (this.dismiss()) action.onSelect() })
+      const later = document.createElement('button')
+      later.type = 'button'
+      later.className = 'whats-new-btn whats-new-btn--secondary'
+      later.dataset['ref'] = 'later'
+      later.textContent = 'Später'
+      later.addEventListener('click', () => this.dismiss())
+      this.button.after(later)
+    } else {
+      this.button.addEventListener('click', () => this.dismiss())
+    }
     this.root.addEventListener('click', e => { if (e.target === this.root) this.dismiss() })
     container.appendChild(this.root)
     this.events.on(document, 'keydown', e => { if (e.key === 'Escape' && this.isOpen()) this.dismiss() })
@@ -38,11 +53,13 @@ export class WhatsNewOverlay {
     if (!this.prefersReducedMotion()) this.launchConfetti()
   }
 
-  private dismiss(): void {
-    if (!this.isOpen()) return
+  /** Liefert false, wenn das Overlay schon zu war (Doppelklick) — dann kein onSelect. */
+  private dismiss(): boolean {
+    if (!this.isOpen()) return false
     this.root.classList.remove('open')
     this.confetti.replaceChildren()
     this.opts.onDismiss?.()
+    return true
   }
 
   destroy(): void { this.events.dispose(); this.root.remove() }

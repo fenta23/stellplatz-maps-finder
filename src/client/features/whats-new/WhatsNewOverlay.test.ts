@@ -17,11 +17,14 @@ describe('WhatsNewOverlay', () => {
   it('renders title, main message and highlights', () => {
     stubMotion(false)
     const { c } = make()
-    expect(c.textContent).toContain('Version 2.0')
-    expect(c.textContent).toContain('POIs laden jetzt in Sekundenbruchteilen')
-    expect(c.textContent).toContain('Hütte')
-    expect(c.textContent).toContain('Filter-Auswahl')
-    expect(c.textContent).toContain('Verantwortungsvoll unterwegs')
+    expect(c.textContent).toContain('Version 3.0')
+    expect(c.textContent).toContain('Orte entlang deiner Route')
+    expect(c.textContent).toContain('Komoot-Link oder GPX')
+    expect(c.textContent).toContain('Zehn neue Kategorien')
+    expect(c.textContent).toContain('Wandern, Radfahren und Camping')
+    expect(c.textContent).toContain('Fahrradkarte')
+    expect(c.textContent).toContain('Routenberechnung in der App entfällt')
+    expect(c.textContent).toContain('Google bzw. Apple Maps')
     expect(c.querySelector('[role="dialog"]')?.getAttribute('aria-modal')).toBe('true')
     expect(c.querySelector('[aria-hidden="true"].whats-new-confetti')).not.toBeNull()
   })
@@ -73,5 +76,68 @@ describe('WhatsNewOverlay', () => {
     const { o, c } = make()
     o.open()
     expect(c.querySelectorAll('.confetti-piece')).toHaveLength(0)
+  })
+
+  it('without action there is a single "Los geht’s" button', () => {
+    stubMotion(false)
+    const { c } = make()
+    const btns = c.querySelectorAll('button')
+    expect(btns).toHaveLength(1)
+    expect(btns[0]!.textContent).toBe('Los geht’s')
+  })
+
+  describe('with action', () => {
+    const setup = () => {
+      stubMotion(false)
+      const calls: string[] = []
+      const onSelect = vi.fn(() => { calls.push('select') })
+      const onDismiss = vi.fn(() => { calls.push('dismiss') })
+      const made = make({ onDismiss, action: { label: 'Profil wählen', onSelect } })
+      made.o.open()
+      return { ...made, calls, onSelect, onDismiss }
+    }
+
+    it('shows the action label as primary and "Später" as secondary', () => {
+      const { c, btn } = setup()
+      const btns = c.querySelectorAll('button')
+      expect(btns).toHaveLength(2)
+      expect(btn.textContent).toBe('Profil wählen')
+      expect(btns[1]!.textContent).toBe('Später')
+      expect(document.activeElement).toBe(btn)
+    })
+
+    it('primary dismisses first, then calls onSelect', () => {
+      const { btn, root, calls, onSelect, onDismiss } = setup()
+      btn.click()
+      expect(root.classList.contains('open')).toBe(false)
+      expect(calls).toEqual(['dismiss', 'select'])
+      expect(onDismiss).toHaveBeenCalledTimes(1)
+      expect(onSelect).toHaveBeenCalledTimes(1)
+    })
+
+    it('primary double click calls onSelect only once', () => {
+      const { btn, onSelect } = setup()
+      btn.click(); btn.click()
+      expect(onSelect).toHaveBeenCalledTimes(1)
+    })
+
+    it.each([
+      ['"Später"', (c: HTMLElement) => (c.querySelectorAll('button')[1] as HTMLButtonElement).click()],
+      ['backdrop', (c: HTMLElement) => (c.querySelector('.whats-new') as HTMLElement).click()],
+      ['escape', () => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))],
+    ])('%s only dismisses, never calls onSelect', (_n, trigger) => {
+      const { c, root, onSelect, onDismiss } = setup()
+      trigger(c)
+      expect(root.classList.contains('open')).toBe(false)
+      expect(onDismiss).toHaveBeenCalledTimes(1)
+      expect(onSelect).not.toHaveBeenCalled()
+    })
+
+    it('confetti still launches', () => {
+      stubMotion(false)
+      const { o, c } = make({ confettiCount: 5, action: { label: 'X', onSelect: () => {} } })
+      o.open()
+      expect(c.querySelectorAll('.confetti-piece')).toHaveLength(5)
+    })
   })
 })

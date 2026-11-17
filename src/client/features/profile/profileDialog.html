@@ -1,0 +1,19 @@
+<div class="fav-panel profile-panel" role="dialog" aria-modal="true" aria-label="Profil wählen">
+  <div class="fav-header">
+    <span class="fav-title">Wofür nutzt du die App?</span>
+    <button class="fav-close" type="button" aria-label="Schließen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+  </div>
+  <div class="import-body">
+    <div class="profile-cards" data-ref="cards"></div>
+    <div class="profile-preview" role="status" aria-live="polite" data-ref="preview">
+      <p class="profile-preview-line" data-ref="previewShow" hidden></p>
+      <p class="profile-preview-line" data-ref="previewHide" hidden></p>
+      <p class="profile-preview-line" data-ref="previewNone" hidden></p>
+    </div>
+    <p class="profile-note">Eigene Filter und eigene POIs bleiben unverändert. Einzelne Filter kannst du jederzeit unter „Filter verwalten“ anpassen.</p>
+    <div class="profile-actions">
+      <button class="import-btn" type="button" data-ref="apply">Übernehmen</button>
+      <button class="import-btn profile-btn-secondary" type="button" data-ref="cancel">Abbrechen</button>
+    </div>
+  </div>
+</div>

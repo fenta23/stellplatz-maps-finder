@@ -54,6 +54,8 @@ import { createSelection } from './selection.js'
 import { createPoiRefresher, fetchSignature } from './poiRefresher.js'
 import { initImport } from './importWiring.js'
 import { createTrackWiring } from './trackWiring.js'
+import { createProfileWiring } from './profileWiring.js'
+import { LocalProfileStore } from '@/features/profile/ProfileStore.js'
 import { createTrackPoiLoader } from './trackPoiLoader.js'
 import { LocalTrackStore } from '@/features/track/TrackStore.js'
 import { createLeafletTrackLayer } from '@/features/map/leafletTrackLayer.js'
@@ -61,7 +63,7 @@ import { initCustomPois } from './customPoiWiring.js'
 import { initAuthSync } from './authWiring.js'
 import { geocode } from '@/core/nominatim.js'
 import {
-  SVG_STAR, SVG_NOTE, SVG_USER, SVG_TRASH, SVG_INFO, SVG_UPLOAD, SVG_SHIELD, SVG_BUILDING, SVG_HELP, SVG_LEAF, SVG_ROUTE,
+  SVG_STAR, SVG_NOTE, SVG_USER, SVG_TRASH, SVG_INFO, SVG_UPLOAD, SVG_SHIELD, SVG_BUILDING, SVG_HELP, SVG_LEAF, SVG_ROUTE, SVG_PROFILE,
 } from './icons.js'
 // Cross-cutting responsive overrides — must load AFTER all feature CSS so the
 // media-query rules win over feature base rules of equal specificity.
@@ -129,7 +131,8 @@ async function init() {
 
   // ── Filters ─────────────────────────────────────────────────────────────────
   const filterStore = new SyncedFilterStore(new LocalFilterStore())
-  const filterConfigPanel = new FilterConfigPanel(document.body, filterStore)
+  let openProfiles: () => void = () => {}
+  const filterConfigPanel = new FilterConfigPanel(document.body, filterStore, { onOpenProfiles: () => openProfiles() })
   setPoiMetaRegistry({
     label: id => filterStore.get(id)?.name,
     iconId: id => filterStore.get(id)?.iconId,
@@ -464,11 +467,16 @@ async function init() {
   const datenschutzPanel = new DatenschutzPanel(document.body)
   const impressumPanel = new ImpressumPanel(document.body)
   const responsibilityPanel = new ResponsibilityPanel(document.body)
+  const profileWiring = createProfileWiring({
+    store: new LocalProfileStore(), filterStore, dialogContainer: document.body, flash: flashInfo,
+  })
+  openProfiles = () => { closeAll(); profileWiring.open() }
   const helpPanel = new HelpPanel(document.body, {
     filterStore,
+    profiles: profileWiring.helpProfiles,
     onDismiss: () => {
       helpSeenStore.markSeen()
-      whatsNewStore.markSeen(APP_VERSION) // neue Nutzer sehen das 2.0-Overlay nie
+      whatsNewStore.markSeen(APP_VERSION) // neue Nutzer sehen das Release-Overlay nie
       if (supabase) {
         void supabase.auth.updateUser({ data: { helpSeen: true } })
           .catch(err => console.warn('[help] metadata sync failed:', err))
@@ -480,13 +488,14 @@ async function init() {
   const closeAll = () => {
     infoPanel.close(); datenschutzPanel.close(); impressumPanel.close()
     favoritesPanel.close(); notesPanel.close(); helpPanel.close()
-    responsibilityPanel.close(); trackWiring.closeImport()
+    responsibilityPanel.close(); trackWiring.closeImport(); profileWiring.close()
   }
 
   const menuItems: MenuEntry[] = [
     { icon: SVG_STAR, label: 'Favoriten', onSelect: () => { closeAll(); favoritesPanel.open() } },
     { icon: SVG_NOTE, label: 'Notizen', onSelect: () => { closeAll(); notesPanel.open() } },
     { icon: SVG_ROUTE, label: 'Route importieren (GPX/Komoot)', onSelect: () => { closeAll(); trackWiring.openImport() } },
+    { icon: SVG_PROFILE, label: 'Profil', onSelect: () => { closeAll(); profileWiring.open() } },
     { icon: SVG_LEAF, label: 'Verantwortungsvoll unterwegs', onSelect: () => { closeAll(); responsibilityPanel.open() } },
     { icon: SVG_UPLOAD, label: 'Google Maps importieren', onSelect: () => importHandle.open() },
   ]
@@ -516,7 +525,10 @@ async function init() {
   const helpSeen = helpSeenStore.isSeen()
   const forceWhatsNew = import.meta.env.DEV && new URLSearchParams(location.search).has('whatsnew')
   if (forceWhatsNew || shouldShowWhatsNew(helpSeen, whatsNewStore.isSeen(APP_VERSION) ? APP_VERSION : null, APP_VERSION)) {
-    new WhatsNewOverlay(document.body, { onDismiss: () => whatsNewStore.markSeen(APP_VERSION) }).open()
+    new WhatsNewOverlay(document.body, {
+      onDismiss: () => whatsNewStore.markSeen(APP_VERSION),
+      action: { label: 'Profil wählen', onSelect: () => profileWiring.open() },
+    }).open()
   } else if (!helpSeen) {
     helpPanel.open()
   }

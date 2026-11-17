@@ -113,3 +113,23 @@ describe('FilterConfigPanel — editor', () => {
     expect(store.get(added.id)).toBeUndefined()
   })
 })
+
+describe('FilterConfigPanel — profile shortcut', () => {
+  it('shows no profile button without the dep', () => {
+    const { container } = setup()
+    expect(q(container, '.fc-profile-btn')).toBeNull()
+  })
+
+  it('profile button closes the panel and calls onOpenProfiles', () => {
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const onOpenProfiles = vi.fn()
+    const panel = new FilterConfigPanel(container, new LocalFilterStore(), { onOpenProfiles })
+    panel.open()
+    const btn = q(container, '.fc-profile-btn')!
+    expect(btn.textContent).toMatch(/Profil wählen/)
+    btn.click()
+    expect(panel.isOpen()).toBe(false)
+    expect(onOpenProfiles).toHaveBeenCalledOnce()
+  })
+})

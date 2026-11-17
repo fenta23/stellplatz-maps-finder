@@ -310,4 +310,214 @@ describe('HelpPanel', () => {
     clickNext(c)
     expect(c.querySelector('[data-ref="signin"]')).toBeNull()
   })
+
+  it('step 1 speaks to hikers, cyclists and campers and mentions route and navigation', async () => {
+    const { c, panel } = makePanel()
+    await flush()
+    panel.open()
+    const t = c.textContent ?? ''
+    for (const w of ['Wanderer', 'Radfahrer', 'Camper', 'Orte entlang deiner Route', 'Navigation per Google/Apple Maps']) {
+      expect(t).toContain(w)
+    }
+  })
+
+  describe('profiles', () => {
+    const OPTIONS = [
+      { id: 'hike', label: 'Wandern', description: 'Wasser und Hütten', iconSvg: '<svg data-t="hike"></svg>' },
+      { id: 'bike', label: 'Radfahren', description: 'Café und Service', iconSvg: '<svg data-t="bike"></svg>' },
+      { id: 'camp', label: 'Camping', description: 'Stellplätze', iconSvg: '<svg></svg>' },
+    ]
+    const PRESETS: Record<string, string[]> = { hike: ['drinking_water', 'hut'], bike: ['cafe', 'bike_service'], camp: ['camper', 'campsite'] }
+
+    function makeProfiles(selected: string[] = []) {
+      const onChosen = vi.fn()
+      const presetFor = vi.fn((ids: readonly string[]) => new Set(ids.flatMap(i => PRESETS[i] ?? [])))
+      return { onChosen, presetFor, profiles: { options: OPTIONS, getSelected: () => selected, presetFor, onChosen } }
+    }
+    const card = (c: HTMLElement, id: string) => c.querySelector<HTMLButtonElement>(`.help-profile-card[data-profile-id="${id}"]`)!
+    const fcard = (c: HTMLElement, id: string) => c.querySelector<HTMLButtonElement>(`.help-filter-card[data-filter-id="${id}"]`)!
+    const toggle = (c: HTMLElement) => c.querySelector<HTMLButtonElement>('[data-ref="manual-toggle"]')!
+
+    async function openStep2(deps: Partial<HelpPanelDeps>) {
+      const made = makePanel(deps)
+      await flush()
+      made.panel.open()
+      clickNext(made.c)
+      return made
+    }
+
+    it('shows heading, profile cards (with icons) and a collapsed disclosure', async () => {
+      const { profiles } = makeProfiles()
+      const { c } = await openStep2({ profiles })
+      expect(c.textContent).toContain('Wofür nutzt du die App?')
+      expect(c.querySelectorAll('.help-profile-card')).toHaveLength(3)
+      expect(card(c, 'hike').textContent).toContain('Wandern')
+      expect(card(c, 'hike').textContent).toContain('Wasser und Hütten')
+      expect(card(c, 'hike').querySelector('svg[data-t="hike"]')).not.toBeNull()
+      expect(toggle(c).textContent).toContain('Einzeln anpassen')
+      expect(toggle(c).getAttribute('aria-expanded')).toBe('false')
+      expect(c.querySelector<HTMLElement>('.help-filter-grid')!.hidden).toBe(true)
+    })
+
+    it('without profiles: old heading, no cards, no disclosure, grid visible', async () => {
+      const { c } = await openStep2({})
+      expect(c.textContent).toContain('Was willst du sehen?')
+      expect(c.querySelector('.help-profile-card')).toBeNull()
+      expect(toggle(c)).toBeNull()
+      expect(c.querySelector<HTMLElement>('.help-filter-grid')!.hidden).toBe(false)
+    })
+
+    it('disclosure toggles aria-expanded and grid visibility, and is a real button', async () => {
+      const { c } = await openStep2({ profiles: makeProfiles().profiles })
+      expect(toggle(c).tagName).toBe('BUTTON')
+      toggle(c).click()
+      expect(toggle(c).getAttribute('aria-expanded')).toBe('true')
+      expect(c.querySelector<HTMLElement>('.help-filter-grid')!.hidden).toBe(false)
+      expect(toggle(c).getAttribute('aria-controls')).toBe(c.querySelector('.help-filter-grid')!.id)
+      toggle(c).click()
+      expect(toggle(c).getAttribute('aria-expanded')).toBe('false')
+    })
+
+    it('pre-selects profiles from getSelected() and leaves the grid at the current filter state', async () => {
+      const { profiles } = makeProfiles(['bike'])
+      const { c } = await openStep2({ profiles })
+      expect(card(c, 'bike').getAttribute('aria-pressed')).toBe('true')
+      expect(card(c, 'bike').classList.contains('selected')).toBe(true)
+      expect(card(c, 'hike').getAttribute('aria-pressed')).toBe('false')
+      // Raster = aktueller Stand (parking an, cafe aus), nicht das Preset
+      expect(fcard(c, 'parking').getAttribute('aria-pressed')).toBe('true')
+      expect(fcard(c, 'cafe').getAttribute('aria-pressed')).toBe('false')
+    })
+
+    it('profile cards are multi-select toggle buttons', async () => {
+      const { c } = await openStep2({ profiles: makeProfiles().profiles })
+      card(c, 'hike').click(); card(c, 'camp').click()
+      expect(card(c, 'hike').getAttribute('aria-pressed')).toBe('true')
+      expect(card(c, 'camp').getAttribute('aria-pressed')).toBe('true')
+      card(c, 'hike').click()
+      expect(card(c, 'hike').getAttribute('aria-pressed')).toBe('false')
+      expect(card(c, 'camp').tagName).toBe('BUTTON')
+    })
+
+    it('selecting a profile re-seeds the grid with presetFor(ids) in option order', async () => {
+      const { profiles, presetFor } = makeProfiles()
+      const { c } = await openStep2({ profiles })
+      card(c, 'camp').click()
+      card(c, 'hike').click()
+      expect(presetFor).toHaveBeenLastCalledWith(['hike', 'camp'])
+      for (const id of ['drinking_water', 'hut', 'camper', 'campsite']) expect(fcard(c, id).getAttribute('aria-pressed'), id).toBe('true')
+      expect(fcard(c, 'parking').getAttribute('aria-pressed')).toBe('false')
+      expect(fcard(c, 'cafe').getAttribute('aria-pressed')).toBe('false')
+    })
+
+    it('manual grid changes survive until the profile selection changes again', async () => {
+      const { c } = await openStep2({ profiles: makeProfiles().profiles })
+      card(c, 'hike').click()
+      fcard(c, 'cafe').click() // manuell dazu
+      expect(fcard(c, 'cafe').getAttribute('aria-pressed')).toBe('true')
+      expect(fcard(c, 'hut').getAttribute('aria-pressed')).toBe('true')
+      card(c, 'bike').click() // Auswahl aendert sich -> neu setzen
+      expect(fcard(c, 'hut').getAttribute('aria-pressed')).toBe('true')
+      expect(fcard(c, 'cafe').getAttribute('aria-pressed')).toBe('true') // im bike-Preset
+      expect(fcard(c, 'parking').getAttribute('aria-pressed')).toBe('false')
+    })
+
+    it('deselecting the last profile leaves the grid as it is', async () => {
+      const { c } = await openStep2({ profiles: makeProfiles().profiles })
+      card(c, 'hike').click()
+      card(c, 'hike').click()
+      expect(fcard(c, 'hut').getAttribute('aria-pressed')).toBe('true')
+      expect(fcard(c, 'parking').getAttribute('aria-pressed')).toBe('false')
+    })
+
+    it('applyFilters writes the seeded grid; onChosen gets the ids once', async () => {
+      const setHidden = vi.fn(); const setEnabled = vi.fn()
+      const { profiles, onChosen } = makeProfiles()
+      const { c } = await openStep2({ profiles, filterStore: makeFilterStore({ setHidden, setEnabled }) })
+      card(c, 'hike').click()
+      clickNext(c)
+      expect(setHidden).toHaveBeenCalledWith('parking', true)
+      expect(setEnabled).toHaveBeenCalledWith('hut', true)
+      expect(onChosen).toHaveBeenCalledTimes(1)
+      expect(onChosen).toHaveBeenCalledWith(['hike'])
+      // Weiterklicken bis zum Ende und Schliessen ruft nicht erneut auf
+      clickNext(c)
+      c.querySelector<HTMLButtonElement>('[data-ref="start"]')!.click()
+      expect(onChosen).toHaveBeenCalledTimes(1)
+    })
+
+    it('onChosen([]) when stepping through with nothing selected', async () => {
+      const { profiles, onChosen } = makeProfiles()
+      const { c } = await openStep2({ profiles })
+      clickNext(c)
+      expect(onChosen).toHaveBeenCalledExactlyOnceWith([])
+    })
+
+    it('going back and re-applying reports only a changed selection', async () => {
+      const { profiles, onChosen } = makeProfiles()
+      const { c } = await openStep2({ profiles })
+      card(c, 'hike').click()
+      clickNext(c)
+      c.querySelector<HTMLButtonElement>('.help-nav-btn--back')!.click()
+      clickNext(c)
+      expect(onChosen).toHaveBeenCalledTimes(1)
+      c.querySelector<HTMLButtonElement>('.help-nav-btn--back')!.click()
+      card(c, 'bike').click()
+      clickNext(c)
+      expect(onChosen).toHaveBeenCalledTimes(2)
+      expect(onChosen).toHaveBeenLastCalledWith(['hike', 'bike'])
+    })
+
+    it('closing on step 1 calls neither onChosen nor the filter store', async () => {
+      const setHidden = vi.fn(); const setEnabled = vi.fn()
+      const { profiles, onChosen } = makeProfiles(['hike'])
+      const onDismiss = vi.fn()
+      const { c, panel } = makePanel({ profiles, onDismiss, filterStore: makeFilterStore({ setHidden, setEnabled }) })
+      await flush()
+      panel.open()
+      c.querySelector<HTMLButtonElement>('.help-skip')!.click()
+      expect(onDismiss).toHaveBeenCalledOnce()
+      expect(onChosen).not.toHaveBeenCalled()
+      expect(setHidden).not.toHaveBeenCalled()
+      expect(setEnabled).not.toHaveBeenCalled()
+    })
+
+    it('skipping on step 2 (unconfirmed) neither applies filters nor reports profiles', async () => {
+      const setHidden = vi.fn()
+      const { profiles, onChosen } = makeProfiles()
+      const { c } = await openStep2({ profiles, filterStore: makeFilterStore({ setHidden }) })
+      card(c, 'hike').click()
+      c.querySelector<HTMLButtonElement>('.help-skip')!.click()
+      expect(onChosen).not.toHaveBeenCalled()
+      expect(setHidden).not.toHaveBeenCalled()
+    })
+
+    it('reopening starts at step 1 with stored profiles pre-selected and a fresh report', async () => {
+      let stored: string[] = []
+      const onChosen = vi.fn((ids: readonly string[]) => { stored = [...ids] })
+      const profiles = { options: OPTIONS, getSelected: () => stored, presetFor: () => new Set<string>(), onChosen }
+      const { c, panel } = makePanel({ profiles })
+      await flush()
+      panel.open(); clickNext(c)
+      card(c, 'camp').click()
+      clickNext(c)
+      panel.close()
+      panel.open()
+      expect(c.querySelectorAll('.help-progress-dot')[0]!.classList.contains('active')).toBe(true)
+      clickNext(c)
+      expect(card(c, 'camp').getAttribute('aria-pressed')).toBe('true')
+      expect(toggle(c).getAttribute('aria-expanded')).toBe('false')
+      clickNext(c)
+      expect(onChosen).toHaveBeenCalledTimes(2)
+      expect(onChosen).toHaveBeenLastCalledWith(['camp'])
+    })
+
+    it('keeps the disclosure state when navigating back to step 2', async () => {
+      const { c } = await openStep2({ profiles: makeProfiles().profiles })
+      toggle(c).click()
+      clickNext(c)
+      c.querySelector<HTMLButtonElement>('.help-nav-btn--back')!.click()
+      expect(toggle(c).getAttribute('aria-expanded')).toBe('true')
+    })
+  })
 })
