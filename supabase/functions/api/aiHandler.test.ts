@@ -25,7 +25,7 @@ vi.mock('../_shared/aiClient.ts', () => ({
 }))
 
 import { handleAi } from './aiHandler.ts'
-import { DEFAULT_FILTERS } from '../../../src/client/features/filters/filterModel.ts'
+import { DEFAULT_FILTERS, FILTER_ICONS } from '../../../src/client/features/filters/filterModel.ts'
 
 const env: Record<string, string> = { AI_REQUIRE_AUTH: 'false' }
 
@@ -111,5 +111,21 @@ describe('chat system prompt', () => {
     for (const f of DEFAULT_FILTERS.filter(d => d.kind === 'osm')) {
       expect(system, `prompt misses filter id ${f.id}`).toContain(`"${f.id}"`)
     }
+  })
+
+  // Regression: the prompt asked for an "iconId" without saying which ids exist or
+  // what to do when none fits, so the model picked an unrelated one — a filter for
+  // bus stops came back with the toilet icon.
+  it('lists every available icon id and tells the model to fall back to "pin"', async () => {
+    chatCompletion.mockResolvedValue('{"status":"offtopic","reply":"x","intent":null}')
+    await handleAi(chat(), null)
+    const messages = chatCompletion.mock.calls[0]![0] as { role: string; content: string }[]
+    const system = messages.find(m => m.role === 'system')!.content
+    const iconSection = system.slice(system.indexOf('"iconId" eines adHocFilters'))
+    expect(iconSection.length, 'prompt has no icon section').toBeGreaterThan(50)
+    for (const icon of FILTER_ICONS) {
+      expect(iconSection, `prompt misses icon id ${icon.id}`).toContain(`"${icon.id}"`)
+    }
+    expect(iconSection).toMatch(/Passt keines[\s\S]*nimm "pin"/)
   })
 })

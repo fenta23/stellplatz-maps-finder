@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Bus-Icon und Vorlage „Bushaltestelle“.** Neues Icon `bus` (Lucide) für eigene und KI-Filter, dazu die Vorlage „Bushaltestelle“ (`highway=bus_stop`) in der Galerie für eigene Filter. Die KI-Suche nimmt es für Haltestellen.
+
+### Fixed
+- **KI-Filter bekamen unpassende Icons.** Ein per KI-Suche angelegter Filter „Bushaltestellen“ erschien mit dem Toiletten-Icon. Der Prompt verlangte ein `iconId`, nannte aber weder die vorhandenen Icons noch eine Regel für den Fall, dass keines passt; das Modell riet. Der Prompt listet jetzt alle Icons mit ihrer Bedeutung und schreibt „pin“ vor, wenn keines die Sache trifft. Ein Test prüft, dass jedes Icon aus `FILTER_ICONS` im Prompt steht. Wirkt nach dem Deploy der Edge Function; bereits angelegte Filter behalten ihr Icon und lassen sich unter „Filter verwalten“ ändern.
+
 ## [3.0.0] - 2026-11-17
 
 Die App richtet sich jetzt an Wanderer, Radfahrer und Camper.

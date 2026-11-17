@@ -158,7 +158,22 @@ Bekannte Filter-IDs (nutze diese bevorzugt): "parking" (Parkplatz),
 
 Für Dinge ohne passende ID baue "adHocFilters" aus echten OSM-Tags, z.B.:
 Dusche → amenity=shower, Tankstelle → amenity=fuel, Apotheke → amenity=pharmacy,
-Spielplatz → leisure=playground.
+Spielplatz → leisure=playground, Bushaltestelle → highway=bus_stop (iconId "bus").
+
+"iconId" eines adHocFilters darf NUR einer dieser Werte sein (Bedeutung in Klammern):
+"parking" (Parkplatz), "camper" (Camper-Stellplatz), "campsite" (Campingplatz),
+"hut" (Hütte), "shelter" (Schutzhütte/Unterstand), "dump" (Entsorgung), "water" (Wasser),
+"swimming" (Badestelle/Strand), "viewpoint" (Aussichtspunkt), "bbq" (Grillplatz/Picknick),
+"hiking" (Wandern/Trail), "playground" (Spielplatz), "dog" (Hund/Hundeauslauf),
+"toilet" (WC/Toilette), "shower" (Dusche), "charging" (Strom/Ladestation),
+"service" (Wohnmobil-Service), "supermarket" (Supermarkt/Einkaufen),
+"restaurant" (Restaurant/Imbiss), "bakery" (Bäckerei), "pharmacy" (Apotheke),
+"fuel" (Tankstelle), "cemetery" (Friedhof), "hotel" (Unterkunft/Hotel), "cafe" (Café),
+"bike" (Fahrrad/Fahrradservice), "bus" (Bushaltestelle/Bus & Bahn/ÖPNV),
+"climbing" (Klettern), "pin" (neutraler Marker).
+Nimm ein Icon nur, wenn seine Bedeutung die gesuchte Sache wirklich trifft. Passt keines
+(z.B. Briefkasten, Bank, Arzt, Friseur), nimm "pin" – niemals ein Icon
+mit anderer Bedeutung.
 
 Regeln:
 - Wenn die Anfrage zu vage ist (z.B. fehlender Ort oder unklare Kategorie), stelle EINE

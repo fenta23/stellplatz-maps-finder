@@ -489,3 +489,14 @@ describe('activeFirst / classification of multi-category elements', () => {
     expect(classifyElement(BAKERY_CAFE, 'node', activeFirst(vis([], ['bakery', 'cafe'])))).toBe('bakery')
   })
 })
+
+describe('bus icon', () => {
+  // A filter for bus stops used to get an unrelated icon because none existed.
+  it('exists and is used by the bus-stop template', () => {
+    expect(FILTER_ICONS.some(i => i.id === 'bus')).toBe(true)
+    expect(filterIconPath('bus')).not.toBe(FILTER_ICONS[0]!.path)
+    const t = FILTER_TEMPLATES.find(x => x.name === 'Bushaltestelle')!
+    expect(t.iconId).toBe('bus')
+    expect(t.selectors).toEqual([{ elements: ['node', 'way'], tags: [{ key: 'highway', value: 'bus_stop' }] }])
+  })
+})

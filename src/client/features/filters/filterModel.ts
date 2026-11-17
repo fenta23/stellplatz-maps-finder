@@ -313,6 +313,7 @@ export const FILTER_TEMPLATES: readonly FilterTemplate[] = [
   tmpl('Badestelle', 'swimming', '#1565C0', 'leisure', 'swimming_area', NWR),
   tmpl('Dusche', 'shower', '#00838F', 'amenity', 'shower'),
   tmpl('Wohnmobil-Service', 'service', '#5D4037', 'shop', 'caravan'),
+  tmpl('Bushaltestelle', 'bus', '#3949AB', 'highway', 'bus_stop'),
 ]
 
 // ── Query building ───────────────────────────────────────────────────────────
