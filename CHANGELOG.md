@@ -7,17 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-- **Ausgewählter Ort ist auf der Karte markiert.** Der Ort, dessen Detailpanel offen ist, erscheint vergrößert mit einem Ring und einem leichten Pulsieren, über allen Markern und Clustern. So bleibt er auch sichtbar, wenn sein Marker in einem Cluster steckt, etwa nach einem Tipp auf einen Eintrag der Routen-Liste. Die Markierung verschwindet mit dem Schließen des Panels. Gilt für jede Auswahl, auch ohne Route; eigene Orte bekommen nur den Ring.
-  - **Ort aus der Routen-Liste rückt in die Bildmitte.** Ein Tipp auf einen Listeneintrag schiebt den Ort in die Mitte des sichtbaren Kartenausschnitts, am Desktop also zwischen Routen-Liste und Detailpanel, am Handy über das Detail-Sheet. Die Zoomstufe bleibt. Ein Tipp auf einen Marker verschiebt die Karte weiterhin nur, wenn das Panel den Ort verdecken würde.
-  - **Gestrichelte Linie zur Route.** Liegt der ausgewählte Ort abseits der aktiven Route (ab 10 m, darunter gilt er wie im Detailpanel als „an der Route“), zeigt eine gestrichelte Luftlinie vom nächstgelegenen Punkt der Route zum Ort. Keine Wegberechnung; Orte weiter als 2 km von der Route bekommen keine Linie.
-  - **Code:** `features/map/poiHighlight.ts` (eigene Leaflet-Pane über den Markern), `showConnector`/`clearConnector` im `TrackLayer`, `pointAtMeters` in `trackGeometry.ts`, `footOf` im `trackPoiLoader`, `onSelected`/`onCleared` in `selection.ts`.
-
 ## [3.0.0] - 2026-11-17
 
 Die App richtet sich jetzt an Wanderer, Radfahrer und Camper.
 
 ### Added
+- **Ausgewählter Ort ist auf der Karte markiert.** Der Ort, dessen Detailpanel offen ist, erscheint vergrößert mit einem Ring und einem leichten Pulsieren, über allen Markern und Clustern. So bleibt er auch sichtbar, wenn sein Marker in einem Cluster steckt, etwa nach einem Tipp auf einen Eintrag der Routen-Liste. Die Markierung verschwindet mit dem Schließen des Panels. Gilt für jede Auswahl, auch ohne Route; eigene Orte bekommen nur den Ring.
+  - **Ort aus der Routen-Liste rückt in die Bildmitte.** Ein Tipp auf einen Listeneintrag schiebt den Ort in die Mitte des sichtbaren Kartenausschnitts, am Desktop also zwischen Routen-Liste und Detailpanel, am Handy über das Detail-Sheet. Die Zoomstufe bleibt. Ein Tipp auf einen Marker verschiebt die Karte weiterhin nur, wenn das Panel den Ort verdecken würde.
+  - **Gestrichelte Linie zur Route.** Liegt der ausgewählte Ort abseits der aktiven Route (ab 10 m, darunter gilt er wie im Detailpanel als „an der Route“), zeigt eine gestrichelte Luftlinie vom nächstgelegenen Punkt der Route zum Ort. Keine Wegberechnung; Orte weiter als 2 km von der Route bekommen keine Linie.
+  - **Code:** `features/map/poiHighlight.ts` (eigene Leaflet-Pane über den Markern), `showConnector`/`clearConnector` im `TrackLayer`, `pointAtMeters` in `trackGeometry.ts`, `footOf` im `trackPoiLoader`, `onSelected`/`onCleared` in `selection.ts`.
 - **Mehrere gespeicherte Routen.** Bis zu zehn importierte Routen bleiben auf dem Gerät gespeichert, eine davon ist aktiv. Der Import-Dialog listet die übrigen unter „Gespeicherte Routen“ mit „Anzeigen“ und Löschen. „Route schließen“ (bisher „Route entfernen“) blendet die Route nur aus, sie bleibt gespeichert; gelöscht wird ausdrücklich. Wer eine schon gespeicherte Route erneut importiert, bekommt sie wieder aktiviert statt doppelt. Die bisher einzeln gespeicherte Route wird beim ersten Start übernommen (`stellplatz:track` → `stellplatz:tracks`). Ist der Speicher voll, fallen zuerst die ältesten nicht aktiven Routen weg. Kein Sync zwischen Geräten.
 - **Abschnitt der Route wählen.** Zwei Regler im Routen-Panel begrenzen Liste, Zähler und Marker gemeinsam auf „km A bis km B“, ohne Nachladen. „Ganze Route“ setzt zurück; eine neue Route ebenfalls. Bei Routen unter 2 km entfällt der Regler.
 - **Orte entlang der Route als GPX exportieren.** „Als GPX exportieren“ lädt eine GPX-1.1-Datei mit einem Wegpunkt je gelistetem Ort (Name, Kategorie, „km 12,4 · 180 m abseits“) und der Strecke herunter, für Radcomputer, Garmin oder Komoot. Exportiert wird genau das, was gerade gelistet ist (aktive Kategorien, Abstand, Abschnitt). Namen aus OSM und Dateien werden XML-sicher geschrieben.
