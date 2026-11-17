@@ -306,7 +306,7 @@ async function init() {
     selectPoi: poi => void selection.select(poi),
     isTypeActive: type => osmFilterIds().has(type),
     rowFor: poi => ({
-      ...trackRowTexts(poi.tags.name, typeLabel(poi.type)),
+      ...trackRowTexts(poi.tags.name, typeLabel(poi.type), { type: poi.type, now: new Date() }),
       color: styleResolver(poi.type).color,
       iconSvg: typeIcon(poi.type), // our own icon set, not user data
     }),

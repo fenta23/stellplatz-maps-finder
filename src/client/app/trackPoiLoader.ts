@@ -1,19 +1,19 @@
 // Loads the POIs along the active track: static tiles for the built-in filters
 // (loaded once for the maximum corridor), Overpass `around:` queries in chunks
-// for custom/AI filters and as tile fallback. Orchestrates the pure helpers of
-// the track slice; knows nothing about the DOM or the map.
+// for custom/AI filters, for built-ins the tiles do not contain, and as tile
+// fallback. Orchestrates the pure helpers of the track slice; knows nothing
+// about the DOM or the map.
 
 import { fetchPoisAround, poiKey, type OsmPoi } from '@/features/pois/OverpassClient.js'
 import type { FilterDef } from '@/features/filters/filterModel.js'
 import type { PoiTileSource, TileLayer } from '@/features/pois/poiTiles.js'
-import { tileKeysFor } from '@/features/pois/poiTiles.js'
+import { planTileFilters, tileKeysFor, tiledFilterIds } from '@/features/pois/poiTiles.js'
 import { trackPoiCountMessage } from '@/features/pois/statusMessages.js'
 import { createSegmentIndex, type SegmentIndex } from '@/features/track/trackGeometry.js'
 import {
   chunkForOverpass, corridorBoxes, matchCorridor, overpassRadiusBucket, type CorridorHit,
 } from '@/features/track/corridor.js'
 import { MAX_CORRIDOR_M, type Track, type TrackPoint, type TrackPosition } from '@/features/track/trackTypes.js'
-import { tileLayersFor } from './poiRefresher.js'
 
 export const TILE_BATCH_SIZE = 12
 export const MAX_OVERPASS_TRACK_M = 300_000
@@ -70,6 +70,7 @@ export function createTrackPoiLoader(deps: TrackPoiLoaderDeps): TrackPoiLoader {
   // Per-track load state (reset by a full run).
   let tilesDone = false
   let fallback = false // tiles unusable → built-ins go through Overpass as well
+  let tiledIds: ReadonlySet<string> | null = null // filter ids the tiles contain (null = manifest not read yet)
   let runBucket = 0 // Overpass radius bucket of the last/current Overpass phase; 0 = none yet
   let failed = new Set<number>() // chunk indices that failed twice
   let skippedLong = false
@@ -93,6 +94,13 @@ export function createTrackPoiLoader(deps: TrackPoiLoaderDeps): TrackPoiLoader {
     }
   }
 
+  /** Filters for the Overpass path: user/AI ones plus built-ins the tiles lack — everything after a tile failure. */
+  function overpassFiltersNow(): readonly FilterDef[] {
+    const { all, custom } = partition()
+    if (fallback) return all
+    return tiledIds ? planTileFilters(all, tiledIds).liveFilters : custom
+  }
+
   function stop(): void {
     generation++
     controller?.abort()
@@ -105,6 +113,7 @@ export function createTrackPoiLoader(deps: TrackPoiLoaderDeps): TrackPoiLoader {
     candidates.clear()
     tilesDone = false
     fallback = false
+    tiledIds = null
     runBucket = 0
     failed = new Set()
     skippedLong = false
@@ -131,7 +140,7 @@ export function createTrackPoiLoader(deps: TrackPoiLoaderDeps): TrackPoiLoader {
     const { signal } = ctl
     const live = () => gen === generation && !signal.aborted
     running = true
-    const { builtins, custom, all } = partition()
+    const { builtins } = partition()
 
     try {
       // ── Phase 1: static tiles for the built-ins ──
@@ -139,17 +148,20 @@ export function createTrackPoiLoader(deps: TrackPoiLoaderDeps): TrackPoiLoader {
         const tiles = deps.tiles
         let cellDeg = 0
         try {
-          cellDeg = (await tiles.manifest(signal)).cellDeg
+          const m = await tiles.manifest(signal)
+          cellDeg = m.cellDeg
+          tiledIds = tiledFilterIds(m)
         } catch { /* no cellDeg → fallback below */ }
         if (!live()) return
         let ok = cellDeg > 0
         if (ok) {
+          const plan = planTileFilters(deps.getOsmFilters(), tiledIds)
           const seen = new Set<string>()
           const keys: string[] = []
           for (const box of corridorBoxes(t.points, MAX_CORRIDOR_M)) {
             for (const k of tileKeysFor(box, cellDeg)) if (!seen.has(k)) { seen.add(k); keys.push(k) }
           }
-          const pairs: Array<[TileLayer, string]> = tileLayersFor(builtins)
+          const pairs: Array<[TileLayer, string]> = plan.layers
             .flatMap(layer => keys.map((k): [TileLayer, string] => [layer, k]))
           const batches = Math.ceil(pairs.length / TILE_BATCH_SIZE)
           for (let b = 0; b < batches && ok; b++) {
@@ -160,7 +172,7 @@ export function createTrackPoiLoader(deps: TrackPoiLoaderDeps): TrackPoiLoader {
               else wanted.set(layer, [key])
             }
             try {
-              const pois = await tiles.fetchTilePois(wanted, builtins, signal)
+              const pois = await tiles.fetchTilePois(wanted, plan.tileFilters, signal)
               if (!live()) return
               for (const p of pois) candidates.set(poiKey(p), p)
               deps.onUpdate(hitsNow(), false)
@@ -177,7 +189,7 @@ export function createTrackPoiLoader(deps: TrackPoiLoaderDeps): TrackPoiLoader {
       }
 
       // ── Phase 2: Overpass (custom filters, or everything after a tile failure) ──
-      const overpassFilters = fallback ? all : custom
+      const overpassFilters = overpassFiltersNow()
       const tooLong = t.lengthM > MAX_OVERPASS_TRACK_M
       const bucket = overpassRadiusBucket(corridorM)
       const wantOverpass = overpassFilters.length > 0 && (
@@ -247,8 +259,7 @@ export function createTrackPoiLoader(deps: TrackPoiLoaderDeps): TrackPoiLoader {
     setCorridor(m) {
       if (!track) return
       corridorM = m
-      const { custom, all } = partition()
-      const overpassFilters = fallback ? all : custom
+      const overpassFilters = overpassFiltersNow()
       const grew = runBucket > 0 && overpassRadiusBucket(m) > runBucket
         && overpassFilters.length > 0 && track.lengthM <= MAX_OVERPASS_TRACK_M
       if (grew) { void execute('auto'); return }

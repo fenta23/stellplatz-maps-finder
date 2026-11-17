@@ -1,7 +1,10 @@
 import { describe, it, expect, vi } from 'vitest'
 import { gzipSync } from 'node:zlib'
 import { DEFAULT_FILTERS, type FilterDef } from '@/features/filters/filterModel.js'
-import { createPoiTileSource, decodeTile, recordsToPois, tileKeysFor, type TileManifest } from './poiTiles.js'
+import {
+  createPoiTileSource, decodeTile, LEGACY_TILED_FILTER_IDS, planTileFilters, recordsToPois, tileKeysFor, tiledFilterIds,
+  type TileManifest,
+} from './poiTiles.js'
 
 const MANIFEST: TileManifest = {
   version: '2026-10-02', date: '2026-10-02', cellDeg: 0.25,
@@ -156,5 +159,113 @@ describe('createPoiTileSource', () => {
     // User moved campsite to the front.
     const reordered: FilterDef[] = [...builtins].sort((a, b) => (a.id === 'campsite' ? -1 : b.id === 'campsite' ? 1 : 0))
     expect((await src.fetchTilePois(wanted, reordered))[0]?.type).toBe('campsite')
+  })
+})
+
+describe('tiledFilterIds', () => {
+  it('is the union of the manifest filters', () => {
+    const m: TileManifest = { ...MANIFEST, filters: { parking: ['parking'], food: ['restaurant', 'cafe'], rest: ['camper'] } }
+    expect([...tiledFilterIds(m)].sort()).toEqual(['cafe', 'camper', 'parking', 'restaurant'])
+  })
+
+  it('falls back to the legacy set for a manifest without filters', () => {
+    expect(tiledFilterIds(MANIFEST)).toBe(LEGACY_TILED_FILTER_IDS)
+    expect([...LEGACY_TILED_FILTER_IDS].sort())
+      .toEqual(['camper', 'campsite', 'climbing', 'dump', 'hut', 'parking', 'shelter', 'water'])
+  })
+
+  it.each([
+    ['null', null], ['a string', 'parking'], ['an array', ['parking']], ['non-array values', { rest: 'camper' }],
+  ])('treats a malformed filters (%s) like absent', (_n, filters) => {
+    expect(tiledFilterIds({ ...MANIFEST, filters } as unknown as TileManifest)).toBe(LEGACY_TILED_FILTER_IDS)
+  })
+
+  it('an empty filters object means the tiles contain nothing', () => {
+    expect(tiledFilterIds({ ...MANIFEST, filters: {} }).size).toBe(0)
+  })
+})
+
+describe('planTileFilters', () => {
+  const all = DEFAULT_FILTERS.filter(f => f.kind === 'osm')
+  const vis = (ids: readonly string[]) => all.map(f => (ids.includes(f.id) ? { ...f, hidden: false, enabled: true } : f))
+  const custom: FilterDef = { ...all[0]!, id: 'u-fuel', builtin: false }
+  const LEGACY = LEGACY_TILED_FILTER_IDS
+  const ids = (fs: readonly FilterDef[]) => fs.map(f => f.id)
+
+  it('without tiles (null) everything is live and no layer is wanted', () => {
+    const plan = planTileFilters([...all, custom], null)
+    expect(plan.tileFilters).toEqual([])
+    expect(ids(plan.liveFilters)).toEqual(ids([...all, custom]))
+    expect(plan.layers).toEqual([])
+  })
+
+  it('legacy manifest: the nine existing filters are tiled, parking layer only while active', () => {
+    const filters = all.filter(f => !f.hidden)
+    const plan = planTileFilters(filters, LEGACY)
+    expect(ids(plan.tileFilters)).toEqual(ids(filters))
+    expect(plan.liveFilters).toEqual([])
+    expect(plan.layers).toEqual(['parking', 'rest'])
+    const off = filters.map(f => (f.id === 'parking' ? { ...f, enabled: false } : f))
+    expect(planTileFilters(off, LEGACY).layers).toEqual(['rest'])
+  })
+
+  it('legacy manifest: a visible new built-in is live, its layer is not requested', () => {
+    const filters = vis(['parking', 'camper', 'restaurant'])
+    const plan = planTileFilters(filters, LEGACY)
+    expect(ids(plan.liveFilters)).toContain('restaurant')
+    expect(ids(plan.tileFilters)).not.toContain('restaurant')
+    expect(plan.layers).not.toContain('food')
+  })
+
+  it('user filters are always live, in the original order next to untiled built-ins', () => {
+    const restaurant = vis(['restaurant']).find(f => f.id === 'restaurant')!
+    const plan = planTileFilters([custom, restaurant, ...all.filter(f => f.id === 'camper')], LEGACY)
+    expect(ids(plan.liveFilters)).toEqual(['u-fuel', 'restaurant'])
+    expect(ids(plan.tileFilters)).toEqual(['camper'])
+  })
+
+  it('new manifest: the new layer is wanted only while one of its filters is active', () => {
+    const tiled = new Set([...LEGACY, 'restaurant', 'cafe'])
+    const rest = vis(['restaurant']).find(f => f.id === 'restaurant')!
+    const camper = all.find(f => f.id === 'camper')!
+    expect(planTileFilters([camper, rest], tiled).layers).toEqual(['rest', 'food'])
+    expect(planTileFilters([camper, { ...rest, enabled: false }], tiled).layers).toEqual(['rest'])
+    expect(planTileFilters([camper, { ...rest, hidden: true }], tiled).layers).toEqual(['rest'])
+  })
+
+  it('rest is only requested when a rest-layer filter is tiled; order follows TILE_LAYER_IDS', () => {
+    const tiled = new Set([...LEGACY, 'bakery', 'hotel', 'ebike_charging', 'cafe'])
+    const f = vis(['bakery', 'hotel', 'ebike_charging', 'cafe']).filter(x => tiled.has(x.id) && ['bakery', 'hotel', 'ebike_charging', 'cafe'].includes(x.id))
+    expect(planTileFilters(f, tiled).layers).toEqual(['supply', 'food', 'lodging', 'bike'])
+  })
+
+  it('a custom filter never pulls a layer even with a built-in-looking id', () => {
+    const fake: FilterDef = { ...custom, id: 'parking' }
+    expect(planTileFilters([fake], LEGACY)).toEqual({ tileFilters: [], liveFilters: [fake], layers: [] })
+  })
+})
+
+describe('createPoiTileSource with additional layers', () => {
+  it('lists whatever layers the manifest has and fetches them', async () => {
+    const manifest: TileManifest = { ...MANIFEST, tiles: { rest: ['1_1'], food: ['1_1'] }, filters: { rest: ['camper'], food: ['restaurant'] } }
+    const fetchFn = fakeServer({
+      '/manifest.json': json(manifest),
+      '/2026-10-02/food/1_1.json.gz': gz([['n', 7, 1, 1, { amenity: 'restaurant' }]]),
+      '/2026-10-02/rest/1_1.json.gz': gz([]),
+    })
+    const src = createPoiTileSource('https://tiles.test', fetchFn)
+    const restaurant = DEFAULT_FILTERS.find(f => f.id === 'restaurant')!
+    const pois = await src.fetchTilePois(new Map([['food', ['1_1', '2_2']], ['rest', ['1_1']]]), [restaurant])
+    expect(pois.map(p => p.id)).toEqual([7])
+    expect(fetchFn.mock.calls.map(c => String(c[0])).sort()).toEqual([
+      'https://tiles.test/2026-10-02/food/1_1.json.gz',
+      'https://tiles.test/2026-10-02/rest/1_1.json.gz',
+      'https://tiles.test/manifest.json',
+    ])
+  })
+
+  it('accepts a legacy manifest with only parking and rest tiles', async () => {
+    const src = createPoiTileSource('https://tiles.test', fakeServer({ '/manifest.json': json(MANIFEST) }))
+    await expect(src.manifest()).resolves.toMatchObject({ version: '2026-10-02' })
   })
 })

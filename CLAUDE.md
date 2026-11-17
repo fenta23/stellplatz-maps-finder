@@ -8,7 +8,7 @@
 ```
 npm install       # deps
 npm run dev       # Vite :5173 (API via VITE_API_BASE aus .env oder lokaler Proxy :54321)
-npm test          # unit tests (Vitest, 1083 tests)
+npm test          # unit tests (Vitest, 1154 tests)
 npm run test:int  # integration tests vs Edge Function
 npm run build     # → dist/client/
 ```
@@ -59,6 +59,8 @@ _shared/    utils.ts (CORS, Query-Validation, BBox-Snap, Supabase-Client, Rate-L
 ## POI-Kacheln
 - Eingebaute Filter kommen aus statischen Kacheln (Daten-Repo `fenta23/camp-finder-data`, wöchentlich aus Geofabrik), eigene/KI-Filter live via Overpass; Fallback auf Overpass
 - Build: `scripts/poi-tiles/` (importiert `DEFAULT_FILTERS`/`classifyElement`), Workflow-Vorlage in `scripts/poi-tiles/data-repo/`
+- Ebenen: `rest` (immer), `parking`, `supply`, `food`, `lodging`, `bike` (nur solange ein Filter der Ebene aktiv ist); Zuordnung über `tileLayerOf` in `filterModel.ts`. Manifest-Feld `filters` sagt, welche Filter die Kacheln kennen – der Rest läuft live über Overpass
+- Neuer eingebauter Filter: erst nach App-Merge **und** Kachel-Build im Daten-Repo aus Kacheln verfügbar
 - Details + lokaler Test: `docs/troubleshooting.md#poi-kacheln`
 
 ## POI Types (Overpass)
@@ -68,6 +70,8 @@ _shared/    utils.ts (CORS, Query-Validation, BBox-Snap, Supabase-Client, Rate-L
 - Dump → `amenity=sanitary_dump_station`
 - Water → `amenity=water_point`
 - Climbing → `sport=climbing`
+- Hut / Shelter → `tourism=alpine_hut|wilderness_hut` / `amenity=shelter`
+- Seit 3.0 zusätzlich (standardmäßig ausgeblendet): Trinkwasser, Friedhof (Wasser), Toilette, Supermarkt, Bäckerei, Unterkunft, Restaurant, Café, Fahrrad-Service, E-Bike-Laden – Selektoren in `DEFAULT_FILTERS` (`features/filters/filterModel.ts`), dort ist die einzige Quelle
 
 ## Principles
 - Vanilla TypeScript, kein Framework

@@ -116,11 +116,18 @@ jobs:
         working-directory: app
         env:
           NODE_OPTIONS: --max-old-space-size=12288
-          # ~50 % der erwarteten Europa-Mengen (3,9 Mio. / 0,3 Mio.): ein kaputter
+          # Mindestmengen pro Layer (POI_TILES_MIN_<LAYER>, fehlend = 0): ein kaputter
           # Filter-Schritt bricht hier ab, statt leere Kacheln zu deployen — die
-          # alte Version bleibt dann online.
+          # alte Version bleibt dann online. parking/rest: ~50 % der erwarteten
+          # Europa-Mengen (3,9 Mio. / 0,3 Mio.).
           POI_TILES_MIN_PARKING: 2000000
           POI_TILES_MIN_REST: 150000
+          # TODO nach dem ersten echten Build setzen, auf etwa die Hälfte der dort
+          # gemessenen Zahlen (STAND.md bzw. Build-Log) — bewusst nicht geraten:
+          # POI_TILES_MIN_SUPPLY:
+          # POI_TILES_MIN_FOOD:
+          # POI_TILES_MIN_LODGING:
+          # POI_TILES_MIN_BIKE:
         run: |
           VERSION=$(date -u +%F)
           npx tsx scripts/poi-tiles/build.ts "$WORK/europe-filtered.osm.pbf" "$WORK/site" "$VERSION"
@@ -138,7 +145,8 @@ jobs:
       - name: Commit STAND.md (keepalive)
         working-directory: data
         run: |
-          jq -r '"# Stand\n\n- Build: \(.date) (`\(.version)`)\n- Parkplätze: \(.counts.parking) POIs in \(.tiles.parking | length) Kacheln\n- Rest: \(.counts.rest) POIs in \(.tiles.rest | length) Kacheln\n\nDaten © OpenStreetMap-Mitwirkende, ODbL."' \
+          # Eine Zeile pro Layer (parking, rest, supply, food, lodging, bike).
+          jq -r '. as $m | "# Stand\n\n- Build: \($m.date) (`\($m.version)`)\n" + ($m.counts | to_entries | map("- \(.key): \(.value) POIs in \($m.tiles[.key] | length) Kacheln") | join("\n")) + "\n\nDaten © OpenStreetMap-Mitwirkende, ODbL."' \
             "$WORK/site/manifest.json" > STAND.md
           cat STAND.md
           git config user.name 'github-actions[bot]'

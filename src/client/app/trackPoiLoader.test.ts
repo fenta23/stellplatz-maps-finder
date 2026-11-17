@@ -12,7 +12,9 @@ afterEach(() => { vi.useRealTimers() })
 
 const flush = () => new Promise(r => setTimeout(r, 0))
 
-const BUILTINS = DEFAULT_FILTERS.filter(f => f.kind === 'osm')
+// What main.ts hands over: visible OSM filters (the newer built-ins are hidden by default).
+const ALL_BUILTINS = DEFAULT_FILTERS.filter(f => f.kind === 'osm')
+const BUILTINS = ALL_BUILTINS.filter(f => !f.hidden)
 const CUSTOM: FilterDef = {
   id: 'custom1', name: 'Eigener', iconId: 'parking', color: '#123456', enabled: true, kind: 'osm',
   builtin: false, order: 99, selectors: [{ elements: ['node'], tags: [{ key: 'a', value: 'b' }] }],
@@ -34,7 +36,7 @@ const MANIFEST: TileManifest = {
 
 type TileCall = ReadonlyMap<TileLayer, readonly string[]>
 
-function fakeTiles(opts: { pois?: (batch: number) => OsmPoi[]; failBatch?: number; failManifest?: boolean } = {}) {
+function fakeTiles(opts: { pois?: (batch: number) => OsmPoi[]; failBatch?: number; failManifest?: boolean; manifest?: TileManifest } = {}) {
   const calls: TileCall[] = []
   let inflight = 0
   let maxInflight = 0
@@ -47,7 +49,7 @@ function fakeTiles(opts: { pois?: (batch: number) => OsmPoi[]; failBatch?: numbe
     if (opts.failBatch === n) throw new Error('tile down')
     return opts.pois ? opts.pois(n) : [poi(n, 48.0009, 11 + 0.01 * n)]
   })
-  const manifest = vi.fn(async () => { if (opts.failManifest) throw new Error('no manifest'); return MANIFEST })
+  const manifest = vi.fn(async () => { if (opts.failManifest) throw new Error('no manifest'); return opts.manifest ?? MANIFEST })
   return { source: { manifest, fetchTilePois } satisfies PoiTileSource, calls, fetchTilePois, manifest, maxInflight: () => maxInflight }
 }
 
@@ -170,6 +172,70 @@ describe('tile path', () => {
     await first
     expect(fetchAround).not.toHaveBeenCalled()
     expect(setStatus.mock.calls.some(c => c[1] === true)).toBe(false)
+  })
+})
+
+describe('new built-in categories', () => {
+  const unhide = (ids: readonly string[]) =>
+    ALL_BUILTINS.filter(f => !f.hidden || ids.includes(f.id)).map(f => (ids.includes(f.id) ? { ...f, hidden: false, enabled: true } : f))
+  const NEW_MANIFEST: TileManifest = {
+    ...MANIFEST,
+    tiles: { parking: [], rest: [], food: [] },
+    filters: { parking: ['parking'], rest: ['camper', 'campsite', 'dump', 'water', 'climbing', 'hut', 'shelter'], food: ['restaurant', 'cafe'] },
+  }
+  const ids = (fs: readonly FilterDef[]) => fs.map(f => f.id)
+  const layersOf = (t: ReturnType<typeof fakeTiles>) => [...new Set(t.calls.flatMap(c => [...c.keys()]))]
+
+  it('legacy manifest: an untiled built-in joins the Overpass path with the user filters', async () => {
+    const t = fakeTiles()
+    const { loader, fetchAround } = setup({ tiles: t.source, filters: [...unhide(['restaurant']), CUSTOM] })
+    await loader.load(mkTrack())
+    expect(layersOf(t)).toEqual(['parking', 'rest'])
+    expect(fetchAround).toHaveBeenCalled()
+    for (const call of fetchAround.mock.calls) expect(ids(call[2])).toEqual(['restaurant', 'custom1'])
+    for (const call of t.fetchTilePois.mock.calls) expect(ids(call[1]!)).not.toContain('restaurant')
+  })
+
+  it('legacy manifest: the nine existing filters never query Overpass (unchanged)', async () => {
+    const t = fakeTiles()
+    const { loader, fetchAround } = setup({ tiles: t.source })
+    await loader.load(mkTrack())
+    expect(fetchAround).not.toHaveBeenCalled()
+  })
+
+  it('new manifest: the new layer is loaded while its filter is active, not otherwise', async () => {
+    const on = fakeTiles({ manifest: NEW_MANIFEST })
+    const a = setup({ tiles: on.source, filters: unhide(['restaurant']) })
+    await a.loader.load(mkTrack())
+    expect(layersOf(on)).toEqual(['parking', 'rest', 'food'])
+    expect(a.fetchAround).not.toHaveBeenCalled()
+    for (const call of on.fetchTilePois.mock.calls) expect(ids(call[1]!)).toContain('restaurant')
+
+    const off = fakeTiles({ manifest: NEW_MANIFEST })
+    const filters = unhide(['restaurant']).map(f => (f.id === 'restaurant' ? { ...f, enabled: false } : f))
+    await setup({ tiles: off.source, filters }).loader.load(mkTrack())
+    expect(layersOf(off)).toEqual(['parking', 'rest'])
+  })
+
+  it('new manifest: a built-in it does not list is chunked like a user filter', async () => {
+    const t = fakeTiles({ manifest: NEW_MANIFEST })
+    const { loader, fetchAround } = setup({ tiles: t.source, filters: unhide(['hotel']) })
+    await loader.load(mkTrack({ points: LONG, lengthM: 59_000 }))
+    expect(fetchAround).toHaveBeenCalledTimes(3) // same chunking as custom filters
+    for (const call of fetchAround.mock.calls) {
+      expect(ids(call[2])).toEqual(['hotel'])
+      expect(call[1]).toBe(530) // bucket 500 + 30 slack
+    }
+  })
+
+  it('a corridor slider growth re-queries the untiled built-in (live set, not just user filters)', async () => {
+    const t = fakeTiles()
+    const { loader, fetchAround } = setup({ tiles: t.source, filters: unhide(['restaurant']) })
+    await loader.load(mkTrack({ corridorM: 500 }))
+    fetchAround.mockClear()
+    loader.setCorridor(5000)
+    await flush()
+    expect(fetchAround).toHaveBeenCalled()
   })
 })
 

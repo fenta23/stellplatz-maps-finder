@@ -170,7 +170,112 @@ export const DEFAULT_FILTERS: readonly FilterDef[] = [
       ],
     }],
   },
+  // ── Wander-/Rad-Kategorien (order 9–18) ─────────────────────────────────
+  // hidden: true — bestehende Nutzer sehen keine neuen Chips. enabled: true —
+  // wer einen Filter in den Einstellungen einblendet, hat ihn sofort aktiv
+  // (ohne zweiten Tap auf den Chip). Gegenstück zu hut/shelter oben (dort
+  // sichtbar + enabled:false). Reihenfolge ist Absicht: classifyElement nimmt den
+  // ersten Treffer (bakery vor cafe, hotel vor restaurant, campsite/hut davor).
+  // Der erste positive Tag jedes Selectors ist der selektive (osmium-Vorfilter).
+  {
+    id: 'drinking_water', name: 'Trinkwasser', iconId: 'water', color: '#4DD0E1',
+    enabled: true, hidden: true, kind: 'osm', builtin: true, order: 9,
+    selectors: [
+      { elements: NW, tags: [{ key: 'amenity', value: 'drinking_water' }] },
+      { elements: N, tags: [{ key: 'man_made', value: 'water_tap' }, { key: 'drinking_water', value: 'yes' }] },
+      { elements: N, tags: [{ key: 'natural', value: 'spring' }, { key: 'drinking_water', value: 'yes' }] },
+    ],
+  },
+  {
+    id: 'cemetery', name: 'Friedhof (Wasser)', iconId: 'cemetery', color: '#212121',
+    enabled: true, hidden: true, kind: 'osm', builtin: true, order: 10,
+    selectors: [
+      { elements: NWR, tags: [{ key: 'landuse', value: 'cemetery' }] },
+      { elements: NWR, tags: [{ key: 'amenity', value: 'grave_yard' }] },
+    ],
+  },
+  {
+    id: 'toilets', name: 'Toilette', iconId: 'toilet', color: '#9575CD',
+    enabled: true, hidden: true, kind: 'osm', builtin: true, order: 11,
+    selectors: [
+      { elements: NW, tags: [{ key: 'amenity', value: 'toilets' }, { key: 'access', value: 'private', negate: true }] },
+    ],
+  },
+  {
+    id: 'supermarket', name: 'Supermarkt', iconId: 'supermarket', color: '#7CB342',
+    enabled: true, hidden: true, kind: 'osm', builtin: true, order: 12,
+    selectors: [
+      { elements: NW, tags: [{ key: 'shop', value: 'supermarket' }] },
+      { elements: NW, tags: [{ key: 'shop', value: 'convenience' }] },
+    ],
+  },
+  {
+    id: 'bakery', name: 'Bäckerei', iconId: 'bakery', color: '#F9A825',
+    enabled: true, hidden: true, kind: 'osm', builtin: true, order: 13,
+    selectors: [
+      { elements: NW, tags: [{ key: 'shop', value: 'bakery' }] },
+    ],
+  },
+  {
+    id: 'hotel', name: 'Unterkunft', iconId: 'hotel', color: '#880E4F',
+    enabled: true, hidden: true, kind: 'osm', builtin: true, order: 14,
+    selectors: [
+      { elements: NW, tags: [{ key: 'tourism', value: 'hotel' }] },
+      { elements: NW, tags: [{ key: 'tourism', value: 'guest_house' }] },
+      { elements: NW, tags: [{ key: 'tourism', value: 'hostel' }] },
+    ],
+  },
+  {
+    id: 'restaurant', name: 'Restaurant', iconId: 'restaurant', color: '#C62828',
+    enabled: true, hidden: true, kind: 'osm', builtin: true, order: 15,
+    selectors: [
+      { elements: NW, tags: [{ key: 'amenity', value: 'restaurant' }] },
+      { elements: NW, tags: [{ key: 'amenity', value: 'fast_food' }] },
+      { elements: NW, tags: [{ key: 'amenity', value: 'biergarten' }] },
+      { elements: NW, tags: [{ key: 'amenity', value: 'pub' }, { key: 'food', value: 'yes' }] },
+    ],
+  },
+  {
+    id: 'cafe', name: 'Café', iconId: 'cafe', color: '#FF8A65',
+    enabled: true, hidden: true, kind: 'osm', builtin: true, order: 16,
+    selectors: [
+      { elements: NW, tags: [{ key: 'amenity', value: 'cafe' }] },
+    ],
+  },
+  {
+    id: 'bike_service', name: 'Fahrrad-Service', iconId: 'bike', color: '#283593',
+    enabled: true, hidden: true, kind: 'osm', builtin: true, order: 17,
+    selectors: [
+      { elements: NW, tags: [{ key: 'shop', value: 'bicycle' }] },
+      { elements: NW, tags: [{ key: 'amenity', value: 'bicycle_repair_station' }] },
+    ],
+  },
+  {
+    id: 'ebike_charging', name: 'E-Bike-Laden', iconId: 'charging', color: '#9E9D24',
+    enabled: true, hidden: true, kind: 'osm', builtin: true, order: 18,
+    selectors: [
+      { elements: NW, tags: [{ key: 'amenity', value: 'charging_station' }, { key: 'bicycle', value: 'yes' }] },
+    ],
+  },
 ]
+
+// ── Tile layers ──────────────────────────────────────────────────────────────
+
+export type TileLayerId = 'parking' | 'rest' | 'supply' | 'food' | 'lodging' | 'bike'
+export const TILE_LAYER_IDS: readonly TileLayerId[] = ['parking', 'rest', 'supply', 'food', 'lodging', 'bike']
+
+const TILE_LAYER_BY_FILTER: Readonly<Record<string, TileLayerId>> = {
+  parking: 'parking',
+  drinking_water: 'supply', cemetery: 'supply', toilets: 'supply', supermarket: 'supply', bakery: 'supply',
+  restaurant: 'food', cafe: 'food',
+  hotel: 'lodging',
+  bike_service: 'bike', ebike_charging: 'bike',
+}
+
+/** Static tile layer a built-in filter is served from; unknown ids fall into 'rest'. */
+export function tileLayerOf(filterId: string): TileLayerId {
+  return Object.hasOwn(TILE_LAYER_BY_FILTER, filterId) ? TILE_LAYER_BY_FILTER[filterId]! : 'rest'
+}
 
 /** The set of built-in ids whose OSM tags must not be edited/deleted. */
 export const BUILTIN_FILTER_IDS: ReadonlySet<string> = new Set(DEFAULT_FILTERS.map(f => f.id))
@@ -189,12 +294,8 @@ const tmpl = (name: string, iconId: string, color: string, key: string, value: s
 
 export const FILTER_TEMPLATES: readonly FilterTemplate[] = [
   tmpl('Tankstelle', 'fuel', '#C62828', 'amenity', 'fuel'),
-  tmpl('Supermarkt', 'supermarket', '#558B2F', 'shop', 'supermarket'),
-  tmpl('Bäckerei', 'bakery', '#F9A825', 'shop', 'bakery'),
   tmpl('Apotheke', 'pharmacy', '#D81B60', 'amenity', 'pharmacy'),
-  tmpl('Restaurant', 'restaurant', '#6A1B9A', 'amenity', 'restaurant'),
   tmpl('Toilette', 'toilet', '#455A64', 'amenity', 'toilets'),
-  tmpl('Trinkwasser', 'water', '#0277BD', 'amenity', 'drinking_water'),
   tmpl('Ladestation', 'charging', '#00838F', 'amenity', 'charging_station'),
   tmpl('Aussichtspunkt', 'viewpoint', '#2E7D32', 'tourism', 'viewpoint', NWR),
   tmpl('Picknickplatz', 'bbq', '#795548', 'tourism', 'picnic_site', NWR),

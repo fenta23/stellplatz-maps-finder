@@ -67,12 +67,12 @@ function setup(initial: Track | null = null, fetchFn?: typeof fetch) {
   }
   const setMarkers = vi.fn<(p: readonly OsmPoi[]) => void>()
   const selectPoi = vi.fn<(p: OsmPoi) => void>()
-  const active = new Set(['campsite', 'parking'])
+  const active = new Set(['campsite', 'parking', 'cemetery'])
   const wiring = createTrackWiring({
     store, layer, dialogContainer: container, flash, fetchFn,
     createLoader: c => { cb = c; return loader },
     refresher, setMarkers, selectPoi,
-    rowFor: p => ({ title: p.tags.name ?? 'Ort', subtitle: p.type, color: '#2e7d32', iconSvg: '<svg data-i></svg>' }),
+    rowFor: p => ({ title: p.tags.name ?? 'Ort', subtitle: p.type, color: '#2e7d32', iconSvg: '<svg data-i></svg>', ...(p.type === 'cemetery' ? { hint: 'Wasser im Winter oft abgestellt' } : {}) }),
     isTypeActive: t => active.has(t),
     panelContainer: panelBox,
   })
@@ -238,6 +238,15 @@ describe('createTrackWiring: POIs along the route', () => {
     store.set({ ...track, name: 'Andere', points: [[51, 8], [51.1, 8.1]] })
     expect(loader.load).toHaveBeenCalledTimes(2)
     expect(loader.setCorridor).not.toHaveBeenCalled()
+  })
+
+  it('passes the row hint through to the panel rows', () => {
+    const { emit, rows } = setup(track)
+    emit([hit(poi(1, 'cemetery', 'Friedhof'), 3), hit(poi(2, 'campsite', 'Camp'), 5)])
+    const hints = rows().map(r => r.querySelector<HTMLElement>('.track-row-hint')!)
+    expect(hints[0]!.hidden).toBe(false)
+    expect(hints[0]!.textContent).toBe('Wasser im Winter oft abgestellt')
+    expect(hints[1]!.hidden).toBe(true)
   })
 
   it('a corridor change (same route, re-parsed points) only calls setCorridor — no reload, no panel reset', () => {

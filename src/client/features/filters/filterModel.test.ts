@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   DEFAULT_FILTERS, PERSONAL_FILTER_ID, FILTER_ICONS, FILTER_TEMPLATES, FILTER_COLORS,
   buildOverpassQuery, buildOverpassAroundQuery, classifyElement, filterIconPath,
+  tileLayerOf, TILE_LAYER_IDS, isFilterActive,
   isValidTagToken, isValidCondition, isValidSelector, MAX_SELECTOR_CONDITIONS,
   type FilterDef, type OsmSelector,
 } from './filterModel.js'
@@ -13,8 +14,11 @@ const byId = (id: string): FilterDef => DEFAULT_FILTERS.find(f => f.id === id)!
 describe('DEFAULT_FILTERS', () => {
   it('has the 8 OSM types plus a personal group', () => {
     expect(DEFAULT_FILTERS.map(f => f.id)).toEqual(
-      ['parking', 'camper', 'campsite', 'dump', 'water', 'climbing', PERSONAL_FILTER_ID, 'hut', 'shelter'],
+      ['parking', 'camper', 'campsite', 'dump', 'water', 'climbing', PERSONAL_FILTER_ID, 'hut', 'shelter',
+        'drinking_water', 'cemetery', 'toilets', 'supermarket', 'bakery', 'hotel', 'restaurant', 'cafe',
+        'bike_service', 'ebike_charging'],
     )
+    expect(DEFAULT_FILTERS.map(f => f.order)).toEqual(DEFAULT_FILTERS.map((_, i) => i))
   })
 
   it('marks the personal group as kind=personal with no selectors and its own colour', () => {
@@ -34,6 +38,66 @@ describe('DEFAULT_FILTERS', () => {
   it('enables everything except the two opt-in newcomers', () => {
     const off = DEFAULT_FILTERS.filter(f => !f.enabled).map(f => f.id)
     expect(off).toEqual(['hut', 'shelter'])
+  })
+
+  const NEW_IDS = ['drinking_water', 'cemetery', 'toilets', 'supermarket', 'bakery', 'hotel', 'restaurant', 'cafe', 'bike_service', 'ebike_charging']
+
+  it('ships the ten hiking/cycling filters hidden but enabled (un-hiding activates them)', () => {
+    for (const id of NEW_IDS) {
+      const f = byId(id)
+      expect(f.kind, id).toBe('osm')
+      expect(f.builtin, id).toBe(true)
+      expect(f.hidden, id).toBe(true)
+      expect(f.enabled, id).toBe(true)
+      expect(isFilterActive(f), id).toBe(false)
+      expect(isFilterActive({ ...f, hidden: false }), id).toBe(true)
+      expect(FILTER_ICONS.some(i => i.id === f.iconId), `${id} icon`).toBe(true)
+    }
+  })
+
+  it('gives every built-in a unique colour', () => {
+    const colors = DEFAULT_FILTERS.map(f => f.color.toLowerCase())
+    expect(new Set(colors).size).toBe(colors.length)
+  })
+
+  it('puts the selective tag first in each new selector (osmium pre-filter)', () => {
+    for (const id of NEW_IDS) {
+      for (const sel of byId(id).selectors) {
+        expect(sel.tags[0]!.negate, id).toBeUndefined()
+        expect(['amenity', 'shop', 'tourism', 'landuse', 'man_made', 'natural']).toContain(sel.tags[0]!.key)
+      }
+    }
+  })
+
+  it('matches the specified tags and element kinds', () => {
+    const all = DEFAULT_FILTERS
+    expect(classifyElement({ amenity: 'drinking_water' }, 'way', all)).toBe('drinking_water')
+    expect(classifyElement({ man_made: 'water_tap', drinking_water: 'yes' }, 'node', all)).toBe('drinking_water')
+    expect(classifyElement({ man_made: 'water_tap' }, 'node', all)).toBeNull()
+    expect(classifyElement({ natural: 'spring', drinking_water: 'yes' }, 'node', all)).toBe('drinking_water')
+    expect(classifyElement({ natural: 'spring', drinking_water: 'yes' }, 'way', all)).toBeNull()
+    expect(classifyElement({ landuse: 'cemetery' }, 'relation', all)).toBe('cemetery')
+    expect(classifyElement({ amenity: 'grave_yard' }, 'way', all)).toBe('cemetery')
+    expect(classifyElement({ amenity: 'toilets' }, 'node', all)).toBe('toilets')
+    expect(classifyElement({ amenity: 'toilets', access: 'private' }, 'node', all)).toBeNull()
+    expect(classifyElement({ shop: 'convenience' }, 'node', all)).toBe('supermarket')
+    expect(classifyElement({ tourism: 'hostel' }, 'way', all)).toBe('hotel')
+    expect(classifyElement({ amenity: 'pub', food: 'yes' }, 'node', all)).toBe('restaurant')
+    expect(classifyElement({ amenity: 'pub' }, 'node', all)).toBeNull()
+    expect(classifyElement({ amenity: 'bicycle_repair_station' }, 'node', all)).toBe('bike_service')
+    expect(classifyElement({ amenity: 'charging_station', bicycle: 'yes' }, 'node', all)).toBe('ebike_charging')
+    expect(classifyElement({ amenity: 'charging_station' }, 'node', all)).toBeNull()
+  })
+
+  // Overlaps: classifyElement nimmt den ersten Treffer, die Reihenfolge ist Absicht.
+  it('resolves overlapping tags by order', () => {
+    const all = DEFAULT_FILTERS
+    expect(classifyElement({ shop: 'bakery', amenity: 'cafe' }, 'node', all)).toBe('bakery')
+    expect(classifyElement({ tourism: 'hotel', amenity: 'restaurant' }, 'node', all)).toBe('hotel')
+    expect(classifyElement({ tourism: 'camp_site', amenity: 'restaurant' }, 'way', all)).toBe('campsite')
+    expect(classifyElement({ tourism: 'alpine_hut', amenity: 'restaurant' }, 'node', all)).toBe('hut')
+    expect(classifyElement({ shop: 'supermarket', amenity: 'cafe' }, 'node', all)).toBe('supermarket')
+    expect(classifyElement({ landuse: 'cemetery', amenity: 'drinking_water' }, 'node', all)).toBe('drinking_water')
   })
 
   // Regression: enabled:false darf nicht hidden:true bedeuten — sonst
@@ -186,7 +250,7 @@ describe('classifyElement', () => {
     expect(classifyElement({ sport: 'climbing' }, 'relation', all)).toBe('climbing')
   })
   it('returns null for unknown tags', () => {
-    expect(classifyElement({ shop: 'bakery' }, 'node', all)).toBeNull()
+    expect(classifyElement({ shop: 'books' }, 'node', all)).toBeNull()
   })
   it('respects element-kind restriction (dump only node/way)', () => {
     expect(classifyElement({ amenity: 'sanitary_dump_station' }, 'relation', all)).toBeNull()
@@ -227,6 +291,12 @@ describe('icons & templates', () => {
   })
   it('filterIconPath falls back to the first icon for unknown id', () => {
     expect(filterIconPath('does-not-exist')).toBe(FILTER_ICONS[0]!.path)
+  })
+  it('has no template whose selectors a built-in already covers', () => {
+    const names = FILTER_TEMPLATES.map(x => x.name)
+    for (const n of ['Supermarkt', 'Bäckerei', 'Restaurant', 'Trinkwasser']) expect(names).not.toContain(n)
+    // Ladestation (alle Ladestationen) und Toilette (inkl. access=private) sind breiter als die Built-ins.
+    expect(names).toContain('Ladestation')
   })
   it('every template is structurally valid', () => {
     expect(FILTER_TEMPLATES.length).toBeGreaterThan(8)
@@ -362,5 +432,29 @@ describe('backend condition limit', () => {
       expect(n, stmt.trim()).toBeLessThanOrEqual(MAX_SELECTOR_CONDITIONS)
       expect(n).toBeGreaterThan(0)
     }
+  })
+})
+
+describe('tileLayerOf', () => {
+  it('maps built-in filters to their tile layer', () => {
+    expect(tileLayerOf('parking')).toBe('parking')
+    for (const id of ['drinking_water', 'cemetery', 'toilets', 'supermarket', 'bakery']) expect(tileLayerOf(id)).toBe('supply')
+    for (const id of ['restaurant', 'cafe']) expect(tileLayerOf(id)).toBe('food')
+    expect(tileLayerOf('hotel')).toBe('lodging')
+    for (const id of ['bike_service', 'ebike_charging']) expect(tileLayerOf(id)).toBe('bike')
+    for (const id of ['camper', 'campsite', 'dump', 'water', 'climbing', 'hut', 'shelter', PERSONAL_FILTER_ID]) {
+      expect(tileLayerOf(id)).toBe('rest')
+    }
+  })
+
+  it('falls back to rest for unknown ids, including prototype keys', () => {
+    expect(tileLayerOf('does-not-exist')).toBe('rest')
+    expect(tileLayerOf('constructor')).toBe('rest')
+    expect(tileLayerOf('toString')).toBe('rest')
+  })
+
+  it('lists the layers in order and covers every built-in', () => {
+    expect(TILE_LAYER_IDS).toEqual(['parking', 'rest', 'supply', 'food', 'lodging', 'bike'])
+    for (const f of DEFAULT_FILTERS) expect(TILE_LAYER_IDS).toContain(tileLayerOf(f.id))
   })
 })

@@ -1,19 +1,69 @@
-import { classifyElement, type FilterDef, type OsmElementKind } from '@/features/filters/filterModel.js'
+import {
+  classifyElement, isFilterActive, tileLayerOf, TILE_LAYER_IDS,
+  type FilterDef, type OsmElementKind, type TileLayerId,
+} from '@/features/filters/filterModel.js'
 import type { LatLngBounds, OsmPoi, OsmTags } from './OverpassClient.js'
 
 // Static POI tiles for the built-in filters, built weekly from Geofabrik
 // extracts (scripts/poi-tiles/) and served from the data repo's GitHub Pages.
 // One small gzip per 0.25° cell and layer instead of a 9–19 s Overpass query.
 
-export type TileLayer = 'parking' | 'rest'
+export type TileLayer = TileLayerId
 
 export interface TileManifest {
   readonly version: string
   readonly date: string
   readonly cellDeg: number
   /** Non-empty tiles per layer — unlisted keys are empty and never requested. */
-  readonly tiles: Readonly<Record<TileLayer, readonly string[]>>
+  readonly tiles: Readonly<Partial<Record<TileLayer, readonly string[]>>>
+  /** Filter ids each layer contains. Absent in tiles built before the extra categories. */
+  readonly filters?: Readonly<Partial<Record<TileLayer, readonly string[]>>>
   readonly attribution: string
+}
+
+/**
+ * Filter ids contained in tiles built before the manifest carried `filters`.
+ * Frozen on purpose: those tiles never learn new categories, so a manifest
+ * without `filters` must keep meaning exactly this set — even when the client
+ * gains more built-in filters.
+ */
+export const LEGACY_TILED_FILTER_IDS: ReadonlySet<string> = new Set([
+  'parking', 'camper', 'campsite', 'dump', 'water', 'climbing', 'hut', 'shelter',
+])
+
+/** Filter ids the tiles contain; a missing or malformed `filters` means the legacy set. */
+export function tiledFilterIds(m: TileManifest): ReadonlySet<string> {
+  const f: unknown = m.filters
+  if (typeof f !== 'object' || f === null || Array.isArray(f)) return LEGACY_TILED_FILTER_IDS
+  const ids = new Set<string>()
+  for (const v of Object.values(f)) {
+    if (!Array.isArray(v)) return LEGACY_TILED_FILTER_IDS
+    for (const id of v) if (typeof id === 'string') ids.add(id)
+  }
+  return ids
+}
+
+export interface TilePlan {
+  /** Built-ins the tiles contain. */
+  readonly tileFilters: FilterDef[]
+  /** User/AI filters plus built-ins the tiles lack (original order) → Overpass. */
+  readonly liveFilters: FilterDef[]
+  /** Layers to download: `rest` whenever it has filters, any other only while one of its filters is active. */
+  readonly layers: TileLayer[]
+}
+
+/** `tiled === null`: no tile source / manifest unavailable → everything is live. */
+export function planTileFilters(filters: readonly FilterDef[], tiled: ReadonlySet<string> | null): TilePlan {
+  const tileFilters: FilterDef[] = []
+  const liveFilters: FilterDef[] = []
+  for (const f of filters) {
+    if (tiled !== null && f.builtin && tiled.has(f.id)) tileFilters.push(f)
+    else liveFilters.push(f)
+  }
+  const layers = TILE_LAYER_IDS.filter(layer => layer === 'rest'
+    ? tileFilters.some(f => tileLayerOf(f.id) === 'rest')
+    : tileFilters.some(f => tileLayerOf(f.id) === layer && isFilterActive(f)))
+  return { tileFilters, liveFilters, layers }
 }
 
 /** On-disk record: [n|w|r, id, lat, lon, tags]. */
@@ -129,7 +179,9 @@ export function createPoiTileSource(
       .then(m => {
         if (!m?.version || !m.cellDeg || !m.tiles) throw new Error('POI tiles: invalid manifest')
         listed.clear()
-        for (const layer of ['parking', 'rest'] as const) listed.set(layer, new Set(m.tiles[layer] ?? []))
+        for (const [layer, keys] of Object.entries(m.tiles)) {
+          listed.set(layer as TileLayer, new Set(Array.isArray(keys) ? keys : []))
+        }
         return m
       })
       .catch(err => {

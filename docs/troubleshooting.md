@@ -48,7 +48,7 @@ Nicht betroffen sind bisher `/api/mapillary` und `/api/ai`. Map-Tiles laufen gru
 
 ## POI-Kacheln
 
-**Aufbau:** Die eingebauten Filter (Parkplatz, Camper, Camping, Entsorgung, Wasser, Klettern, Hütte, Schutzhütte) kommen nicht mehr live von Overpass. Sie werden einmal pro Woche aus den Geofabrik-Extrakten vorberechnet und als statische Kacheln im Daten-Repo [`fenta23/camp-finder-data`](https://github.com/fenta23/camp-finder-data) auf GitHub Pages ausgeliefert. Eigene und KI-Filter fragen weiter live bei Overpass an.
+**Aufbau:** Die eingebauten Filter (Parkplatz, Camper, Camping, Entsorgung, Wasser, Klettern, Hütte, Schutzhütte sowie die Wander-/Rad-Kategorien Trinkwasser, Friedhof, Toilette, Supermarkt, Bäckerei, Unterkunft, Restaurant, Café, Fahrrad-Service, E-Bike-Laden) kommen nicht mehr live von Overpass. Sie werden einmal pro Woche aus den Geofabrik-Extrakten vorberechnet und als statische Kacheln im Daten-Repo [`fenta23/camp-finder-data`](https://github.com/fenta23/camp-finder-data) auf GitHub Pages ausgeliefert. Eigene und KI-Filter fragen weiter live bei Overpass an.
 
 | Teil | Ort |
 |---|---|
@@ -57,12 +57,36 @@ Nicht betroffen sind bisher `/api/mapillary` und `/api/ai`. Map-Tiles laufen gru
 | Client | `src/client/features/pois/poiTiles.ts`, `app/poiRefresher.ts` |
 | Basis-URL | `VITE_POI_TILES_BASE`, Default in `src/client/core/config.ts` |
 
+**Layer:** Kacheln liegen unter `{version}/{layer}/{latIdx}_{lonIdx}.json.gz`. Welcher Filter in welchen Layer gehört, steht in `tileLayerOf` (`filterModel.ts`); der Client lädt einen Layer nur, solange einer seiner Filter aktiv ist.
+
+| Layer | Filter | Geladen |
+|---|---|---|
+| `parking` | parking | nur bei aktivem Parkplatz-Filter (riesig) |
+| `rest` | camper, campsite, dump, water, climbing, hut, shelter | immer |
+| `supply` | drinking_water, cemetery, toilets, supermarket, bakery | wenn einer davon aktiv ist |
+| `food` | restaurant, cafe | dto. |
+| `lodging` | hotel | dto. |
+| `bike` | bike_service, ebike_charging | dto. |
+
+**Mehrfach-Zuordnung:** `layersFor` (`tiles.ts`) schreibt ein Objekt in *jeden* Layer, dessen Filter es trifft (Hotel + Restaurant steht in `lodging` und `food`; der Client dedupliziert nach OSM-ID). Ausnahme: Was die `rest`-Filter treffen, steht nicht in `parking` (z. B. `amenity=parking` + `tourism=camp_site`). Ein einfacher Parkplatz, den zusätzlich ein neuer Layer trifft (z. B. `amenity=parking` + `amenity=toilets`), steht in `parking` und in diesem Layer, ist also mit jedem der beiden Filter allein erreichbar. Der Dedupe im Build läuft pro Layer.
+
+**Manifest:** `tiles`/`counts` gelten für alle sechs Layer, `filters.<layer>` listet die Filter-IDs, die der Layer enthält. So erkennt der Client, ob die ausgelieferten Kacheln einen Filter überhaupt kennen; sonst geht dieser Filter live zu Overpass. `tiles.parking`/`tiles.rest` sind unverändert (alte Clients lesen nur diese). Ein Manifest ohne `filters` stammt aus der Zeit vor den neuen Layern: Parkplatz plus die sieben alten `rest`-Filter.
+
+**Mindestmengen:** Der Build bricht ab, wenn ein Layer unter `POI_TILES_MIN_<LAYER>` (z. B. `POI_TILES_MIN_FOOD`) bleibt; fehlend heißt 0. Für `supply`/`food`/`lodging`/`bike` sind im Workflow noch keine gesetzt: nach dem ersten echten Build auf etwa die Hälfte der gebauten Zahlen setzen.
+
+**Ausrollen der neuen Kategorien:**
+
+1. App mergen und deployen.
+2. Den Workflow *Build POI tiles* im Daten-Repo per *Run workflow* von Hand starten. Falls die Vorlage geändert wurde (STAND.md, Mindestmengen), vorher `scripts/poi-tiles/data-repo/.github/workflows/build.yml` von Hand ins Daten-Repo kopieren.
+3. Bis dieser Build durch ist, kennt das alte Manifest die neuen Filter nicht (`filters` fehlt) und der Client holt die neuen Kategorien live von Overpass.
+4. Danach `POI_TILES_MIN_*` für die vier neuen Layer setzen.
+
 **Fallback:** Schlagen Manifest oder Kachel fehl (Netz, `404`, Timeout 5 s bzw. 15 s), laufen die eingebauten Filter für den Ausschnitt wie früher über Overpass. Nach einem gescheiterten Manifest versucht der Client es erst nach 60 s erneut und geht bis dahin direkt zu Overpass. Die App bleibt also benutzbar, ist dann aber so langsam wie vor den Kacheln.
 
 **Diagnose:**
 
 ```bash
-curl -sS https://fenta23.github.io/camp-finder-data/manifest.json | jq '{version, date, parking: (.tiles.parking|length), rest: (.tiles.rest|length)}'
+curl -sS https://fenta23.github.io/camp-finder-data/manifest.json | jq '{version, date, counts, filters, tiles: (.tiles | map_values(length))}'
 ```
 
 - Manifest fehlt oder ist alt → Actions-Log des Workflows *Build POI tiles* im Daten-Repo ansehen und ihn per *Run workflow* neu starten.

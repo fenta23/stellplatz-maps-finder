@@ -1,6 +1,7 @@
-import { coalesce } from '@shared/fp.js'
 import type { OsmPoi } from '@/features/pois/OverpassClient.js'
+import { typeLabel as filterLabel } from '@/features/pois/poiMeta.js'
 
+/** Wording for the detail panel where it differs from the filter's (chip) name. */
 export const TYPE_LABELS: Record<OsmPoi['type'], string> = {
   parking: 'Parkplatz',
   camper: 'Camper-Stellplatz',
@@ -9,7 +10,12 @@ export const TYPE_LABELS: Record<OsmPoi['type'], string> = {
   water: 'Wasserstelle',
 }
 
-export const typeLabel = (type: OsmPoi['type']): string => coalesce('Ort')(TYPE_LABELS[type])
+/**
+ * Every other type takes its filter's name (built-in or user-created), so a new
+ * category never shows up as the generic "Ort" in the panel.
+ */
+export const typeLabel = (type: OsmPoi['type']): string =>
+  Object.hasOwn(TYPE_LABELS, type) ? TYPE_LABELS[type]! : filterLabel(type)
 
 export const ACCESS_LABELS: Record<string, string> = {
   public: 'Öffentlich', private: 'Privat', permissive: 'Erlaubt',

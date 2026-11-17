@@ -20,6 +20,8 @@ export interface TrackRowInfo {
   readonly title: string
   readonly subtitle: string
   readonly color: string
+  /** Optional extra line under the subtitle. */
+  readonly hint?: string | undefined
   /** Trusted SVG markup from our own icon set. */
   readonly iconSvg?: string | undefined
 }
@@ -93,6 +95,7 @@ export function createTrackWiring(deps: TrackWiringDeps): TrackWiring {
       const info = deps.rowFor(h.item)
       rows.push({
         key: poiKey(h.item), title: info.title, subtitle: info.subtitle, color: info.color,
+        ...(info.hint ? { hint: info.hint } : {}),
         ...(info.iconSvg ? { iconSvg: info.iconSvg } : {}),
         kmAlong: h.kmAlong, offsetM: h.offsetM,
       })

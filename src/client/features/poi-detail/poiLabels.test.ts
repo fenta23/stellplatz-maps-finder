@@ -13,6 +13,20 @@ describe('typeLabel', () => {
   it('falls back to Ort for unknown types', () => {
     expect(typeLabel('whatever' as never)).toBe('Ort')
   })
+
+  // Regression: the panel showed the generic "Ort" for every category outside
+  // the five hard-coded ones (climbing, huts, and all newer filters).
+  it('uses the filter name for categories without a panel-specific label', () => {
+    expect(typeLabel('hut')).toBe('Hütte')
+    expect(typeLabel('climbing')).toBe('Klettergebiet')
+    expect(typeLabel('cemetery')).toBe('Friedhof (Wasser)')
+    expect(typeLabel('hotel')).toBe('Unterkunft')
+    expect(typeLabel('restaurant')).toBe('Restaurant')
+  })
+
+  it('is not fooled by inherited object keys', () => {
+    expect(typeLabel('constructor' as never)).toBe('Ort')
+  })
 })
 
 describe('bool', () => {

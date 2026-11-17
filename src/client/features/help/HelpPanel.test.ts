@@ -193,6 +193,26 @@ describe('HelpPanel', () => {
     }
   })
 
+  it('renders a card per built-in OSM filter; hidden newcomers start deselected and unhide on select', async () => {
+    const setHidden = vi.fn()
+    const { c, panel } = makePanel({ filterStore: makeFilterStore({ setHidden }) })
+    await flush()
+    panel.open()
+    clickNext(c) // to step 2
+    const osm = DEFAULT_FILTERS.filter(f => f.kind === 'osm')
+    expect(c.querySelectorAll('.help-filter-card')).toHaveLength(osm.length)
+    for (const f of osm) {
+      const card = c.querySelector<HTMLButtonElement>(`.help-filter-card[data-filter-id="${f.id}"]`)!
+      expect(card.querySelector('.help-filter-card-name')!.textContent).toBe(f.name)
+      expect(card.querySelector('svg')).toBeTruthy()
+    }
+    const cafe = c.querySelector<HTMLButtonElement>('.help-filter-card[data-filter-id="cafe"]')!
+    expect(cafe.classList.contains('selected')).toBe(false)
+    cafe.click()
+    clickNext(c)
+    expect(setHidden).toHaveBeenCalledWith('cafe', false)
+  })
+
   it('enables an opt-in filter when it gets selected in the wizard', async () => {
     const setEnabled = vi.fn()
     const setHidden = vi.fn()

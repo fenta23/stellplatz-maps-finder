@@ -209,7 +209,9 @@ describe('createPoiRefresher suspend / resume', () => {
 
 // ── Static tiles for built-in filters ────────────────────────────────────────
 
-const BUILTINS = DEFAULT_FILTERS.filter(f => f.kind === 'osm')
+// What main.ts hands over: visible OSM filters (the newer built-ins are hidden by default).
+const ALL_BUILTINS = DEFAULT_FILTERS.filter(f => f.kind === 'osm')
+const BUILTINS = ALL_BUILTINS.filter(f => !f.hidden)
 const withParkingOff = BUILTINS.map(f => (f.id === 'parking' ? { ...f, enabled: false } : f))
 const FUEL: FilterDef = {
   id: 'u-fuel', name: 'Tankstelle', iconId: 'fuel', color: '#C62828', enabled: true, kind: 'osm',
@@ -219,7 +221,7 @@ const MANIFEST: TileManifest = {
   version: 'v1', date: '2026-10-02', cellDeg: 0.25, tiles: { parking: [], rest: [] }, attribution: '',
 }
 
-function fakeTiles(opts: { fail?: boolean } = {}) {
+function fakeTiles(opts: { fail?: boolean; manifest?: TileManifest } = {}) {
   const fetchTilePois = vi.fn(async (wanted: ReadonlyMap<TileLayer, readonly string[]>, _filters?: readonly FilterDef[]): Promise<readonly OsmPoi[]> => {
     if (opts.fail) throw new Error('tiles down')
     return [...wanted].flatMap(([layer, keys]) => keys.map((k, i): OsmPoi => ({
@@ -227,7 +229,7 @@ function fakeTiles(opts: { fail?: boolean } = {}) {
       lat: 48.12, lon: 11.57, tags: { k },
     })))
   })
-  const manifest = vi.fn(async () => { if (opts.fail) throw new Error('tiles down'); return MANIFEST })
+  const manifest = vi.fn(async () => { if (opts.fail) throw new Error('tiles down'); return opts.manifest ?? MANIFEST })
   return { manifest, fetchTilePois } satisfies PoiTileSource
 }
 
@@ -246,7 +248,7 @@ describe('createPoiRefresher with static tiles', () => {
     await r.refresh(); await flush()
     expect(fetchPoisMock).not.toHaveBeenCalled()
     expect(tiles.fetchTilePois).toHaveBeenCalledTimes(1)
-    expect([...tiles.fetchTilePois.mock.calls[0]![0].keys()]).toEqual(['rest', 'parking'])
+    expect([...tiles.fetchTilePois.mock.calls[0]![0].keys()]).toEqual(['parking', 'rest'])
     expect(setMarkers.mock.calls.at(-1)![0].length).toBeGreaterThan(0)
   })
 
@@ -342,7 +344,117 @@ describe('createPoiRefresher with static tiles', () => {
   })
 })
 
+// ── Additional tile layers (supply/food/lodging/bike) ───────────────────────
+
+const unhide = (ids: readonly string[]) =>
+  ALL_BUILTINS.filter(f => !f.hidden || ids.includes(f.id)).map(f => (ids.includes(f.id) ? { ...f, hidden: false, enabled: true } : f))
+const NEW_MANIFEST: TileManifest = {
+  ...MANIFEST,
+  tiles: { parking: [], rest: [], food: [], supply: [] },
+  filters: {
+    parking: ['parking'], rest: ['camper', 'campsite', 'dump', 'water', 'climbing', 'hut', 'shelter'],
+    food: ['restaurant', 'cafe'], supply: ['toilets'],
+  },
+}
+
+describe('createPoiRefresher with new built-in categories', () => {
+  const setup = (filters: readonly FilterDef[], tiles: PoiTileSource) => {
+    let current = filters
+    const r = createPoiRefresher({
+      getBounds: () => CITY, setMarkers: vi.fn(), setStatus: vi.fn(), getOsmFilters: () => current, tiles,
+    })
+    return { r, setFilters: (f: readonly FilterDef[]) => { current = f } }
+  }
+  const layersOf = (t: ReturnType<typeof fakeTiles>, call: number) => [...t.fetchTilePois.mock.calls[call]![0].keys()]
+
+  it('legacy manifest (no filters): an un-hidden new built-in goes to Overpass with the user filters', async () => {
+    const tiles = fakeTiles() // MANIFEST has no `filters`
+    const filters = [...unhide(['restaurant']), FUEL]
+    const { r } = setup(filters, tiles)
+    await r.refresh(); await flush()
+    expect(fetchPoisMock).toHaveBeenCalledTimes(1)
+    expect(fetchPoisMock.mock.calls[0]![1].map((f: FilterDef) => f.id)).toEqual(['restaurant', 'u-fuel'])
+    expect(layersOf(tiles, 0)).toEqual(['parking', 'rest'])
+    expect(tiles.fetchTilePois.mock.calls[0]![1]!.map(f => f.id)).not.toContain('restaurant')
+  })
+
+  it('legacy manifest: only the nine existing filters visible → no Overpass (unchanged behaviour)', async () => {
+    const tiles = fakeTiles()
+    const { r } = setup(BUILTINS, tiles)
+    await r.refresh(); await flush()
+    expect(fetchPoisMock).not.toHaveBeenCalled()
+  })
+
+  it('new manifest: the layer is requested only while its filter is active, loaded once on toggle-on', async () => {
+    const tiles = fakeTiles({ manifest: NEW_MANIFEST })
+    const hiddenOff = unhide(['restaurant']).map(f => (f.id === 'restaurant' ? { ...f, enabled: false } : f))
+    const { r, setFilters } = setup(hiddenOff, tiles)
+    await r.refresh(); await flush()
+    expect(layersOf(tiles, 0)).toEqual(['parking', 'rest']) // food not downloaded
+    setFilters(unhide(['restaurant']))
+    await r.refresh(); await flush()
+    expect(tiles.fetchTilePois).toHaveBeenCalledTimes(2)
+    expect(layersOf(tiles, 1)).toEqual(['food'])
+    expect(fetchPoisMock).not.toHaveBeenCalled()
+    await r.refresh(); await flush()
+    setFilters(hiddenOff); await r.refresh(); await flush()
+    setFilters(unhide(['restaurant'])); await r.refresh(); await flush()
+    expect(tiles.fetchTilePois).toHaveBeenCalledTimes(2) // remembered, loaded once
+  })
+
+  it('new manifest: filters it does not list stay live', async () => {
+    const tiles = fakeTiles({ manifest: NEW_MANIFEST })
+    const { r } = setup(unhide(['restaurant', 'hotel']), tiles)
+    await r.refresh(); await flush()
+    expect(layersOf(tiles, 0)).toEqual(['parking', 'rest', 'food'])
+    expect(fetchPoisMock).toHaveBeenCalledTimes(1)
+    expect(fetchPoisMock.mock.calls[0]![1].map((f: FilterDef) => f.id)).toEqual(['hotel'])
+  })
+
+  it('hiding the live built-in again leaves the tiles and Overpass untouched', async () => {
+    const tiles = fakeTiles()
+    const { r, setFilters } = setup(unhide(['restaurant']), tiles)
+    await r.refresh(); await flush()
+    expect(fetchPoisMock).toHaveBeenCalledTimes(1)
+    setFilters(BUILTINS)
+    await r.refresh(); await flush()
+    // restaurant no longer live; the remaining tile filters did not change → no new tile read, no query
+    expect(fetchPoisMock).toHaveBeenCalledTimes(1)
+    expect(tiles.fetchTilePois).toHaveBeenCalledTimes(1)
+  })
+
+  it('manifest down: all built-ins incl. new ones go to Overpass, tiles are not asked', async () => {
+    const tiles = fakeTiles({ fail: true })
+    const { r } = setup(unhide(['restaurant']), tiles)
+    await r.refresh(); await flush()
+    expect(tiles.fetchTilePois).not.toHaveBeenCalled()
+    expect(fetchPoisMock).toHaveBeenCalledTimes(1)
+    expect(fetchPoisMock.mock.calls[0]![1].map((f: FilterDef) => f.id)).toContain('restaurant')
+  })
+
+  it('a manifest that is superseded while loading does not touch the state of the newer refresh', async () => {
+    let release!: () => void
+    const tiles = fakeTiles()
+    tiles.manifest.mockImplementationOnce(() => new Promise(res => { release = () => res(MANIFEST) }))
+    const { r } = setup(BUILTINS, tiles)
+    const p1 = r.refresh()
+    await flush()
+    const p2 = r.refresh()
+    release()
+    await p1; await p2; await flush()
+    expect(tiles.fetchTilePois).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe('fetchSignature', () => {
+  it('changes when a filter of any optional layer is switched on/off', () => {
+    const on = unhide(['restaurant'])
+    const off = on.map(f => (f.id === 'restaurant' ? { ...f, enabled: false } : f))
+    expect(fetchSignature(on)).not.toBe(fetchSignature(off))
+    const bike = unhide(['bike_service'])
+    expect(fetchSignature(bike)).not.toBe(fetchSignature(bike.map(f => (f.id === 'bike_service' ? { ...f, enabled: false } : f))))
+  })
+
   it('changes when parking is switched on/off or a filter is added', () => {
     const base = fetchSignature(BUILTINS)
     expect(fetchSignature(withParkingOff)).not.toBe(base)

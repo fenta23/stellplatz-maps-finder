@@ -4,10 +4,11 @@
 //   osmium tags-filter in.osm.pbf -e expressions.txt -o filtered.pbf
 //   npx tsx scripts/poi-tiles/build.ts filtered.pbf out/ [version]
 //
-// POI_TILES_MIN_PARKING / POI_TILES_MIN_REST: fail instead of writing a build
-// with fewer POIs (guards against a silently broken filter step).
+// POI_TILES_MIN_<LAYER> (PARKING, REST, SUPPLY, FOOD, LODGING, BIKE): fail instead
+// of writing a build with fewer POIs in that layer (guards against a silently
+// broken filter step). Unset = 0.
 //
-// Output: out/manifest.json + out/{version}/{parking|rest}/{key}.json.gz
+// Output: out/manifest.json + out/{version}/{layer}/{key}.json.gz
 
 import { spawn } from 'node:child_process'
 import { createInterface } from 'node:readline'
@@ -23,11 +24,12 @@ const gzipAsync = promisify(gzip)
 async function build(input: string, outDir: string, version: string, min: Partial<Record<Layer, number>>): Promise<void> {
   // Serialized POIs per layer → tile key. Kept as JSON strings: far less heap
   // than ~4M live objects for the whole of Europe.
-  const tiles: Record<Layer, Map<string, string[]>> = { parking: new Map(), rest: new Map() }
-  // osmium exports closed ways as both LineString (w…) and area (a…) — dedupe
-  // on the normalised OSM id.
-  const seen = new Set<string>()
-  let lines = 0, kept = 0
+  const tiles = Object.fromEntries(LAYERS.map(l => [l, new Map<string, string[]>()])) as Record<Layer, Map<string, string[]>>
+  // osmium exports closed ways as both LineString (w…) and area (a…) and the same
+  // element can occur in several country extracts — dedupe on the normalised OSM
+  // id, per layer (an element legitimately appears once in each of its layers).
+  const seen = Object.fromEntries(LAYERS.map(l => [l, new Set<string>()])) as Record<Layer, Set<string>>
+  let lines = 0, kept = 0 // kept = POI placements (an element in two layers counts twice)
 
   const osmium = spawn('osmium', ['export', '-f', 'geojsonseq', '--add-unique-id=type_id', '-O', '-o', '-', input], {
     stdio: ['ignore', 'pipe', 'inherit'],
@@ -46,19 +48,23 @@ async function build(input: string, outDir: string, version: string, min: Partia
     const placed = placeFeature(JSON.parse(line) as Feature)
     if (!placed) continue
     const uid = `${placed.poi[0]}${placed.poi[1]}`
-    if (seen.has(uid)) continue
-    seen.add(uid)
-    kept++
-    const bucket = tiles[placed.layer].get(placed.key) ?? []
-    bucket.push(JSON.stringify(placed.poi))
-    tiles[placed.layer].set(placed.key, bucket)
+    let json: string | null = null
+    for (const layer of placed.layers) {
+      if (seen[layer].has(uid)) continue
+      seen[layer].add(uid)
+      json ??= JSON.stringify(placed.poi)
+      const bucket = tiles[layer].get(placed.key) ?? []
+      bucket.push(json)
+      tiles[layer].set(placed.key, bucket)
+      kept++
+    }
   }
   const code = await exited
   if (code !== 0) throw new Error(`osmium export exited with ${code}`)
 
   const count = (l: Layer) => [...tiles[l].values()].reduce((n, p) => n + p.length, 0)
-  const counts = { parking: count('parking'), rest: count('rest') }
-  console.log(`${lines} features read, ${kept} POIs kept`)
+  const counts = Object.fromEntries(LAYERS.map(l => [l, count(l)])) as Record<Layer, number>
+  console.log(`${lines} features read, ${kept} POI placements kept`)
   for (const l of LAYERS) console.log(`  ${l}: ${counts[l]} POIs in ${tiles[l].size} tiles`)
   const low = belowMinimum(counts, min)
   if (low.length > 0) throw new Error(`too few POIs in ${low.join(', ')} — refusing to write a broken build`)
@@ -72,7 +78,9 @@ async function build(input: string, outDir: string, version: string, min: Partia
     }
   }
 
-  const manifest = buildManifest(version, { parking: tiles.parking.keys(), rest: tiles.rest.keys() }, counts)
+  const manifest = buildManifest(
+    version, Object.fromEntries(LAYERS.map(l => [l, tiles[l].keys()])) as Record<Layer, Iterable<string>>, counts,
+  )
   await writeFile(join(outDir, 'manifest.json'), JSON.stringify(manifest, null, 1))
 }
 
@@ -83,10 +91,9 @@ if (args[0] === '--expressions') {
 } else if (args.length >= 2) {
   const version = args[2] ?? new Date().toISOString().slice(0, 10)
   // Sanity floors (CI sets them for Europe; local regional builds leave them 0).
-  const min = {
-    parking: Number(process.env['POI_TILES_MIN_PARKING'] ?? 0),
-    rest: Number(process.env['POI_TILES_MIN_REST'] ?? 0),
-  }
+  const min = Object.fromEntries(
+    LAYERS.map(l => [l, Number(process.env[`POI_TILES_MIN_${l.toUpperCase()}`] ?? 0)]),
+  ) as Record<Layer, number>
   build(args[0]!, args[1]!, version, min).catch(err => {
     console.error(err)
     process.exit(1)

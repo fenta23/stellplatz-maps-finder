@@ -16,6 +16,36 @@ describe('LocalFilterStore', () => {
     expect(s.list().map(f => f.id)).toEqual(DEFAULT_FILTERS.map(f => f.id))
   })
 
+  // Bestandsnutzer haben Overrides nur fuer die alten neun Filter im localStorage.
+  it('lists new built-ins hidden+enabled and leaves existing overrides untouched', () => {
+    const OLD = ['parking', 'camper', 'campsite', 'dump', 'water', 'climbing', PERSONAL_FILTER_ID, 'hut', 'shelter']
+    const stored = OLD.map(id => {
+      const d = DEFAULT_FILTERS.find(f => f.id === id)!
+      return { ...d, color: '#123456', enabled: id !== 'parking', hidden: id === 'dump' ? true : undefined }
+    })
+    localStorage.setItem('stellplatz:filter-defs', JSON.stringify(stored))
+    const s = new LocalFilterStore()
+    for (const id of OLD) {
+      const f = s.get(id)!
+      expect(f.color, id).toBe('#123456')
+      expect(f.enabled, id).toBe(id !== 'parking')
+      expect(f.hidden === true, id).toBe(id === 'dump')
+    }
+    const added = DEFAULT_FILTERS.filter(f => !OLD.includes(f.id))
+    expect(added).toHaveLength(10)
+    for (const d of added) {
+      const f = s.get(d.id)!
+      expect(f.hidden, d.id).toBe(true)
+      expect(f.enabled, d.id).toBe(true)
+      expect(f.color, d.id).toBe(d.color)
+    }
+    expect(s.list().map(f => f.id)).toEqual(DEFAULT_FILTERS.map(f => f.id))
+    // un-hiding activates immediately
+    s.setHidden('cafe', false)
+    expect(s.get('cafe')).toMatchObject({ enabled: true })
+    expect(s.get('cafe')!.hidden).not.toBe(true)
+  })
+
   it('toggles enabled and persists across reloads', () => {
     const s = new LocalFilterStore()
     s.setEnabled('parking', false)

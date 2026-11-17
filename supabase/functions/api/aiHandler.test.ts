@@ -25,6 +25,7 @@ vi.mock('../_shared/aiClient.ts', () => ({
 }))
 
 import { handleAi } from './aiHandler.ts'
+import { DEFAULT_FILTERS } from '../../../src/client/features/filters/filterModel.ts'
 
 const env: Record<string, string> = { AI_REQUIRE_AUTH: 'false' }
 
@@ -97,5 +98,18 @@ describe('handleAi summarize', () => {
     const res = await handleAi(summarize(), null)
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({ summary: 'Kostenloser Parkplatz für Wohnmobile.' })
+  })
+})
+
+describe('chat system prompt', () => {
+  // Drift guard: the prompt hard-codes the filter ids; hut/shelter were once forgotten.
+  it('lists every built-in OSM filter id', async () => {
+    chatCompletion.mockResolvedValue('{"status":"offtopic","reply":"x","intent":null}')
+    await handleAi(chat(), null)
+    const messages = chatCompletion.mock.calls[0]![0] as { role: string; content: string }[]
+    const system = messages.find(m => m.role === 'system')!.content
+    for (const f of DEFAULT_FILTERS.filter(d => d.kind === 'osm')) {
+      expect(system, `prompt misses filter id ${f.id}`).toContain(`"${f.id}"`)
+    }
   })
 })

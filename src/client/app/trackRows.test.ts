@@ -9,4 +9,11 @@ describe('trackRowTexts', () => {
     expect(trackRowTexts(undefined, 'Parkplatz')).toEqual({ title: 'Parkplatz', subtitle: '' })
     expect(trackRowTexts('  ', 'Parkplatz')).toEqual({ title: 'Parkplatz', subtitle: '' })
   })
+  it('adds the winter hint only for cemeteries in winter', () => {
+    const winter = new Date(2026, 0, 15), summer = new Date(2026, 6, 15)
+    expect(trackRowTexts('Friedhof Nord', 'Friedhof', { type: 'cemetery', now: winter }))
+      .toEqual({ title: 'Friedhof Nord', subtitle: 'Friedhof', hint: 'Wasser im Winter oft abgestellt' })
+    expect(trackRowTexts('Friedhof Nord', 'Friedhof', { type: 'cemetery', now: summer })).not.toHaveProperty('hint')
+    expect(trackRowTexts('Camp', 'Campingplatz', { type: 'campsite', now: winter })).not.toHaveProperty('hint')
+  })
 })

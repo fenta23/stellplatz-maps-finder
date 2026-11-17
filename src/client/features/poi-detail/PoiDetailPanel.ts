@@ -14,6 +14,7 @@ import type { PoiImage } from './imageGallery.js'
 import { renderNotes } from './noteRenderer.js'
 import type { OsmNote } from './noteRenderer.js'
 import { parseOpenHours } from './poiOpenHours.js'
+import { CEMETERY_TYPE_ID, cemeteryWaterHint } from './cemeteryHint.js'
 import panelHtml from './poiDetailPanel.html?raw'
 
 const SVG_MAP_PIN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>'
@@ -74,7 +75,8 @@ export class PoiDetailPanel {
   private nearbyItems: NearbyItem[] = []
   private _collapsed = false
 
-  constructor(private readonly container: HTMLElement) {
+  /** `now` is injectable for tests (season-dependent hints); defaults to the current date. */
+  constructor(private readonly container: HTMLElement, private readonly now: () => Date = () => new Date()) {
     this.panel = document.createElement('aside')
     this.panel.className = 'poi-detail-panel hidden'
     this.panel.setAttribute('aria-label', 'POI Details')
@@ -182,6 +184,18 @@ export class PoiDetailPanel {
     if (trackInfo) {
       ref(view, 'trackInfo').hidden = false
       ref(view, 'trackInfoText').textContent = trackInfoText(trackInfo)
+    }
+
+    // Cemetery water hint (all year; extra sentence in winter)
+    if (poi.type === CEMETERY_TYPE_ID) {
+      const hint = cemeteryWaterHint(this.now())
+      ref(view, 'cemeteryHint').hidden = false
+      ref(view, 'cemeteryHintText').textContent = hint.text
+      if (hint.winterText) {
+        const w = ref(view, 'cemeteryHintWinter')
+        w.hidden = false
+        w.textContent = hint.winterText
+      }
     }
 
     // Losfahren: hand-off to the nav app (destination only)

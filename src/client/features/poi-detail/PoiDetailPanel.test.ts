@@ -281,3 +281,46 @@ describe('PoiDetailPanel', () => {
     })
   })
 })
+
+describe('PoiDetailPanel cemetery water hint', () => {
+  const cemetery: OsmPoi = { id: 2, type: 'cemetery', lat: 48, lon: 11, tags: { name: 'Friedhof Nord' } }
+  const parking: OsmPoi = { id: 3, type: 'parking', lat: 48, lon: 11, tags: { name: 'P1' } }
+  const make = (d: Date) => {
+    const container = document.createElement('div')
+    const panel = new PoiDetailPanel(container, () => d)
+    return { container, panel }
+  }
+  const hint = (c: HTMLElement) => c.querySelector<HTMLElement>('.cemetery-hint')!
+  const winterEl = (c: HTMLElement) => c.querySelector<HTMLElement>('.cemetery-hint-winter')!
+
+  it('shows the all-year text in July without the winter sentence', () => {
+    const { container, panel } = make(new Date(2026, 6, 15))
+    panel.show(cemetery)
+    expect(hint(container).hidden).toBe(false)
+    expect(hint(container).textContent).toContain('Meist Wasserhahn vorhanden – keine geprüfte Trinkwasserqualität.')
+    expect(hint(container).querySelector('svg')).not.toBeNull()
+    expect(winterEl(container).hidden).toBe(true)
+  })
+
+  it('emphasises the winter sentence in January', () => {
+    const { container, panel } = make(new Date(2026, 0, 15))
+    panel.show(cemetery)
+    expect(winterEl(container).hidden).toBe(false)
+    expect(winterEl(container).textContent).toBe('Im Winter ist das Wasser oft abgestellt.')
+  })
+
+  it('is hidden for a parking POI', () => {
+    const { container, panel } = make(new Date(2026, 0, 15))
+    panel.show(parking)
+    expect(hint(container).hidden).toBe(true)
+  })
+
+  it('is hidden again when a non-cemetery POI follows a cemetery', () => {
+    const { container, panel } = make(new Date(2026, 0, 15))
+    panel.show(cemetery)
+    expect(hint(container).hidden).toBe(false)
+    panel.show(parking)
+    expect(hint(container).hidden).toBe(true)
+    expect(winterEl(container).hidden).toBe(true)
+  })
+})
