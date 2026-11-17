@@ -453,6 +453,9 @@ async function init() {
   })
 
   mapService.onBaseLayerChange(key => trackWiring.setSatellite(key === 'Satellit'))
+  // The base layer is restored from localStorage before any listener exists —
+  // bring the route line's colours in line with it once.
+  trackWiring.setSatellite(mapService.getBaseLayerLabel() === 'Satellit')
   mapService.onTrackAction(() => trackWiring.openImport())
 
   // ── Side menu ───────────────────────────────────────────────────────────────

@@ -8,7 +8,7 @@ Kartenbasierte Web-App zur Parkplatz- und Stellplatzsuche mit automatischer Anze
 
 ## Features
 
-- 🗺️ **Interaktive Karte** (Leaflet) mit automatischem POI-Laden beim Scrollen/Zoomen — Kartenstil **CARTO Voyager** (clean, erdig) + umschaltbarer **Satelliten-Layer** (Esri)
+- 🗺️ **Interaktive Karte** (Leaflet) mit automatischem POI-Laden beim Scrollen/Zoomen — Kartenstil **CARTO Voyager** (clean, erdig) + wählbare Kartenebenen über „Ebenen“: **Satellit** (Esri), **Fahrradkarte** (OpenCycleMap bzw. CyclOSM) und **Topografische Karte** (OpenTopoMap); die Auswahl wird gemerkt
 - 🅿️ **Parkplätze** (öffentlich vs. privat unterschieden), 🚐 **Camper-Stellplätze**, ⛺ **Campingplätze**, 🚿 **Entsorgungsstationen**, 🚰 **Frischwasserpunkte**
 - 🔍 **Suche** mit Nominatim-Autocomplete (viewport-basiert)
 - 🧭 **Navigation** per Deep-Link an Google Maps bzw. Apple Maps — die App plant keine Routen selbst
@@ -25,7 +25,7 @@ Kartenbasierte Web-App zur Parkplatz- und Stellplatzsuche mit automatischer Anze
 
 | Schicht | Technologie |
 |---|---|
-| Karte | [Leaflet](https://leafletjs.com) + [markercluster](https://github.com/Leaflet/Leaflet.markercluster) · [CARTO Voyager](https://carto.com) / [Esri](https://www.esri.com) Tiles |
+| Karte | [Leaflet](https://leafletjs.com) + [markercluster](https://github.com/Leaflet/Leaflet.markercluster) · [CARTO Voyager](https://carto.com) / [Esri](https://www.esri.com) / [Thunderforest](https://www.thunderforest.com) / [CyclOSM](https://www.cyclosm.org) / [OpenTopoMap](https://opentopomap.org) Tiles |
 | POI-Daten | [Overpass API](https://overpass-api.de) (OpenStreetMap) |
 | Geocoding | [Nominatim](https://nominatim.org) |
 | Navigation | Deep-Link an Google Maps / Apple Maps |

@@ -46,6 +46,7 @@ jobs:
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           VITE_DSGVO_VERANTWORTLICHER: ${{ secrets.VITE_DSGVO_VERANTWORTLICHER }}
           VITE_CARTO_API_KEY: ${{ secrets.VITE_CARTO_API_KEY }}
+          VITE_THUNDERFOREST_API_KEY: ${{ secrets.VITE_THUNDERFOREST_API_KEY }}
 
       - uses: actions/configure-pages@v4
 
