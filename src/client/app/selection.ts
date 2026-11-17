@@ -8,6 +8,8 @@ export interface SelectionDeps {
   readonly panel: PoiDetailPanel
   readonly favorites: IFavoritesStore
   readonly panIntoView: (poi: { lat: number; lon: number }) => void
+  /** Move the POI to the middle of the visible map (selection from a list); falls back to panIntoView. */
+  readonly centerInView?: (poi: { lat: number; lon: number }) => void
   readonly loadDetails: (poi: OsmPoi) => void
   readonly getNote?: (poi: OsmPoi) => string
   /** For custom POIs: open the edit dialog. */
@@ -18,10 +20,19 @@ export interface SelectionDeps {
   readonly isLoggedIn?: () => boolean
   /** Position of a POI along the active imported route; null/absent → not shown. */
   readonly getTrackInfo?: (poi: OsmPoi) => PanelView['trackInfo'] | null
+  /** A POI became the selected one (e.g. mark it on the map). */
+  readonly onSelected?: (poi: OsmPoi) => void
+  /** Nothing is selected any more. */
+  readonly onCleared?: () => void
+}
+
+export interface SelectOptions {
+  /** Centre the POI on the visible map instead of only uncovering it (it was picked from a list, not on the map). */
+  readonly center?: boolean
 }
 
 export interface Selection {
-  select(poi: OsmPoi): void
+  select(poi: OsmPoi, opts?: SelectOptions): void
   clear(): void
 }
 
@@ -42,9 +53,11 @@ export function createSelection(deps: SelectionDeps): Selection {
   }
 
   return {
-    select(poi) {
+    select(poi, opts) {
       session.selectedPoi = poi
-      deps.panIntoView(poi)
+      if (opts?.center && deps.centerInView) deps.centerInView(poi)
+      else deps.panIntoView(poi)
+      deps.onSelected?.(poi)
       const trackInfo = deps.getTrackInfo?.(poi)
       panel.show(poi, {
         isFavorite: isFav(poi), noteText: noteOf(poi), config: buildConfig(poi),
@@ -55,6 +68,7 @@ export function createSelection(deps: SelectionDeps): Selection {
 
     clear() {
       session.selectedPoi = null
+      deps.onCleared?.()
     },
   }
 }

@@ -16,5 +16,9 @@ export interface TrackLayer {
   fitBounds(insets?: MapInsets): void
   /** Switch to the high-contrast colours used on aerial imagery. */
   setSatellite(on: boolean): void
+  /** Dashed straight line from a point on the track to a place off it, replacing any previous one. */
+  showConnector(from: TrackPoint, to: TrackPoint): void
+  clearConnector(): void
+  /** Remove the track and the connector. */
   clear(): void
 }

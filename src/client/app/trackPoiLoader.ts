@@ -9,7 +9,7 @@ import { activeFirst, type FilterDef } from '@/features/filters/filterModel.js'
 import type { PoiTileSource, TileLayer } from '@/features/pois/poiTiles.js'
 import { planTileFilters, reclassifyPoi, tileKeysFor, tiledFilterIds } from '@/features/pois/poiTiles.js'
 import { trackPoiCountMessage } from '@/features/pois/statusMessages.js'
-import { createSegmentIndex, type SegmentIndex } from '@/features/track/trackGeometry.js'
+import { createSegmentIndex, pointAtMeters, project, type SegmentIndex } from '@/features/track/trackGeometry.js'
 import {
   chunkForOverpass, corridorBoxes, matchCorridor, overpassRadiusBucket, type CorridorHit,
 } from '@/features/track/corridor.js'
@@ -53,6 +53,8 @@ export interface TrackPoiLoader {
   cancel(): void
   /** For the detail panel; null when no track or farther than MAX_CORRIDOR_M. */
   positionOf(poi: OsmPoi): TrackPosition | null
+  /** Nearest point on the track to the POI; null when no track or farther than MAX_CORRIDOR_M. */
+  footOf(poi: OsmPoi): TrackPoint | null
 }
 
 type Mode = 'full' | 'auto' | 'failed'
@@ -306,6 +308,12 @@ export function createTrackPoiLoader(deps: TrackPoiLoaderDeps): TrackPoiLoader {
       if (!track || !index) return null
       const hit = matchCorridor(index, track.lengthM, [poi], MAX_CORRIDOR_M)[0]
       return hit ? { kmAlong: hit.kmAlong, kmToEnd: hit.kmToEnd, offsetM: hit.offsetM } : null
+    },
+
+    footOf(poi) {
+      if (!track || !index) return null
+      const pos = project(index, poi)
+      return pos ? pointAtMeters(index, pos.kmAlong * 1000) : null
     },
   }
 }

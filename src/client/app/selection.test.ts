@@ -84,3 +84,41 @@ describe('createSelection.clear', () => {
     expect(session.selectedPoi).toBeNull()
   })
 })
+
+describe('createSelection hooks (mark the selected place on the map)', () => {
+  it('reports the selected POI and the end of the selection', () => {
+    const onSelected = vi.fn()
+    const onCleared = vi.fn()
+    const { deps } = makeDeps({ onSelected, onCleared })
+    const selection = createSelection(deps)
+    selection.select(poi)
+    expect(onSelected).toHaveBeenCalledWith(poi)
+    expect(onCleared).not.toHaveBeenCalled()
+    selection.select(customPoi)
+    expect(onSelected).toHaveBeenLastCalledWith(customPoi)
+    selection.clear()
+    expect(onCleared).toHaveBeenCalledOnce()
+  })
+})
+
+describe('createSelection.select with { center: true } (picked from a list)', () => {
+  it('centres the POI instead of only uncovering it', () => {
+    const centerInView = vi.fn()
+    const { deps } = makeDeps({ centerInView })
+    createSelection(deps).select(poi, { center: true })
+    expect(centerInView).toHaveBeenCalledWith(poi)
+    expect(deps.panIntoView).not.toHaveBeenCalled()
+  })
+
+  it('keeps the gentle pan for a plain select (marker click) and without a centring dep', () => {
+    const centerInView = vi.fn()
+    const a = makeDeps({ centerInView })
+    createSelection(a.deps).select(poi)
+    expect(centerInView).not.toHaveBeenCalled()
+    expect(a.deps.panIntoView).toHaveBeenCalledWith(poi)
+
+    const b = makeDeps()
+    createSelection(b.deps).select(poi, { center: true })
+    expect(b.deps.panIntoView).toHaveBeenCalledWith(poi)
+  })
+})

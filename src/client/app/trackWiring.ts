@@ -59,6 +59,8 @@ export interface TrackWiringDeps {
 }
 
 export const RETRY_SUFFIX = ' – erneut versuchen'
+/** Below this the place counts as "an der Route" (same limit as the detail panel): no connector line. */
+export const CONNECTOR_MIN_OFFSET_M = 10
 
 /**
  * Default for `scheduleStartupFit`: two animation frames, so the freshly created
@@ -73,7 +75,11 @@ export interface TrackWiring {
   /** Call when the filter store changed; `needsRefetch` = its fetch signature changed. */
   readonly onFiltersChanged: (needsRefetch: boolean) => void
   readonly positionOf: (poi: OsmPoi) => TrackPosition | null
+  /** The selected POI changed (null = none): draws/removes the dashed line from the route to it. */
+  readonly onPoiSelected: (poi: OsmPoi | null) => void
   readonly isTrackActive: () => boolean
+  /** CSS px of the map covered by the track panel (zeros without a track). */
+  readonly mapInsets: () => { readonly left: number; readonly bottom: number }
   /** Mobile: fold the list away while the map is being moved. */
   readonly collapsePanel: () => void
   readonly openImport: () => void
@@ -135,6 +141,16 @@ export function createTrackWiring(deps: TrackWiringDeps): TrackWiring {
     },
   })
 
+  // Dashed line from the nearest point of the route to the selected place.
+  let selected: OsmPoi | null = null
+  const drawConnector = () => {
+    const poi = current ? selected : null
+    const pos = poi ? loader.positionOf(poi) : null
+    const foot = poi && pos && pos.offsetM >= CONNECTOR_MIN_OFFSET_M ? loader.footOf(poi) : null
+    if (poi && foot) layer.showConnector(foot, [poi.lat, poi.lon])
+    else layer.clearConnector()
+  }
+
   const panel = new TrackPanel(deps.panelContainer, {
     onSelectRow: key => { const poi = byKey.get(key); if (poi) deps.selectPoi(poi) },
     onCorridorChange: m => store.setCorridor(m),
@@ -177,6 +193,7 @@ export function createTrackWiring(deps: TrackWiringDeps): TrackWiring {
     refresher.suspend() // the corridor owns the markers now
     panel.setTrack(track)
     void loader.load(track)
+    drawConnector() // another route: the line to the selected place belongs to the old one
   }
 
   const deactivate = () => {
@@ -256,7 +273,9 @@ export function createTrackWiring(deps: TrackWiringDeps): TrackWiring {
       rebuildRows()
     },
     positionOf: poi => loader.positionOf(poi),
+    onPoiSelected: poi => { selected = poi; drawConnector() },
     isTrackActive: () => current !== null,
+    mapInsets: () => panel.mapInsets(),
     collapsePanel: () => { if (current) panel.collapse() },
     openImport: () => dialog.open(),
     closeImport: () => dialog.close(),

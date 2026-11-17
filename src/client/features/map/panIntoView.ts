@@ -53,3 +53,76 @@ export function panPoiIntoView(
   })
   if (dx !== 0 || dy !== 0) map.panBy([dx, dy], { animate: true })
 }
+
+/** A rectangle in map-container pixel coordinates. */
+export interface MapArea {
+  readonly left: number
+  readonly top: number
+  readonly right: number
+  readonly bottom: number
+}
+
+/** Map edges covered by UI other than the detail panel (header, track panel), in CSS px. */
+export interface CoveredEdges {
+  readonly left?: number
+  readonly top?: number
+  readonly bottom?: number
+}
+
+export interface FreeAreaInput {
+  readonly isMobile: boolean
+  readonly mapWidth: number
+  readonly mapHeight: number
+  /** Viewport y of the map container's top edge. */
+  readonly containerTop: number
+  readonly viewportHeight: number
+  readonly covered?: CoveredEdges
+}
+
+/** Pure: the part of the map not covered by the detail panel (side panel / bottom sheet) or `covered`. */
+export function freeMapArea(i: FreeAreaInput): MapArea {
+  const top = i.covered?.top ?? 0
+  const bottom = i.mapHeight - (i.covered?.bottom ?? 0)
+  if (i.isMobile) {
+    const sheetTop = i.viewportHeight * (1 - MOBILE_SHEET_FRACTION) - i.containerTop
+    return { left: 0, top, right: i.mapWidth, bottom: Math.min(bottom, sheetTop) }
+  }
+  return { left: i.covered?.left ?? 0, top, right: i.mapWidth - PANEL_WIDTH, bottom }
+}
+
+/** Below this the free strip is too narrow to aim for; the map centre is used on that axis. */
+export const MIN_FREE_PX = 80
+
+/** Pure: how far to pan so the POI sits in the middle of `area`. Unlike computePan it moves in every direction. */
+export function computeCenterPan(
+  poi: { readonly x: number; readonly y: number },
+  area: MapArea,
+  map: { readonly width: number; readonly height: number },
+): { dx: number; dy: number } {
+  const cx = area.right - area.left >= MIN_FREE_PX ? (area.left + area.right) / 2 : map.width / 2
+  const cy = area.bottom - area.top >= MIN_FREE_PX ? (area.top + area.bottom) / 2 : map.height / 2
+  return { dx: Math.round(poi.x - cx), dy: Math.round(poi.y - cy) }
+}
+
+/** Thin DOM/Leaflet wrapper: pan so the POI sits in the middle of the still-visible map.
+ *  @param covered  Edges in viewport px; `top` = viewport y where the map becomes visible. */
+export function centerPoiInView(
+  map: L.Map,
+  container: HTMLElement,
+  poi: { lat: number; lon: number },
+  covered: CoveredEdges = {},
+): void {
+  const containerTop = container.getBoundingClientRect().top
+  const size = { width: container.clientWidth, height: container.clientHeight }
+  const area = freeMapArea({
+    isMobile: window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`).matches,
+    mapWidth: size.width,
+    mapHeight: size.height,
+    containerTop,
+    viewportHeight: window.innerHeight,
+    covered: { ...covered, top: Math.max(0, (covered.top ?? containerTop) - containerTop) },
+  })
+  const point = map.latLngToContainerPoint([poi.lat, poi.lon])
+  const { dx, dy } = computeCenterPan({ x: point.x, y: point.y }, area, size)
+  if (dx !== 0 || dy !== 0) map.panBy([dx, dy], { animate: true })
+}

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { readFileSync } from 'node:fs'
 import L from 'leaflet'
-import { createLeafletTrackLayer, FIT_MAX_ZOOM, FIT_PADDING_TOP_LEFT, FIT_PADDING_BOTTOM_RIGHT } from './leafletTrackLayer.js'
+import { createLeafletTrackLayer, CONNECTOR_DASH, FIT_MAX_ZOOM, FIT_PADDING_TOP_LEFT, FIT_PADDING_BOTTOM_RIGHT } from './leafletTrackLayer.js'
 import type { TrackPoint } from '@/features/track/trackTypes.js'
 
 const POINTS: readonly TrackPoint[] = [[48.0, 9.0], [48.1, 9.1], [48.2, 9.05]]
@@ -131,5 +131,56 @@ describe('createLeafletTrackLayer', () => {
     expect(() => t.show([[48, 9]])).not.toThrow()
     expect(() => t.fitBounds()).not.toThrow()
     expect(() => t.setSatellite(true)).not.toThrow()
+  })
+})
+
+describe('connector to a selected place', () => {
+  const dashed = () => polylines().filter(l => l.options.dashArray === CONNECTOR_DASH)
+  const FROM: TrackPoint = [48.1, 9.1]
+  const TO: TrackPoint = [48.12, 9.2]
+
+  it('draws a dashed, non-interactive line with a casing between the two points', () => {
+    const t = make()
+    t.show(POINTS)
+    t.showConnector(FROM, TO)
+    expect(polylines()).toHaveLength(4)
+    expect(dashed()).toHaveLength(1)
+    const line = dashed()[0]!
+    expect(line.options.interactive).toBe(false)
+    expect((line.getLatLngs() as L.LatLng[]).map(p => [p.lat, p.lng])).toEqual([[...FROM], [...TO]])
+  })
+
+  it('replaces the previous connector instead of leaking', () => {
+    const t = make()
+    t.show(POINTS)
+    t.showConnector(FROM, TO)
+    t.showConnector(FROM, [48.3, 9.3])
+    expect(polylines()).toHaveLength(4)
+    expect((dashed()[0]!.getLatLngs() as L.LatLng[])[1]!.lat).toBe(48.3)
+  })
+
+  it('survives a redraw of the track, goes with clearConnector and with clear', () => {
+    const t = make()
+    t.show(POINTS)
+    t.showConnector(FROM, TO)
+    t.show(POINTS)
+    expect(dashed()).toHaveLength(1)
+    t.clearConnector()
+    expect(dashed()).toHaveLength(0)
+    expect(polylines()).toHaveLength(2)
+    t.showConnector(FROM, TO)
+    t.clear()
+    expect(layers().filter(l => l instanceof L.Path)).toHaveLength(0)
+  })
+
+  it('follows the satellite colour', () => {
+    const t = make()
+    t.show(POINTS)
+    t.showConnector(FROM, TO)
+    const before = dashed()[0]!.options.color
+    t.setSatellite(true)
+    expect(dashed()[0]!.options.color).not.toBe(before)
+    t.showConnector(FROM, TO)
+    expect(dashed()[0]!.options.color).not.toBe(before)
   })
 })

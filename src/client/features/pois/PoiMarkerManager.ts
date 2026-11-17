@@ -108,6 +108,11 @@ export class PoiMarkerManager {
     return svgToDataUrl(buildIcon(tracked.poiType, isFav, hasNote, tracked.isPrivate, this.resolveStyle(tracked.poiType)))
   }
 
+  /** The icon this POI's marker has right now (style, favourite/note badges), e.g. for a highlight. */
+  iconUrlFor(poi: OsmPoi): string {
+    return this.iconFor({ poiType: poi.type, poiId: poi.id, isPrivate: isPrivateParking(poi) })
+  }
+
   updatePois(pois: readonly OsmPoi[]): void {
     const incoming = new Set(pois.map(poiKey))
 
