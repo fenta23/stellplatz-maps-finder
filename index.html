@@ -124,7 +124,12 @@
                     calc(14px + env(safe-area-inset-left));
                 background: var(--accent-strong);
                 color: #fff;
-                z-index: 10;
+                /* Anchor and stacking context of the search box: its suggestion
+                   list and card hang below the bar and must lie above #status
+                   (1000), the floating pill (1001) and the track sheet (1050),
+                   but below the mobile detail sheet (1100) and all menus. */
+                position: relative;
+                z-index: 1060;
                 flex-shrink: 0;
                 box-shadow: var(--shadow-sm);
             }

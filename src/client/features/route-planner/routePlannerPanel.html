@@ -1,31 +1,26 @@
-<section class="planner-panel" role="dialog" aria-label="Route planen" hidden>
+<section class="planner-panel" hidden>
   <div class="planner-full" data-ref="full">
-    <div class="planner-header">
-      <span class="planner-title">Route planen</span>
-      <button class="planner-close" type="button" data-ref="close" aria-label="Schließen" title="Schließen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
-    </div>
-
     <div class="planner-fields">
       <div class="planner-field" data-role="start">
         <span class="planner-dot planner-dot-start" aria-hidden="true"></span>
-        <div class="planner-input-wrap">
-          <input class="planner-input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" data-ref="startInput" />
-          <ul class="planner-suggestions" data-ref="startList"></ul>
-        </div>
         <button class="planner-icon-btn" type="button" data-ref="startLocate" aria-label="Start: Mein Standort" title="Mein Standort"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="2" x2="5" y1="12" y2="12"/><line x1="19" x2="22" y1="12" y2="12"/><line x1="12" x2="12" y1="2" y2="5"/><line x1="12" x2="12" y1="19" y2="22"/><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="3"/></svg></button>
         <button class="planner-icon-btn" type="button" data-ref="startPick" aria-label="Start auf Karte wählen" title="Auf Karte wählen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg></button>
+        <div class="planner-input-wrap">
+          <input class="planner-input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" data-ref="startInput" />
+          <ul data-ref="startList"></ul>
+        </div>
       </div>
 
       <button class="planner-icon-btn planner-swap" type="button" data-ref="swap" aria-label="Start und Ziel tauschen" title="Start und Ziel tauschen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></svg></button>
 
       <div class="planner-field" data-role="end">
         <span class="planner-dot planner-dot-end" aria-hidden="true"></span>
-        <div class="planner-input-wrap">
-          <input class="planner-input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" data-ref="endInput" />
-          <ul class="planner-suggestions" data-ref="endList"></ul>
-        </div>
         <button class="planner-icon-btn" type="button" data-ref="endLocate" aria-label="Ziel: Mein Standort" title="Mein Standort"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="2" x2="5" y1="12" y2="12"/><line x1="19" x2="22" y1="12" y2="12"/><line x1="12" x2="12" y1="2" y2="5"/><line x1="12" x2="12" y1="19" y2="22"/><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="3"/></svg></button>
         <button class="planner-icon-btn" type="button" data-ref="endPick" aria-label="Ziel auf Karte wählen" title="Auf Karte wählen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg></button>
+        <div class="planner-input-wrap">
+          <input class="planner-input" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" data-ref="endInput" />
+          <ul data-ref="endList"></ul>
+        </div>
       </div>
     </div>
 
@@ -37,6 +32,7 @@
 
     <button class="planner-go" type="button" data-ref="go" disabled>Route berechnen</button>
     <p class="planner-status" role="status" aria-live="polite" data-ref="status"></p>
+    <button class="planner-link" type="button" data-ref="importLink" hidden>Route importieren / gespeicherte Routen</button>
   </div>
 
   <div class="planner-pick" data-ref="pick" hidden>

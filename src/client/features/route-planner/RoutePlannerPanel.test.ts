@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { RoutePlannerPanel, type RoutePlannerDeps } from './RoutePlannerPanel.js'
-import type { PlaceSuggestion } from './PlaceField.js'
+import type { PlaceSuggestion } from '@/core/PlaceField.js'
 import type { PlanPoint, PlanRequest, TravelMode } from './plannerModel.js'
 
 const koeln: PlaceSuggestion = { label: 'Köln, Nordrhein-Westfalen, Deutschland', lat: 50.94, lon: 6.96 }
@@ -64,45 +64,87 @@ describe('RoutePlannerPanel – structure', () => {
     expect(container.querySelectorAll('[role="radio"]')).toHaveLength(3)
     expect(modeBtn('car').getAttribute('aria-checked')).toBe('true')
     expect(go().disabled).toBe(true)
-    for (const r of ['startLocate', 'startPick', 'endLocate', 'endPick', 'swap', 'close']) {
+    for (const r of ['startLocate', 'startPick', 'endLocate', 'endPick', 'swap']) {
       expect(q(r).getAttribute('aria-label')).toBeTruthy()
     }
     expect(q('startInput').getAttribute('aria-label')).toBe('Start')
     expect(q('endInput').getAttribute('aria-label')).toBe('Ziel')
   })
 
-  it('toggles body class planner-open with open/close', () => {
-    const { panel } = setup()
+  it('shows and hides the panel with open/close', () => {
+    const { panel, container } = setup()
+    const root = container.querySelector<HTMLElement>('.planner-panel')!
     panel.open()
     expect(panel.isOpen()).toBe(true)
-    expect(document.body.classList.contains('planner-open')).toBe(true)
+    expect(root.hidden).toBe(false)
     panel.open() // idempotent
     expect(panel.isOpen()).toBe(true)
     panel.close()
     expect(panel.isOpen()).toBe(false)
-    expect(document.body.classList.contains('planner-open')).toBe(false)
+    expect(root.hidden).toBe(true)
   })
 
-  it('close button closes', () => {
-    const { panel, q } = setup()
-    panel.open()
-    q('close').click()
-    expect(panel.isOpen()).toBe(false)
+  it('has no header, close button or dialog role of its own', () => {
+    const { container } = setup()
+    const root = container.querySelector<HTMLElement>('.planner-panel')!
+    expect(root.hasAttribute('role')).toBe(false)
+    expect(container.querySelector('[data-ref="close"]')).toBeNull()
   })
 
-  it('calls onClose once per real close (button, Esc, close()), not when already closed', () => {
+  it('calls onClose once per real close (Esc, close()), not when already closed', () => {
     const onClose = vi.fn()
-    const { panel, q, esc } = setup({ onClose })
+    const { panel, esc } = setup({ onClose })
     panel.close()
     expect(onClose).not.toHaveBeenCalled()
-    panel.open()
-    q('close').click()
     panel.open()
     esc()
     panel.open()
     panel.close()
     panel.close()
-    expect(onClose).toHaveBeenCalledTimes(3)
+    expect(onClose).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('RoutePlannerPanel – import link', () => {
+  it('is hidden without onOpenImport', () => {
+    const { q } = setup()
+    expect(q('importLink').hidden).toBe(true)
+  })
+
+  it('is visible with onOpenImport; a click calls it and keeps the panel open', () => {
+    const onOpenImport = vi.fn()
+    const { panel, q } = setup({ onOpenImport })
+    panel.open()
+    expect(q('importLink').hidden).toBe(false)
+    q('importLink').click()
+    expect(onOpenImport).toHaveBeenCalledTimes(1)
+    expect(panel.isOpen()).toBe(true)
+  })
+})
+
+describe('RoutePlannerPanel – focusFirstEmpty', () => {
+  it('focuses the start input when both are empty', () => {
+    const { panel, q } = setup()
+    panel.open()
+    panel.focusFirstEmpty()
+    expect(document.activeElement).toBe(q('startInput'))
+  })
+
+  it('focuses the destination when only the start is set', () => {
+    const { panel, q } = setup()
+    panel.open()
+    panel.setPoint('start', poi)
+    panel.focusFirstEmpty()
+    expect(document.activeElement).toBe(q('endInput'))
+  })
+
+  it('focuses "Route berechnen" when both are set', () => {
+    const { panel, go } = setup()
+    panel.open()
+    panel.setPoint('start', poi)
+    panel.setPoint('end', { ...poi, label: 'Ziel' })
+    panel.focusFirstEmpty()
+    expect(document.activeElement).toBe(go())
   })
 })
 
@@ -229,20 +271,17 @@ describe('RoutePlannerPanel – setting points', () => {
 })
 
 describe('RoutePlannerPanel – map pick', () => {
-  it('shrinks to a pick row and sets body classes; cancel restores', () => {
+  it('shrinks to a pick row; cancel restores', () => {
     const { panel, q, container, picks } = setup()
     panel.open()
     q('startPick').click()
     expect(panel.pickingRole()).toBe('start')
-    expect(document.body.classList.contains('planner-picking')).toBe(true)
-    expect(document.body.classList.contains('planner-open')).toBe(true)
     expect(q('full').hidden).toBe(true)
     expect(q('pick').hidden).toBe(false)
     expect(container.textContent).toContain('Start auf der Karte antippen')
     q('pickCancel').click()
     expect(picks[0]!.cancel).toHaveBeenCalledTimes(1)
     expect(panel.pickingRole()).toBeNull()
-    expect(document.body.classList.contains('planner-picking')).toBe(false)
     expect(q('full').hidden).toBe(false)
     expect(q('pick').hidden).toBe(true)
   })
@@ -262,7 +301,7 @@ describe('RoutePlannerPanel – map pick', () => {
     expect(val('endInput')).toBe('Kartenpunkt')
     expect(deps.onPointsChange).toHaveBeenLastCalledWith(null, { lat: 50, lon: 7, label: 'Kartenpunkt', kind: 'map' })
     expect(panel.pickingRole()).toBeNull()
-    expect(document.body.classList.contains('planner-picking')).toBe(false)
+    expect(q('pick').hidden).toBe(true)
     expect(picks[0]!.cancel).not.toHaveBeenCalled()
   })
 
@@ -341,14 +380,14 @@ describe('RoutePlannerPanel – map pick', () => {
     expect(cancel).not.toHaveBeenCalled()
   })
 
-  it('close() during a pick cancels it and clears body classes', () => {
+  it('close() during a pick cancels it and restores the form', () => {
     const { panel, q, picks } = setup()
     panel.open()
     q('startPick').click()
     panel.close()
     expect(picks[0]!.cancel).toHaveBeenCalledTimes(1)
-    expect(document.body.classList.contains('planner-picking')).toBe(false)
-    expect(document.body.classList.contains('planner-open')).toBe(false)
+    expect(q('pick').hidden).toBe(true)
+    expect(q('full').hidden).toBe(false)
   })
 })
 
@@ -516,14 +555,12 @@ describe('RoutePlannerPanel – run', () => {
 })
 
 describe('RoutePlannerPanel – destroy', () => {
-  it('removes DOM, listeners and body classes', () => {
+  it('removes DOM and listeners', () => {
     const { panel, container, q, esc, picks } = setup()
     panel.open()
     q('startPick').click()
     panel.destroy()
     expect(container.querySelector('.planner-panel')).toBeNull()
-    expect(document.body.classList.contains('planner-open')).toBe(false)
-    expect(document.body.classList.contains('planner-picking')).toBe(false)
     expect(picks[0]!.cancel).toHaveBeenCalledTimes(1)
     expect(() => esc()).not.toThrow()
     expect(panel.isOpen()).toBe(false)

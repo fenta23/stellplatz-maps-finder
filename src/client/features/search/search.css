@@ -1,87 +1,142 @@
-/* ── Search ── */
+/* Suchbox (SearchBox): Suchzeile im #topbar; in den Modi route/ai Kopfzeile + Karte darunter.
+   Setzt die Body-Klasse `searchbox-open`, solange die Karte offen ist. */
 #search-bar {
     flex: 1;
+    min-width: 0;
     position: relative;
 }
-.search-wrapper {
-    position: relative;
-}
-.search-form {
-    margin: 0;
-    display: block;
+.sbx {
     position: relative;
 }
 
-.search-input {
-    width: 100%;
-    padding: 8px 68px 8px 12px;
-    border: none;
-    border-radius: var(--radius-sm);
-    font-size: 16px;
-    color: var(--ink);
+.sbx-form,
+.sbx-head {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin: 0;
+    /* Route und KI stehen vor dem Feld, Löschen dahinter. */
+    padding: 2px 4px;
+    min-height: 38px;
+    box-sizing: border-box;
     background: var(--surface);
+    border-radius: var(--radius-sm);
+}
+.sbx-head {
+    justify-content: space-between;
+    padding: 2px 4px 2px 12px;
+}
+.sbx-title {
+    font-weight: 600;
+    color: var(--ink);
+}
+
+.sbx-input {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 8px 8px 6px;
+    border: none;
+    background: transparent;
+    font-size: 16px; /* >=16px, sonst zoomt iOS */
+    color: var(--ink);
     outline: none;
 }
-.search-input::placeholder {
+.sbx-input::placeholder {
     color: var(--ink-faint);
 }
-/* Hide the browser's native search-cancel "x" — we have our own .search-clear button. */
-.search-input::-webkit-search-cancel-button {
+.sbx-input::-webkit-search-cancel-button {
     -webkit-appearance: none;
     appearance: none;
 }
 
-.search-clear {
-    position: absolute;
-    right: 34px;
-    top: 50%;
-    transform: translateY(-50%);
-    border: none;
-    background: none;
-    cursor: pointer;
-    padding: 4px;
-    color: var(--ink-faint);
-    line-height: 1;
-    border-radius: 50%;
-    display: flex;
+.sbx-btn {
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    &.hidden{
-        display: none;
-
-    }
+    flex-shrink: 0;
+    min-width: 32px;
+    height: 32px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    cursor: pointer;
+    line-height: 1;
 }
-.search-clear svg {
+.sbx-btn svg {
     width: 18px;
     height: 18px;
     display: block;
 }
-.search-clear:hover {
-    color: var(--ink-muted);
+.sbx-btn:focus-visible {
+    outline: 2px solid var(--accent-strong);
+    outline-offset: 1px;
+}
+.sbx-clear { color: var(--ink-faint); }
+.sbx-clear:hover { color: var(--ink-muted); }
+.sbx-ai { color: var(--accent); }
+.sbx-ai:hover { color: var(--accent-strong); }
+.sbx-route { color: var(--accent-strong); }
+.sbx-route:hover { color: var(--ink); }
+.sbx-close { color: var(--ink-muted); }
+.sbx-close:hover { color: var(--ink); }
+
+.sbx-route:has(.sbx-route-label:not([hidden])) {
+    border-radius: var(--radius-pill, 999px);
+    padding: 0 10px;
+    gap: 6px;
+}
+.sbx-route-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    white-space: nowrap;
 }
 
-/* "✨ KI-Suche" trigger — appended to DOM for logged-in users only. */
-.search-ai {
+/* display:flex überstimmt sonst das hidden-Attribut. */
+.sbx-form[hidden],
+.sbx-head[hidden],
+.sbx-panel[hidden],
+.sbx-btn[hidden],
+.sbx-route-label[hidden],
+.sbx-panel > [hidden] {
+    display: none;
+}
+
+/* Kein overflow: würde die Vorschlagslisten des Routenformulars abschneiden. */
+.sbx-panel {
     position: absolute;
-    right: 4px;
-    top: 50%;
-    transform: translateY(-50%);
-    border: none;
-    background: none;
-    cursor: pointer;
-    padding: 4px;
-    color: var(--accent);
-    line-height: 1;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    top: calc(100% + 8px);
+    left: 0;
+    width: min(100%, 420px);
+    padding: 10px 12px 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    color: var(--ink);
+    box-sizing: border-box;
 }
-.search-ai svg {
-    width: 19px;
-    height: 19px;
-    display: block;
+
+.sbx > .place-list {
+    max-height: 260px;
 }
-.search-ai:hover {
-    color: var(--accent-strong);
+
+@media (max-width: 600px) {
+    /* Karte und Liste verankern sich am #topbar statt an der schmalen Box. */
+    #search-bar,
+    .sbx {
+        position: static;
+    }
+    .sbx-panel,
+    .sbx > .place-list {
+        left: 8px;
+        right: 8px;
+        width: auto;
+    }
+    .sbx-panel {
+        top: calc(100% + 4px);
+    }
+    .sbx > .place-list {
+        top: calc(100% - 6px);
+    }
 }

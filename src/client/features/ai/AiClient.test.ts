@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest'
-import { loadPoiSummary } from './AiClient.js'
+import { loadPoiSummary, sendAiChat } from './AiClient.js'
 import type { OsmPoi } from '@/features/pois/OverpassClient.js'
 
 afterEach(() => vi.unstubAllGlobals())
@@ -62,5 +62,53 @@ describe('loadPoiSummary', () => {
   it('returns null when the JSON body is malformed', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: () => Promise.reject(new Error('bad json')) }))
     expect(await loadPoiSummary(poi)).toBeNull()
+  })
+})
+
+describe('sendAiChat', () => {
+  const turns = [{ role: 'user', content: 'Bodensee' }] as const
+
+  it('passes a valid response through parseChatResponse', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ status: 'ready', reply: 'Gefunden.', intent: { place: 'Bodensee', enableFilters: ['camper'] } }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const res = await sendAiChat(turns)
+
+    expect(res.status).toBe('ready')
+    expect(res.reply).toBe('Gefunden.')
+    expect(res.intent?.place).toBe('Bodensee')
+    const [url, init] = fetchMock.mock.calls[0]!
+    expect(String(url)).toContain('/api/ai')
+    expect(JSON.parse(init.body as string)).toMatchObject({ task: 'chat', messages: turns })
+  })
+
+  it('asks to log in again on 401 (expired session)', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 401, json: () => Promise.resolve({}) }))
+    const res = await sendAiChat(turns)
+    expect(res.status).toBe('error')
+    expect(res.reply).toBe('Bitte melde dich erneut an, um die KI-Suche zu nutzen.')
+  })
+
+  it('reports rate limiting on 429', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 429, json: () => Promise.resolve({}) }))
+    const res = await sendAiChat(turns)
+    expect(res.status).toBe('error')
+    expect(res.reply).toBe('Zu viele Anfragen – bitte einen Moment warten.')
+  })
+
+  it('reports unavailability on other HTTP errors', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 500, json: () => Promise.resolve({}) }))
+    const res = await sendAiChat(turns)
+    expect(res).toMatchObject({ status: 'error', reply: 'Die KI-Suche ist gerade nicht erreichbar.' })
+  })
+
+  it('maps a network error to an error status', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
+    const res = await sendAiChat(turns)
+    expect(res.status).toBe('error')
+    expect(res.intent).toBeNull()
   })
 })

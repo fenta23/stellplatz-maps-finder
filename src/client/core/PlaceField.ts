@@ -1,9 +1,18 @@
 import { createEventScope, type EventScope } from '@/core/events.js'
+import './placeField.css'
 
 export interface PlaceSuggestion {
   readonly label: string
   readonly lat: number
   readonly lon: number
+}
+
+export interface PlaceFieldAction {
+  readonly id: string
+  readonly label: string
+  /** Statisches, eigenes SVG-Markup (kein Nutzertext) – wird per innerHTML gesetzt. */
+  readonly iconSvg?: string
+  run(): void
 }
 
 export interface PlaceFieldDeps {
@@ -15,6 +24,8 @@ export interface PlaceFieldDeps {
   onInvalidate(): void
   /** Standard 400. */
   readonly debounceMs?: number
+  /** Zusatzzeilen unter den Treffern, passend zur aktuellen Eingabe. */
+  actions?(query: string): readonly PlaceFieldAction[]
 }
 
 export const MIN_QUERY_LENGTH = 3
@@ -36,6 +47,7 @@ export class PlaceField {
   private token = 0
   private lastQuery = ''
   private items: readonly PlaceSuggestion[] = []
+  private actionRows: readonly PlaceFieldAction[] = []
   private active = -1
 
   constructor(
@@ -51,6 +63,7 @@ export class PlaceField {
     input.setAttribute('aria-expanded', 'false')
     input.setAttribute('aria-controls', this.listId)
     list.id = this.listId
+    list.classList.add('place-list')
     list.setAttribute('role', 'listbox')
     list.hidden = true
 
@@ -91,6 +104,7 @@ export class PlaceField {
     this.list.hidden = true
     this.list.replaceChildren()
     this.items = []
+    this.actionRows = []
     this.active = -1
     this.lastQuery = ''
     this.input.setAttribute('aria-expanded', 'false')
@@ -124,46 +138,87 @@ export class PlaceField {
     }, this.debounceMs)
   }
 
+  /** Sofort suchen (ohne Debounce) und den ersten Treffer wählen. false = nichts gewählt. */
+  async submit(): Promise<boolean> {
+    const query = this.input.value.trim()
+    if (query.length < MIN_QUERY_LENGTH) return false
+    if (this.isListOpen() && this.lastQuery === query && this.items.length > 0) {
+      this.select(this.items[0]!)
+      return true
+    }
+    this.cancelPending()
+    const results = await this.load(query)
+    const first = results?.[0]
+    if (!first) return false
+    this.select(first)
+    return true
+  }
+
   private async lookup(query: string): Promise<void> {
     if (query === this.lastQuery) return
+    await this.load(query)
+  }
+
+  /** Fragt `suggest` ab und rendert; null bei veralteter Antwort oder Fehler. */
+  private async load(query: string): Promise<readonly PlaceSuggestion[] | null> {
     this.lastQuery = query
     const my = ++this.token
+    // Aktionen sind sofort nutzbar, ohne Treffer-Antwort abzuwarten.
+    if (this.actionsFor(query).length > 0) this.render(query, [], 'pending')
     let results: readonly PlaceSuggestion[]
     try {
       results = await this.deps.suggest(query)
     } catch {
-      if (my !== this.token) return
+      if (my !== this.token) return null
       this.lastQuery = ''
-      this.render([], true)
-      return
+      this.render(query, [], 'failed')
+      return null
     }
-    if (my !== this.token) return
-    this.render(results, false)
+    if (my !== this.token) return null
+    this.render(query, results, 'ok')
+    return results
   }
 
-  private render(results: readonly PlaceSuggestion[], failed: boolean): void {
+  private actionsFor(query: string): readonly PlaceFieldAction[] {
+    return this.deps.actions?.(query) ?? []
+  }
+
+  private render(query: string, results: readonly PlaceSuggestion[], state: 'ok' | 'failed' | 'pending'): void {
     this.items = results
+    this.actionRows = this.actionsFor(query)
     this.active = -1
     this.list.replaceChildren()
-    if (results.length === 0) {
+    if (results.length === 0 && state !== 'pending') {
       const li = document.createElement('li')
-      li.className = 'planner-suggestion planner-suggestion-empty'
+      li.className = 'place-option place-option-empty'
       li.setAttribute('role', 'presentation')
-      li.textContent = failed ? 'Suche nicht verfügbar' : 'Keine Treffer'
+      li.textContent = state === 'failed' ? 'Suche nicht verfügbar' : 'Keine Treffer'
       this.list.appendChild(li)
-    } else {
-      results.forEach((s, i) => {
-        const li = document.createElement('li')
-        li.className = 'planner-suggestion'
-        li.id = `${this.listId}-${i}`
-        li.setAttribute('role', 'option')
-        li.setAttribute('aria-selected', 'false')
-        li.textContent = s.label
-        // mousedown feuert vor dem Blur des Eingabefelds; preventDefault hält den Fokus.
-        li.addEventListener('mousedown', e => { e.preventDefault(); this.select(s) })
-        this.list.appendChild(li)
-      })
     }
+    results.forEach((s, i) => {
+      const li = document.createElement('li')
+      li.className = 'place-option'
+      li.id = `${this.listId}-${i}`
+      li.setAttribute('role', 'option')
+      li.setAttribute('aria-selected', 'false')
+      li.textContent = s.label
+      // mousedown feuert vor dem Blur des Eingabefelds; preventDefault hält den Fokus.
+      li.addEventListener('mousedown', e => { e.preventDefault(); this.select(s) })
+      this.list.appendChild(li)
+    })
+    this.actionRows.forEach((a, i) => {
+      const li = document.createElement('li')
+      li.className = 'place-option place-option-action'
+      li.id = `${this.listId}-a-${i}`
+      li.setAttribute('role', 'option')
+      li.setAttribute('aria-selected', 'false')
+      if (a.iconSvg) li.innerHTML = a.iconSvg
+      const label = document.createElement('span')
+      label.textContent = a.label
+      li.appendChild(label)
+      li.addEventListener('mousedown', e => { e.preventDefault(); this.runAction(a) })
+      this.list.appendChild(li)
+    })
     this.list.hidden = false
     this.input.setAttribute('aria-expanded', 'true')
     this.input.removeAttribute('aria-activedescendant')
@@ -176,8 +231,14 @@ export class PlaceField {
     this.deps.onSelect(s)
   }
 
+  private runAction(a: PlaceFieldAction): void {
+    this.cancelPending()
+    this.closeList()
+    a.run()
+  }
+
   private move(delta: number): void {
-    const n = this.items.length
+    const n = this.items.length + this.actionRows.length
     if (n === 0) return
     this.active = this.active < 0 ? (delta > 0 ? 0 : n - 1) : (this.active + delta + n) % n
     const options = this.list.querySelectorAll<HTMLElement>('[role="option"]')
@@ -191,12 +252,15 @@ export class PlaceField {
       // Nur die Liste schließen; das Panel soll darauf nicht auch noch reagieren.
       if (this.closeList()) e.stopPropagation()
     } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-      if (!this.isListOpen() || this.items.length === 0) return
+      if (!this.isListOpen() || this.items.length + this.actionRows.length === 0) return
       e.preventDefault()
       this.move(e.key === 'ArrowDown' ? 1 : -1)
     } else if (e.key === 'Enter') {
+      if (!this.isListOpen() || this.active < 0) return
       const s = this.items[this.active]
-      if (this.isListOpen() && s) { e.preventDefault(); this.select(s) }
+      const a = s ? undefined : this.actionRows[this.active - this.items.length]
+      if (s) { e.preventDefault(); this.select(s) }
+      else if (a) { e.preventDefault(); this.runAction(a) }
     }
   }
 }

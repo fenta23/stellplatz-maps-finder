@@ -36,10 +36,12 @@ export async function sendAiChat(messages: readonly ChatTurn[]): Promise<AiChatR
     })
     if (!resp.ok) {
       return parseChatResponse({
-        status: resp.status === 401 ? 'error' : 'error',
-        reply: resp.status === 429
-          ? 'Zu viele Anfragen – bitte einen Moment warten.'
-          : 'Die KI-Suche ist gerade nicht erreichbar.',
+        status: 'error',
+        reply: resp.status === 401
+          ? 'Bitte melde dich erneut an, um die KI-Suche zu nutzen.'
+          : resp.status === 429
+            ? 'Zu viele Anfragen – bitte einen Moment warten.'
+            : 'Die KI-Suche ist gerade nicht erreichbar.',
       })
     }
     return parseChatResponse(await resp.json())

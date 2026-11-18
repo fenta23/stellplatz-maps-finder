@@ -25,19 +25,14 @@ steal space from the absolutely-positioned map. */
         top: 70px;
     }
 
-    /* ── Route planner (route-planner.css: top strip, z 990 < #status 1000) ──
-       With the header folded away the floating pill (z 1001) sits at the top:
-       move the planner below it, like #status. */
-    body.ui-collapsed .planner-panel {
-        top: calc(70px + env(safe-area-inset-top));
-    }
-    /* The track sheet (z 1050, bottom) would cover the suggestion lists of the
-       planner; it comes back when the planner closes. Give the bottom controls
-       back their normal slot meanwhile. */
-    body.planner-open .track-sheet {
+    /* ── Search box expanded (route form / AI dialog, search.css) ──
+       The header never folds away meanwhile (app/uiCollapse.ts). The track sheet
+       (bottom) would cover the suggestion lists of the route form; it comes back
+       when the box closes. Give the bottom controls back their normal slot. */
+    body.searchbox-open .track-sheet {
         display: none;
     }
-    body.planner-open.track-open .leaflet-bottom {
+    body.searchbox-open.track-open .leaflet-bottom {
         bottom: 0;
     }
 
@@ -167,27 +162,17 @@ z-index must beat Leaflet's panes/controls (root stacking context). */
     }
 }
 
-/* ── Route planner, Desktop: the planner takes the slot of the track column ── */
+/* ── Search box expanded, Desktop ──
+   The card of the box hangs below the search line and would overlap the track
+   column (340px, left): show only one of them. */
 @media (min-width: 601px) {
-    /* Same left column as the track sheet, so only one of them is shown. */
-    body.planner-open .track-sheet {
+    body.searchbox-open .track-sheet {
         display: none;
     }
-    /* Make room like track.css does for track-open: Leaflet's left-hand controls
-       move to the right of the 340px column (12px gap + 12px margin). */
-    body.planner-open .leaflet-top.leaflet-left,
-    body.planner-open .leaflet-bottom.leaflet-left {
-        margin-left: 364px;
+    /* track.css moves Leaflet's left-hand controls right of the column; with the
+       column hidden they go back to the edge. */
+    body.searchbox-open.track-open .leaflet-top.leaflet-left,
+    body.searchbox-open.track-open .leaflet-bottom.leaflet-left {
+        margin-left: 0;
     }
-}
-
-/* ── Route planner, map pick (all sizes) ──
-   The panel shrinks to one line; it must not swallow the click that picks the point,
-   so everything but "Abbrechen" lets pointer events through to the map.
-   The crosshair comes from `.placing-poi` on the map container (MapService.pickPoint). */
-body.planner-picking .planner-panel {
-    pointer-events: none;
-}
-body.planner-picking .planner-pick-cancel {
-    pointer-events: auto;
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { PlaceField, type PlaceFieldDeps, type PlaceSuggestion } from './PlaceField.js'
+import { PlaceField, type PlaceFieldAction, type PlaceFieldDeps, type PlaceSuggestion } from './PlaceField.js'
 
 const koeln: PlaceSuggestion = { label: 'Köln, NRW, Deutschland', lat: 50.94, lon: 6.96 }
 const bonn: PlaceSuggestion = { label: 'Bonn, NRW, Deutschland', lat: 50.73, lon: 7.1 }
@@ -230,5 +230,151 @@ describe('PlaceField', () => {
     expect(field.isListOpen()).toBe(false)
     field.setDisabled(false)
     expect(input.disabled).toBe(false)
+  })
+
+  it('keeps the list closed before the response when there are no actions', async () => {
+    const { type, field } = setup({ suggest: () => new Promise(() => {}) })
+    type('Köln')
+    await settle()
+    expect(field.isListOpen()).toBe(false)
+  })
+
+  describe('actions', () => {
+    const run = vi.fn()
+    const act: PlaceFieldAction = { id: 'ai', label: 'Mit KI suchen: Köln', iconSvg: '<svg></svg>', run }
+    const withAction = (over: Partial<PlaceFieldDeps> = {}) =>
+      setup({ actions: (q: string) => [{ ...act, label: `Mit KI suchen: ${q}` }], ...over })
+    beforeEach(() => { run.mockClear() })
+
+    it('places actions after the results', async () => {
+      const { type, items } = withAction()
+      type('Köln')
+      await settle()
+      expect(items().map(li => li.textContent)).toEqual([koeln.label, bonn.label, 'Mit KI suchen: Köln'])
+      const a = items()[2]!
+      expect(a.getAttribute('role')).toBe('option')
+      expect(a.classList.contains('place-option-action')).toBe(true)
+      expect(a.querySelector('svg')).not.toBeNull()
+    })
+
+    it('places actions after "Keine Treffer"', async () => {
+      const { type, items } = withAction({ suggest: async () => [] })
+      type('Köln')
+      await settle()
+      expect(items().map(li => li.textContent)).toEqual(['Keine Treffer', 'Mit KI suchen: Köln'])
+      expect(items()[0]!.getAttribute('role')).toBe('presentation')
+    })
+
+    it('places actions after "Suche nicht verfügbar"', async () => {
+      const { type, items } = withAction({ suggest: async () => { throw new Error('x') } })
+      type('Köln')
+      await settle()
+      expect(items().map(li => li.textContent)).toEqual(['Suche nicht verfügbar', 'Mit KI suchen: Köln'])
+    })
+
+    it('shows only the actions while the request is pending', async () => {
+      const { type, items, field } = withAction({ suggest: () => new Promise(() => {}) })
+      type('Köln')
+      await settle()
+      expect(field.isListOpen()).toBe(true)
+      expect(items().map(li => li.textContent)).toEqual(['Mit KI suchen: Köln'])
+    })
+
+    it('reaches the action with arrow keys and runs it on Enter', async () => {
+      const { type, key, items, input, field, deps } = withAction()
+      type('Köln')
+      await settle()
+      key('ArrowUp')
+      const a = items()[2]!
+      expect(input.getAttribute('aria-activedescendant')).toBe(a.id)
+      expect(a.getAttribute('aria-selected')).toBe('true')
+      key('Enter')
+      expect(run).toHaveBeenCalledTimes(1)
+      expect(field.isListOpen()).toBe(false)
+      expect(deps.onSelect).not.toHaveBeenCalled()
+      expect(deps.onInvalidate).toHaveBeenCalledTimes(1) // nur vom Tippen
+      expect(input.value).toBe('Köln')
+    })
+
+    it('runs the action via mousedown (default prevented) and cancels the pending request', async () => {
+      let resolve!: (r: readonly PlaceSuggestion[]) => void
+      const { type, items, field, deps } = withAction({ suggest: () => new Promise(r => { resolve = r }) })
+      type('Köln')
+      await settle()
+      const e = new MouseEvent('mousedown', { bubbles: true, cancelable: true })
+      items()[0]!.dispatchEvent(e)
+      expect(e.defaultPrevented).toBe(true)
+      expect(run).toHaveBeenCalledTimes(1)
+      expect(field.isListOpen()).toBe(false)
+      resolve([koeln])
+      await settle(0)
+      expect(field.isListOpen()).toBe(false)
+      expect(deps.onSelect).not.toHaveBeenCalled()
+    })
+
+    it('ignores Enter without an active row even with actions', async () => {
+      const { type, key } = withAction()
+      type('Köln')
+      await settle()
+      key('Enter')
+      expect(run).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('submit', () => {
+    it('selects the first loaded result without a second request', async () => {
+      const { type, field, deps } = setup()
+      type('Köln')
+      await settle()
+      expect(await field.submit()).toBe(true)
+      expect(deps.suggest).toHaveBeenCalledTimes(1)
+      expect(deps.onSelect).toHaveBeenCalledWith(koeln)
+      expect(field.isListOpen()).toBe(false)
+    })
+
+    it('searches immediately without debounce', async () => {
+      const { type, field, deps, input } = setup()
+      type('Köln')
+      const ok = await field.submit()
+      expect(ok).toBe(true)
+      expect(deps.suggest).toHaveBeenCalledTimes(1)
+      expect(input.value).toBe(koeln.label)
+      await settle(1000)
+      expect(deps.suggest).toHaveBeenCalledTimes(1)
+    })
+
+    it('returns false and shows "Keine Treffer" for an empty result', async () => {
+      const { type, field, items, deps } = setup({ suggest: async () => [] })
+      type('Nirgendwo')
+      expect(await field.submit()).toBe(false)
+      expect(items().map(li => li.textContent)).toEqual(['Keine Treffer'])
+      expect(deps.onSelect).not.toHaveBeenCalled()
+    })
+
+    it('returns false when the response is stale after typing', async () => {
+      let resolve!: (r: readonly PlaceSuggestion[]) => void
+      const { type, field, deps } = setup({ suggest: () => new Promise(r => { resolve = r }) })
+      type('Köln')
+      const p = field.submit()
+      type('Bonn')
+      resolve([koeln])
+      expect(await p).toBe(false)
+      expect(deps.onSelect).not.toHaveBeenCalled()
+    })
+
+    it('does not search below the minimum length', async () => {
+      const { type, field, deps } = setup()
+      type('Kö')
+      expect(await field.submit()).toBe(false)
+      expect(deps.suggest).not.toHaveBeenCalled()
+    })
+
+    it('returns false when suggest throws', async () => {
+      const { type, field, items, deps } = setup({ suggest: async () => { throw new Error('offline') } })
+      type('Köln')
+      expect(await field.submit()).toBe(false)
+      expect(items().map(li => li.textContent)).toEqual(['Suche nicht verfügbar'])
+      expect(deps.onSelect).not.toHaveBeenCalled()
+    })
   })
 })
