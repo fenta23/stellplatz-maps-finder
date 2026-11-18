@@ -15,7 +15,8 @@
     align-items: center;
     gap: 2px;
     margin: 0;
-    padding: 2px 4px 2px 0;
+    /* Route und KI stehen vor dem Feld, Löschen dahinter. */
+    padding: 2px 4px;
     min-height: 38px;
     box-sizing: border-box;
     background: var(--surface);
@@ -33,7 +34,7 @@
 .sbx-input {
     flex: 1;
     min-width: 0;
-    padding: 8px 12px;
+    padding: 8px 8px 8px 6px;
     border: none;
     background: transparent;
     font-size: 16px; /* >=16px, sonst zoomt iOS */

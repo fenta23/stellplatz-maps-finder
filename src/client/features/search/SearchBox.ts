@@ -125,7 +125,7 @@ export class SearchBox {
 
   setAiEnabled(enabled: boolean): void {
     this.aiEnabled = enabled
-    if (enabled && !this.aiBtn.isConnected) this.form.insertBefore(this.aiBtn, this.routeBtn)
+    if (enabled && !this.aiBtn.isConnected) this.routeBtn.after(this.aiBtn)
     else if (!enabled && this.aiBtn.isConnected) this.aiBtn.remove()
   }
 
