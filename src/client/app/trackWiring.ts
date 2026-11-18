@@ -64,6 +64,19 @@ export const RETRY_SUFFIX = ' – erneut versuchen'
 /** Below this the place counts as "an der Route" (same limit as the detail panel): no connector line. */
 export const CONNECTOR_MIN_OFFSET_M = 10
 
+/** Same route id, but another line or name: `ITrackStore.replace` was used. */
+function isEdited(before: SavedTrack, after: SavedTrack): boolean {
+  if (before.name !== after.name) return true
+  const a = before.points
+  const b = after.points
+  if (a === b) return false // the usual case (corridor change): no walk over 20,000 points
+  if (a.length !== b.length) return true
+  for (let i = 0; i < a.length; i++) {
+    if (a[i]![0] !== b[i]![0] || a[i]![1] !== b[i]![1]) return true
+  }
+  return false
+}
+
 /**
  * Default for `scheduleStartupFit`: two animation frames, so the freshly created
  * panel and the map container have been laid out before we measure insets.
@@ -217,10 +230,15 @@ export function createTrackWiring(deps: TrackWiringDeps): TrackWiring {
 
   // Routes have ids: the same id = the same route (corridor change or a list-only change
   // such as deleting an inactive route) → no panel reset, no reload, no redraw.
+  // Exception: the route was edited in place (dragged on the map) — new line, new POIs,
+  // but no fit: the user is looking at the spot they just changed.
   store.onChange(track => {
     dialog.refresh()
     if (!track) {
       if (current) { draw(null); deactivate() }
+    } else if (current && current.id === track.id && isEdited(current, track)) {
+      draw(track)
+      activate(track)
     } else if (current && current.id === track.id) {
       const corridorChanged = track.corridorM !== current.corridorM
       current = track

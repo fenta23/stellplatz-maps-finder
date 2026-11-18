@@ -1,6 +1,6 @@
 import {
   MAX_CORRIDOR_M, MIN_CORRIDOR_M, MAX_SAVED_TRACKS, isTrackSource,
-  type SavedTrack, type Track, type TrackPoint,
+  type RouteMode, type RoutePlan, type RouteWaypoint, type SavedTrack, type Track, type TrackPoint,
 } from './trackTypes.js'
 
 export interface ITrackStore {
@@ -10,6 +10,11 @@ export interface ITrackStore {
   list(): readonly SavedTrack[]
   /** Saves and activates; a route equal to a saved one is re-activated instead of duplicated. */
   set(track: Track): SavedTrack
+  /**
+   * Swaps the line of a saved route for an edited one: name, points, length and plan
+   * change; id, age, corridor and the active state stay. Unknown id: nothing happens.
+   */
+  replace(id: string, track: Track): void
   activate(id: string): void
   /** Of the active route. */
   setCorridor(m: number): void
@@ -24,6 +29,24 @@ export interface ITrackStore {
 const clampCorridor = (m: number) => Math.min(MAX_CORRIDOR_M, Math.max(MIN_CORRIDOR_M, m))
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
 
+const ROUTE_MODES: ReadonlySet<unknown> = new Set<RouteMode>(['foot', 'bike', 'car'])
+
+/** The plan of a planned route; a broken one is dropped (the route stays, it just cannot be edited). */
+function parsePlan(d: unknown): RoutePlan | null {
+  if (!d || typeof d !== 'object') return null
+  const r = d as Record<string, unknown>
+  if (!ROUTE_MODES.has(r.mode) || !Array.isArray(r.waypoints) || r.waypoints.length < 2) return null
+  const waypoints: RouteWaypoint[] = []
+  for (const w of r.waypoints as unknown[]) {
+    if (!w || typeof w !== 'object') return null
+    const { lat, lon, label } = w as Record<string, unknown>
+    if (!isNum(lat) || !isNum(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return null
+    if (label !== undefined && typeof label !== 'string') return null
+    waypoints.push({ lat, lon, ...(label ? { label } : {}) })
+  }
+  return { mode: r.mode as RouteMode, waypoints }
+}
+
 /** Validates the fields of one route (shared by the v1 key and v2 entries); null if broken. */
 function parseTrackFields(d: unknown): Track | null {
   if (!d || typeof d !== 'object') return null
@@ -37,7 +60,11 @@ function parseTrackFields(d: unknown): Track | null {
     if (!Array.isArray(p) || p.length !== 2 || !isNum(p[0]) || !isNum(p[1])) return null
     points.push([p[0], p[1]])
   }
-  return { name: r.name, source: r.source, points, lengthM: r.lengthM, corridorM: clampCorridor(r.corridorM) }
+  const plan = r.source === 'planned' ? parsePlan(r.plan) : null
+  return {
+    name: r.name, source: r.source, points, lengthM: r.lengthM, corridorM: clampCorridor(r.corridorM),
+    ...(plan ? { plan } : {}),
+  }
 }
 
 interface Library {
@@ -116,14 +143,27 @@ export class LocalTrackStore implements ITrackStore {
     const at = this.now()
     const existing = s.tracks.find(t => sameRoute(t, track))
     const saved: SavedTrack = existing
-      ? { ...existing, addedAt: at }
+      ? { ...existing, addedAt: at, ...(track.plan ? { plan: track.plan } : {}) }
       : {
         name: track.name, source: track.source, points: track.points, lengthM: track.lengthM,
         corridorM: clampCorridor(track.corridorM), id: this.newId(), addedAt: at,
+        ...(track.plan ? { plan: track.plan } : {}),
       }
     const others = s.tracks.filter(t => t.id !== saved.id)
     this.commit({ activeId: saved.id, tracks: this.evict([saved, ...others], saved.id) })
     return saved
+  }
+
+  replace(id: string, track: Track): void {
+    const s = this.load()
+    const old = s.tracks.find(t => t.id === id)
+    if (!old) return
+    const next: SavedTrack = {
+      name: track.name, source: track.source, points: track.points, lengthM: track.lengthM,
+      corridorM: old.corridorM, id: old.id, addedAt: old.addedAt,
+      ...(track.plan ? { plan: track.plan } : {}),
+    }
+    this.commit({ ...s, tracks: s.tracks.map(t => (t.id === id ? next : t)) })
   }
 
   activate(id: string): void {

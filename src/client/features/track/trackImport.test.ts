@@ -67,4 +67,11 @@ describe('prepareTrack', () => {
   it('keeps the source', () => {
     expect(prepareTrack({ name: 'x', source: 'komoot', points: [[50, 10], [50, 10.01]] }).source).toBe('komoot')
   })
+
+  it('carries the plan of a planned route through, and adds none to an import', () => {
+    const plan = { mode: 'bike', waypoints: [{ lat: 50, lon: 10, label: 'A' }, { lat: 50, lon: 10.02, label: 'B' }] } as const
+    const planned = prepareTrack({ name: 'A → B (Rad)', source: 'planned', points: [[50, 10], [50, 10.02]], plan })
+    expect(planned.plan).toEqual(plan)
+    expect(prepareTrack(track([[50, 10], [50, 10.02]]))).not.toHaveProperty('plan')
+  })
 })

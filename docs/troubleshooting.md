@@ -40,7 +40,7 @@ Kommt lokal `200` und über die Edge Function `403`, ist es dieser Block.
 |---|---|---|
 | Overpass (POIs) | `src/client/core/overpassFetch.ts` | `OverpassClient`, `nearbyClient` |
 | Nominatim | `src/client/core/nominatim.ts` | Suchleiste, KI-Suche, Google-Maps-Import, Ortsfelder im Routenplaner |
-| OSRM bei FOSSGIS (`routing.openstreetmap.de`) | `src/client/features/track/osrmRoute.ts` | Routenplaner (`app/routePlannerWiring.ts`) |
+| OSRM bei FOSSGIS (`routing.openstreetmap.de`) | `src/client/features/track/osrmRoute.ts` | Routenplaner (`app/routePlannerWiring.ts`), Ändern einer geplanten Route auf der Karte (`app/routeEditWiring.ts`) |
 
 `/api/overpass`, `/api/nearby` und `/api/geocode` gibt es serverseitig noch, der Client ruft sie aber nicht mehr auf. Beim Import gilt weiter die Nominatim-Policy von höchstens 1 Anfrage pro Sekunde.
 
@@ -58,7 +58,9 @@ Der Routenplaner ruft die öffentlichen OSRM-Instanzen von FOSSGIS (`routing.ope
 
 **Diagnose:** `curl -s "https://routing.openstreetmap.de/routed-bike/route/v1/driving/12.37,51.34;12.40,51.31?overview=false"` liefert bei laufendem Dienst `"code":"Ok"`.
 
-**Notausgang:** `ROUTE_PLANNING_ENABLED` in `src/client/features/track/osrmRoute.ts` auf `false` setzen. Der Planer meldet dann „derzeit abgeschaltet“, der Rest der App und der Import (GPX, Komoot) laufen weiter. Es genügt ein Frontend-Deploy.
+**Ändern auf der Karte:** Wer die Linie einer geplanten Route zieht oder einen Griff (Start, Ziel, Zwischenpunkt) verschiebt, löst genau eine Anfrage pro Loslassen aus, mit allen Punkten in einer URL (`start;via…;ziel`, höchstens 10 Zwischenpunkte). Beim Ziehen selbst geht nichts raus, und solange eine Anfrage läuft, sind Linie und Griffe gesperrt. Die Meldungen aus der Tabelle erscheinen dann als Statuszeile; die Route bleibt unverändert. Griffe fehlen bei importierten Routen (GPX, Komoot) und bei geplanten Routen aus der Zeit vor dieser Funktion – die kennen ihre Punkte und ihr Verkehrsmittel nicht und müssen neu geplant werden.
+
+**Notausgang:** `ROUTE_PLANNING_ENABLED` in `src/client/features/track/osrmRoute.ts` auf `false` setzen. Der Planer meldet dann „derzeit abgeschaltet“, geplante Routen lassen sich nicht mehr ziehen, der Rest der App und der Import (GPX, Komoot) laufen weiter. Es genügt ein Frontend-Deploy.
 
 `routed-foot` ist ein Fußgängerprofil, kein Wanderrouting; es bevorzugt keine Wanderwege.
 
