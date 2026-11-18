@@ -29,18 +29,11 @@ describe('validateIntent — enableFilters allowlist', () => {
   })
 })
 
-describe('validateIntent — place + distance', () => {
+describe('validateIntent — place', () => {
   it('trims a place string, or null when empty/missing', () => {
     expect(validateIntent({ place: '  Bodensee ' })?.place).toBe('Bodensee')
     expect(validateIntent({ place: '   ' })?.place).toBeNull()
     expect(validateIntent({})?.place).toBeNull()
-  })
-  it('accepts a sane distance and rejects out-of-range / garbage', () => {
-    expect(validateIntent({ maxDistanceKm: 30 })?.maxDistanceKm).toBe(30)
-    expect(validateIntent({ maxDistanceKm: 30.7 })?.maxDistanceKm).toBe(31)
-    expect(validateIntent({ maxDistanceKm: 0 })?.maxDistanceKm).toBeNull()
-    expect(validateIntent({ maxDistanceKm: 99999 })?.maxDistanceKm).toBeNull()
-    expect(validateIntent({ maxDistanceKm: 'lots' })?.maxDistanceKm).toBeNull()
   })
 })
 
@@ -89,6 +82,41 @@ describe('validateIntent — adHocFilters', () => {
   })
 })
 
+describe('validateIntent — route', () => {
+  const route = (r: unknown) => validateIntent({ route: r })?.route
+  it('accepts a full route and trims', () => {
+    expect(route({ from: ' Konstanz ', to: ' Lindau', mode: 'bike' }))
+      .toEqual({ from: 'Konstanz', to: 'Lindau', mode: 'bike' })
+  })
+  it('allows from null / missing (own location)', () => {
+    expect(route({ from: null, to: 'Lindau', mode: 'foot' })?.from).toBeNull()
+    expect(route({ to: 'Lindau' })).toEqual({ from: null, to: 'Lindau', mode: null })
+  })
+  it('drops unknown modes to null', () => {
+    expect(route({ to: 'Lindau', mode: 'rocket' })?.mode).toBeNull()
+    expect(route({ to: 'Lindau', mode: 5 })?.mode).toBeNull()
+  })
+  it('is null without a usable "to"', () => {
+    expect(route({ from: 'Konstanz' })).toBeNull()
+    expect(route({ from: 'Konstanz', to: '  ' })).toBeNull()
+    expect(route({ from: 'Konstanz', to: 42 })).toBeNull()
+  })
+  it('is null when route is not an object', () => {
+    expect(route('Lindau')).toBeNull()
+    expect(route(['Lindau'])).toBeNull()
+    expect(route(null)).toBeNull()
+  })
+  it('is null when from equals to (case-insensitive)', () => {
+    expect(route({ from: 'lindau ', to: 'Lindau' })).toBeNull()
+  })
+  it('is null when the route field is missing', () => {
+    expect(validateIntent({ place: 'X' })?.route).toBeNull()
+  })
+  it('leaves place untouched', () => {
+    expect(validateIntent({ place: 'Lindau', route: { to: 'Lindau' } })?.place).toBe('Lindau')
+  })
+})
+
 describe('intentHasActions', () => {
   it('is false for null or an empty intent', () => {
     expect(intentHasActions(null)).toBe(false)
@@ -97,6 +125,7 @@ describe('intentHasActions', () => {
   it('is true when any action is present', () => {
     expect(intentHasActions(validateIntent({ place: 'Köln' }))).toBe(true)
     expect(intentHasActions(validateIntent({ enableFilters: ['camper'] }))).toBe(true)
+    expect(intentHasActions(validateIntent({ route: { to: 'Lindau' } }))).toBe(true)
   })
 })
 
@@ -110,6 +139,12 @@ describe('parseChatResponse', () => {
     expect(res.status).toBe('ready')
     expect(res.intent?.enableFilters).toEqual(['camper'])
     expect(res.intent?.place).toBe('Bodensee')
+  })
+
+  it('keeps ready when only a route is present', () => {
+    const res = parseChatResponse({ status: 'ready', reply: 'Ok', intent: { route: { from: 'Konstanz', to: 'Lindau', mode: 'bike' } } })
+    expect(res.status).toBe('ready')
+    expect(res.intent?.route).toEqual({ from: 'Konstanz', to: 'Lindau', mode: 'bike' })
   })
 
   it('downgrades ready→clarify when the intent has no real actions', () => {

@@ -28,6 +28,7 @@ export interface RoutePlannerDeps {
 }
 
 const ROLE_NAME: Record<PlanRole, string> = { start: 'Start', end: 'Ziel' }
+const RESOLVING = 'Orte werden gesucht…'
 const LOCATE_UNAVAILABLE = 'Standort nicht verfügbar – Ort suchen oder Punkt auf der Karte wählen'
 
 interface RoleUi {
@@ -55,6 +56,10 @@ export class RoutePlannerPanel {
   private readonly points: Record<PlanRole, PlanPoint | null> = { start: null, end: null }
   /** Per role: bumped on every set/clear/locate/pick so late GPS results are dropped. */
   private readonly seq: Record<PlanRole, number> = { start: 0, end: 0 }
+  /** Roles with a name lookup in flight (`resolvePoint`); any one keeps the "searching" status. */
+  private readonly resolving: Record<PlanRole, boolean> = { start: false, end: false }
+  /** Failed lookups; survives other roles' successes, cleared by the next user action on that role. */
+  private readonly notFound: Record<PlanRole, string | null> = { start: null, end: null }
   private mode: TravelMode
   private opened = false
   private busy = false
@@ -116,6 +121,9 @@ export class RoutePlannerPanel {
     this.runToken++
     this.abort?.abort()
     this.abort = null
+    // Late lookup/locate results must not land in a reopened panel.
+    this.touch('start')
+    this.touch('end')
     this.setBusy(false)
     this.endPick(true)
     this.setStatus('')
@@ -136,8 +144,36 @@ export class RoutePlannerPanel {
   setPoint(role: PlanRole, point: PlanPoint | null): void {
     // Ein laufender Pick für diese Rolle ist damit überholt.
     if (this.pickRole === role) this.endPick(true)
-    this.seq[role]++
+    this.touch(role)
     this.ui[role].field.setText(point?.label ?? '')
+    this.applyPoint(role, point)
+  }
+
+  /** Verkehrsmittel von außen setzen (z. B. aus einem KI-Routenwunsch). */
+  selectMode(mode: TravelMode): void { this.setMode(mode) }
+
+  /**
+   * Belegt ein Feld mit einem Ortsnamen vor und löst ihn asynchron auf.
+   * Tippen, setPoint, Pick, Standort, Tauschen oder Schließen verwerfen das Ergebnis.
+   */
+  async resolvePoint(role: PlanRole, text: string, resolve: () => Promise<PlanPoint | null>): Promise<void> {
+    if (this.pickRole === role) this.endPick(true)
+    this.touch(role)
+    const my = this.seq[role]
+    this.resolving[role] = true
+    this.ui[role].field.setText(text)
+    this.applyPoint(role, null)
+    let point: PlanPoint | null
+    try { point = await resolve() } catch { point = null }
+    if (my !== this.seq[role]) return
+    this.resolving[role] = false
+    if (!this.opened) return
+    if (!point) {
+      this.notFound[role] = `„${text}“ nicht gefunden – bitte ${ROLE_NAME[role]} wählen`
+      this.refreshStatus()
+      return
+    }
+    this.ui[role].field.setText(point.label)
     this.applyPoint(role, point)
   }
 
@@ -145,6 +181,8 @@ export class RoutePlannerPanel {
     this.runToken++
     this.abort?.abort()
     this.abort = null
+    this.touch('start')
+    this.touch('end')
     this.endPick(true)
     this.events.dispose()
     for (const role of ['start', 'end'] as const) this.ui[role].field.destroy()
@@ -158,13 +196,13 @@ export class RoutePlannerPanel {
       name: ROLE_NAME[role],
       suggest: q => this.deps.suggest(q),
       onSelect: s => {
-        this.seq[role]++
+        this.touch(role)
         const label = shortPlaceLabel(s.label)
         this.ui[role].field.setText(label)
         this.applyPoint(role, { lat: s.lat, lon: s.lon, label, kind: 'place' })
       },
       onInvalidate: () => {
-        this.seq[role]++
+        this.touch(role)
         this.applyPoint(role, null)
       },
     })
@@ -179,14 +217,15 @@ export class RoutePlannerPanel {
   private applyPoint(role: PlanRole, point: PlanPoint | null): void {
     const changed = this.points[role] !== point
     this.points[role] = point
-    if (!this.busy) this.setStatus('')
+    this.refreshStatus()
     this.updateGo()
     if (changed) this.deps.onPointsChange?.(this.points.start, this.points.end)
   }
 
   private async locate(role: PlanRole): Promise<void> {
     if (this.busy) return
-    const my = ++this.seq[role]
+    this.touch(role)
+    const my = this.seq[role]
     this.setStatus('Standort wird ermittelt…')
     let pos: { lat: number; lon: number } | null
     try { pos = await this.deps.locate() } catch { pos = null }
@@ -200,7 +239,7 @@ export class RoutePlannerPanel {
     if (this.busy) return
     // Ein laufender Pick (auch der andere Rolle) wird abgelöst.
     this.endPick(true)
-    this.seq[role]++
+    this.touch(role)
     const my = ++this.pickToken
     this.pickRole = role
     this.renderPick()
@@ -209,7 +248,7 @@ export class RoutePlannerPanel {
       // done(null) beendet nur den Pick-Modus; das Feld bleibt, wie es ist.
       this.endPick(false)
       if (!pos) return
-      this.seq[role]++
+      this.touch(role)
       this.ui[role].field.setText('Kartenpunkt')
       this.applyPoint(role, { lat: pos.lat, lon: pos.lon, label: 'Kartenpunkt', kind: 'map' })
     })
@@ -246,13 +285,13 @@ export class RoutePlannerPanel {
     const endText = end.field.getText()
     const a = this.points.start
     const b = this.points.end
-    this.seq.start++
-    this.seq.end++
+    this.touch('start')
+    this.touch('end')
     start.field.setText(endText)
     end.field.setText(startText)
     this.points.start = b
     this.points.end = a
-    this.setStatus('')
+    this.refreshStatus()
     this.updateGo()
     if (a !== b) this.deps.onPointsChange?.(this.points.start, this.points.end)
   }
@@ -323,6 +362,21 @@ export class RoutePlannerPanel {
 
   private updateGo(): void {
     this.goBtn.disabled = this.busy || !this.points.start || !this.points.end
+  }
+
+  /** Any user action on a role drops its pending lookup/locate result and its "not found" message. */
+  private touch(role: PlanRole): void {
+    this.seq[role]++
+    this.resolving[role] = false
+    this.notFound[role] = null
+  }
+
+  /** Standardstatus: Suche läuft > Fehler gescheiterter Auflösungen > leer. Während der Berechnung unberührt. */
+  private refreshStatus(): void {
+    if (this.busy) return
+    if (this.resolving.start || this.resolving.end) { this.setStatus(RESOLVING); return }
+    const errors = (['start', 'end'] as const).flatMap(r => this.notFound[r] ?? [])
+    this.setStatus(errors.join(' · '), errors.length > 0)
   }
 
   private setStatus(msg: string, isError = false): void {

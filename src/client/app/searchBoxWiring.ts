@@ -62,7 +62,17 @@ export function createSearchBoxWiring(deps: SearchBoxWiringDeps): SearchBoxWirin
     openImport: () => { planner.close(); deps.openImport() },
   })
   const dialog = new AiSearchDialog(box.slot('ai'), {
-    onApply: deps.applyAiIntent,
+    onApply: intent => {
+      // A route wish only prefills the planner: the first geocoder hit can be the
+      // wrong place, so the user checks the fields and computes the route.
+      if (intent.route) {
+        box.setMode('route')
+        void planner.planFromNames(intent.route).then(() => {
+          if (box.mode() === 'route') planner.focus()
+        })
+      }
+      return deps.applyAiIntent(intent)
+    },
     onClose: () => { if (box.mode() === 'ai') box.setMode('search') },
     ...(deps.sendAiChat ? { send: deps.sendAiChat } : {}),
   })

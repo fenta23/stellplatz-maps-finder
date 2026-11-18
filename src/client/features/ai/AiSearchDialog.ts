@@ -3,7 +3,10 @@ import { clone, ref } from '@/core/template.js'
 import { createEventScope } from '@/core/events.js'
 import { sendAiChat, type ChatTurn } from './AiClient.js'
 import type { AiChatResponse, AiIntent } from './intentSchema.js'
+import type { TravelMode } from '@/features/route-planner/plannerModel.js'
 import dialogHtml from './aiSearchDialog.html?raw'
+
+const MODE_LABEL: Record<TravelMode, string> = { foot: 'Fuß', bike: 'Rad', car: 'Auto' }
 
 export interface AiSearchDialogDeps {
   /** Bestätigten Intent auf die Karte anwenden (Filter + Ortssprung). */
@@ -59,7 +62,7 @@ export class AiSearchDialog {
     this.input.disabled = false
     this.input.placeholder = this.placeholder
     this.root.hidden = false
-    this.addAssistant('Wonach suchst du? Beschreib z. B. „ruhiger Stellplatz am Bodensee mit Entsorgung".')
+    this.addAssistant('Wonach suchst du? Beschreib z. B. „ruhiger Stellplatz am Bodensee mit Entsorgung“ oder „mit dem Rad von Konstanz nach Lindau, Bäckereien unterwegs“.')
     const text = seed.trim()
     if (text) { this.input.value = text; void this.send() }
     else setTimeout(() => { if (token === this.token) this.input.focus() }, 50)
@@ -155,7 +158,12 @@ export class AiSearchDialog {
     const recap = document.createElement('div')
     recap.className = 'ai-result-recap'
     const bits: string[] = []
-    if (intent.place) bits.push(`📍 ${intent.place}`)
+    const route = intent.route
+    if (route) {
+      let head = `${route.from ?? 'Mein Standort'} → ${route.to}`
+      if (route.mode) head += ` · ${MODE_LABEL[route.mode]}`
+      bits.push(head)
+    } else if (intent.place) bits.push(`📍 ${intent.place}`)
     const cats = intent.enableFilters.length + intent.adHocFilters.length
     if (cats) bits.push(`${cats} Kategorie${cats > 1 ? 'n' : ''}`)
     recap.textContent = bits.join(' · ') || 'Auswahl anwenden'
@@ -164,7 +172,7 @@ export class AiSearchDialog {
     const btn = document.createElement('button')
     btn.type = 'button'
     btn.className = 'ai-result-apply'
-    btn.textContent = 'Auf Karte zeigen'
+    btn.textContent = intent.route ? 'Route vorbereiten' : 'Auf Karte zeigen'
     btn.addEventListener('click', () => {
       void Promise.resolve(this.deps.onApply(intent))
       this.close()
