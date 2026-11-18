@@ -1,43 +1,9 @@
-/* ── Routenplaner: schwebendes Panel mit Start/Ziel, Verkehrsmittel, Berechnen ──
-   Mobil (≤600px, Breakpoint der App): oben über die volle Breite.
-   Desktop (≥601px): 340px-Spalte links.
-   Body-Klassen: planner-open (Panel sichtbar), planner-picking (Karten-Pick läuft). */
-.planner-panel {
-    position: absolute;
-    top: 8px;
-    left: 8px;
-    right: 8px;
-    z-index: 990;
-    padding: 10px 12px 12px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow);
-    color: var(--ink);
-}
+/* ── Routenplaner: Formular im Slot der Suchbox (Start/Ziel, Verkehrsmittel, Berechnen) ──
+   Rahmen, Position und Kopfzeile kommen von der Suchbox. */
 .planner-panel[hidden] {
     display: none;
 }
-@media (min-width: 601px) {
-    .planner-panel {
-        top: 12px;
-        left: 12px;
-        right: auto;
-        width: 340px;
-        z-index: 950;
-    }
-}
 
-.planner-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 8px;
-}
-.planner-title {
-    font-weight: 600;
-}
-.planner-close,
 .planner-icon-btn {
     display: flex;
     align-items: center;
@@ -52,12 +18,10 @@
     color: var(--ink-muted);
     cursor: pointer;
 }
-.planner-close:hover,
 .planner-icon-btn:hover {
     background: var(--surface-2);
     color: var(--ink);
 }
-.planner-close svg,
 .planner-icon-btn svg {
     width: 19px;
     height: 19px;
@@ -110,49 +74,6 @@
     outline: none;
     border-color: var(--accent);
 }
-.planner-suggestions {
-    position: absolute;
-    top: calc(100% + 4px);
-    left: 0;
-    right: 0;
-    z-index: 1;
-    margin: 0;
-    padding: 0;
-    max-height: 220px;
-    overflow-y: auto;
-    list-style: none;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    box-shadow: var(--shadow);
-}
-.planner-suggestions[hidden] {
-    display: none;
-}
-.planner-suggestion {
-    padding: 9px 13px;
-    cursor: pointer;
-    font-size: 0.82rem;
-    color: var(--ink);
-    border-bottom: 1px solid var(--border-soft);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.planner-suggestion:last-child {
-    border-bottom: none;
-}
-.planner-suggestion:hover,
-.planner-suggestion[aria-selected="true"] {
-    background: var(--surface-2);
-}
-.planner-suggestion-empty {
-    cursor: default;
-    color: var(--ink-muted);
-}
-.planner-suggestion-empty:hover {
-    background: none;
-}
 .planner-swap {
     align-self: center;
     width: 28px;
@@ -194,7 +115,8 @@
     color: #fff;
 }
 .planner-mode:focus-visible,
-.planner-go:focus-visible {
+.planner-go:focus-visible,
+.planner-link:focus-visible {
     outline: 2px solid var(--accent-strong);
     outline-offset: 2px;
 }
@@ -233,10 +155,23 @@
     color: var(--danger);
 }
 
-/* Pick-Modus: nur eine Zeile, die Karte bleibt bedienbar. */
-.planner-panel.planner-panel-picking {
-    padding: 8px 12px;
+.planner-link {
+    display: block;
+    margin-top: 4px;
+    padding: 4px 0;
+    border: none;
+    background: none;
+    color: var(--accent-strong);
+    font: inherit;
+    font-size: 0.85rem;
+    text-decoration: underline;
+    cursor: pointer;
 }
+.planner-link[hidden] {
+    display: none;
+}
+
+/* Pick-Modus: nur eine Zeile, die Karte bleibt bedienbar. */
 .planner-pick {
     display: flex;
     align-items: center;

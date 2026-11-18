@@ -1,61 +1,86 @@
 import './ai.css'
 import { clone, ref } from '@/core/template.js'
+import { createEventScope } from '@/core/events.js'
 import { sendAiChat, type ChatTurn } from './AiClient.js'
-import type { AiIntent } from './intentSchema.js'
-import modalHtml from './aiSearchModal.html?raw'
+import type { AiChatResponse, AiIntent } from './intentSchema.js'
+import dialogHtml from './aiSearchDialog.html?raw'
 
-export interface AiSearchModalDeps {
-  /** Apply a confirmed intent to the map (filters + place jump). */
+export interface AiSearchDialogDeps {
+  /** Bestätigten Intent auf die Karte anwenden (Filter + Ortssprung). */
   readonly onApply: (intent: AiIntent) => void | Promise<void>
-  /** Max user turns before the chat is locked (mirrors backend AI_MAX_TURNS). */
+  /** Der Dialog wurde geschlossen (Esc, close(), nach „Auf Karte zeigen“); nur wenn er offen war. */
+  readonly onClose?: () => void
+  /** Standard: sendAiChat. Injizierbar für Tests. */
+  readonly send?: (messages: readonly ChatTurn[]) => Promise<AiChatResponse>
+  /** Max. Nutzerfragen, danach gesperrt (spiegelt AI_MAX_TURNS im Backend). Standard 5. */
   readonly maxTurns?: number
 }
 
-// Small chat modal for the natural-language search. The conversation produces a
-// validated intent; "Auf Karte zeigen" hands it to onApply and closes — the map
-// itself is the result, so there's no separate result list here.
-export class AiSearchModal {
-  private readonly overlay: HTMLElement
+// Inline-Chat für die Suchbox (Kopfzeile und Rahmen liefert die Suchbox). Das
+// Gespräch erzeugt einen validierten Intent; „Auf Karte zeigen“ übergibt ihn an
+// onApply und schließt — die Karte selbst ist das Ergebnis.
+export class AiSearchDialog {
+  private readonly root: HTMLElement
   private readonly messagesEl: HTMLElement
   private readonly input: HTMLInputElement
   private readonly form: HTMLFormElement
   private readonly maxTurns: number
+  private readonly placeholder: string
+  private readonly sendFn: (messages: readonly ChatTurn[]) => Promise<AiChatResponse>
+  private readonly events = createEventScope()
   private messages: ChatTurn[] = []
   private busy = false
+  // Wird bei open/close/destroy erhöht; veraltete Antworten werden verworfen.
+  private token = 0
 
-  constructor(container: HTMLElement, private readonly deps: AiSearchModalDeps) {
+  constructor(container: HTMLElement, private readonly deps: AiSearchDialogDeps) {
     this.maxTurns = deps.maxTurns ?? 5
-    const root = clone(modalHtml)
-    container.appendChild(root)
-    this.overlay = root
-    this.messagesEl = ref(root, 'messages')
-    this.input = ref<HTMLInputElement>(root, 'input')
-    this.form = ref<HTMLFormElement>(root, 'form')
+    this.sendFn = deps.send ?? sendAiChat
+    this.root = clone(dialogHtml)
+    container.appendChild(this.root)
+    this.messagesEl = ref(this.root, 'messages')
+    this.input = ref<HTMLInputElement>(this.root, 'input')
+    this.form = ref<HTMLFormElement>(this.root, 'form')
+    this.placeholder = this.input.placeholder
 
-    ref(root, 'close').addEventListener('click', () => this.close())
-    this.overlay.addEventListener('mousedown', (e) => { if (e.target === this.overlay) this.close() })
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && !this.overlay.classList.contains('hidden')) this.close()
+    this.events.on(document, 'keydown', (e) => {
+      if (e.key === 'Escape' && this.isOpen()) this.close()
     })
-    this.form.addEventListener('submit', (e) => { e.preventDefault(); void this.send() })
+    this.events.on(this.form, 'submit', (e) => { e.preventDefault(); void this.send() })
   }
 
-  /** Open the modal; if `prefill` is given, it's sent as the first question. */
-  open(prefill = ''): void {
+  /** Öffnet mit leerem Verlauf; `seed` wird als erste Frage gesendet. */
+  open(seed = ''): void {
+    const token = ++this.token
     this.messages = []
     this.busy = false
     this.messagesEl.innerHTML = ''
     this.input.value = ''
     this.input.disabled = false
-    this.overlay.classList.remove('hidden')
+    this.input.placeholder = this.placeholder
+    this.root.hidden = false
     this.addAssistant('Wonach suchst du? Beschreib z. B. „ruhiger Stellplatz am Bodensee mit Entsorgung".')
-    const seed = prefill.trim()
-    if (seed) { this.input.value = seed; void this.send() }
-    else setTimeout(() => this.input.focus(), 50)
+    const text = seed.trim()
+    if (text) { this.input.value = text; void this.send() }
+    else setTimeout(() => { if (token === this.token) this.input.focus() }, 50)
   }
 
   close(): void {
-    this.overlay.classList.add('hidden')
+    this.token++
+    this.busy = false
+    if (this.root.hidden) return
+    this.root.hidden = true
+    this.deps.onClose?.()
+  }
+
+  isOpen(): boolean {
+    return !this.root.hidden
+  }
+
+  destroy(): void {
+    this.token++
+    this.events.dispose()
+    this.root.remove()
   }
 
   private async send(): Promise<void> {
@@ -74,9 +99,11 @@ export class AiSearchModal {
       return
     }
 
+    const token = this.token
     this.setBusy(true)
     const typing = this.addTyping()
-    const res = await sendAiChat(this.messages)
+    const res = await this.sendFn([...this.messages])
+    if (token !== this.token) return
     typing.remove()
     this.setBusy(false)
 
@@ -89,7 +116,7 @@ export class AiSearchModal {
       this.addAssistant(res.reply)
       this.lock()
     } else {
-      // clarify | offtopic | error → just show the reply, keep chatting
+      // clarify | offtopic | error → Antwort zeigen, weiter chatten
       this.addAssistant(res.reply, res.status === 'offtopic' || res.status === 'error')
     }
   }
@@ -146,6 +173,7 @@ export class AiSearchModal {
 
     this.messagesEl.appendChild(card)
     this.scrollDown()
+    btn.focus()
   }
 
   private lock(): void {

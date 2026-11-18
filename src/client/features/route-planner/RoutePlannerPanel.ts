@@ -1,7 +1,7 @@
 import './route-planner.css'
 import { clone, ref } from '@/core/template.js'
 import { createEventScope, type EventScope } from '@/core/events.js'
-import { PlaceField, type PlaceSuggestion } from './PlaceField.js'
+import { PlaceField, type PlaceSuggestion } from '@/core/PlaceField.js'
 import {
   TRAVEL_MODES, shortPlaceLabel,
   type PlanPoint, type PlanRequest, type PlanRole, type TravelMode,
@@ -21,8 +21,10 @@ export interface RoutePlannerDeps {
   initialMode(): TravelMode
   onModeChange?(mode: TravelMode): void
   onPointsChange?(start: PlanPoint | null, end: PlanPoint | null): void
-  /** Das Panel wurde geschlossen (Knopf, Esc, Erfolg oder `close()`); nur wenn es offen war. */
+  /** Das Panel wurde geschlossen (Esc, Erfolg oder `close()`); nur wenn es offen war. */
   onClose?(): void
+  /** Verweis auf den Import-Dialog; ohne Dep bleibt der Link verborgen. */
+  onOpenImport?(): void
 }
 
 const ROLE_NAME: Record<PlanRole, string> = { start: 'Start', end: 'Ziel' }
@@ -35,7 +37,10 @@ interface RoleUi {
   readonly pickBtn: HTMLButtonElement
 }
 
-/** Planer-Panel: Start/Ziel (Suche, GPS, Karten-Pick), Verkehrsmittel, Berechnen. */
+/**
+ * Planer-Formular im Slot der Suchbox (Rahmen, Kopfzeile und Schließen-Knopf kommen von dort):
+ * Start/Ziel (Suche, GPS, Karten-Pick), Verkehrsmittel, Berechnen.
+ */
 export class RoutePlannerPanel {
   private readonly panel: HTMLElement
   private readonly full: HTMLElement
@@ -43,7 +48,6 @@ export class RoutePlannerPanel {
   private readonly pickText: HTMLElement
   private readonly goBtn: HTMLButtonElement
   private readonly swapBtn: HTMLButtonElement
-  private readonly closeBtn: HTMLButtonElement
   private readonly statusEl: HTMLElement
   private readonly modeBtns: readonly HTMLButtonElement[]
   private readonly ui: Record<PlanRole, RoleUi>
@@ -69,14 +73,12 @@ export class RoutePlannerPanel {
     this.pickText = ref(this.panel, 'pickText')
     this.goBtn = ref(this.panel, 'go')
     this.swapBtn = ref(this.panel, 'swap')
-    this.closeBtn = ref(this.panel, 'close')
     this.statusEl = ref(this.panel, 'status')
     this.modeBtns = [...this.panel.querySelectorAll<HTMLButtonElement>('[data-mode]')]
     this.mode = deps.initialMode()
 
     this.ui = { start: this.buildRole('start'), end: this.buildRole('end') }
 
-    this.closeBtn.addEventListener('click', () => this.close())
     this.swapBtn.addEventListener('click', () => this.swap())
     this.goBtn.addEventListener('click', () => { void this.run() })
     ref(this.panel, 'pickCancel').addEventListener('click', () => this.cancelPick())
@@ -84,6 +86,10 @@ export class RoutePlannerPanel {
       btn.addEventListener('click', () => this.setMode(btn.dataset.mode as TravelMode))
       btn.addEventListener('keydown', e => this.onModeKey(e, btn))
     }
+    const importLink = ref<HTMLButtonElement>(this.panel, 'importLink')
+    const { onOpenImport } = deps
+    importLink.hidden = !onOpenImport
+    if (onOpenImport) importLink.addEventListener('click', () => onOpenImport())
     container.appendChild(this.panel)
     this.renderMode()
     this.updateGo()
@@ -101,7 +107,6 @@ export class RoutePlannerPanel {
       this.renderMode()
       this.setStatus('')
       this.panel.hidden = false
-      document.body.classList.add('planner-open')
     }
     if (prefill) this.setPoint(prefill.role, prefill.point)
   }
@@ -117,8 +122,14 @@ export class RoutePlannerPanel {
     for (const role of ['start', 'end'] as const) this.ui[role].field.closeList()
     this.opened = false
     this.panel.hidden = true
-    document.body.classList.remove('planner-open')
     if (wasOpen) this.deps.onClose?.()
+  }
+
+  /** Fokussiert das erste Feld, das noch Eingabe braucht: Start, Ziel, sonst „Route berechnen“. */
+  focusFirstEmpty(): void {
+    if (!this.points.start) this.ui.start.input.focus()
+    else if (!this.points.end) this.ui.end.input.focus()
+    else this.goBtn.focus()
   }
 
   /** Setzt oder leert (null) einen Punkt von außen, z. B. aus dem POI-Detail. */
@@ -137,7 +148,6 @@ export class RoutePlannerPanel {
     this.endPick(true)
     this.events.dispose()
     for (const role of ['start', 'end'] as const) this.ui[role].field.destroy()
-    document.body.classList.remove('planner-open', 'planner-picking')
     this.panel.remove()
     this.opened = false
   }
@@ -225,8 +235,6 @@ export class RoutePlannerPanel {
     const picking = role !== null
     this.full.hidden = picking
     this.pickRow.hidden = !picking
-    this.panel.classList.toggle('planner-panel-picking', picking)
-    document.body.classList.toggle('planner-picking', picking)
     if (role) this.pickText.textContent = `${ROLE_NAME[role]} auf der Karte antippen`
   }
 

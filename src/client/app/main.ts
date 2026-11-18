@@ -15,7 +15,6 @@ import { POI_TILES_BASE } from '@/core/config.js'
 import { PoiDetailPanel } from '@/features/poi-detail/PoiDetailPanel.js'
 import { collectTagImages, loadMapillaryImages, loadNearby, loadNotes } from '@/features/poi-detail/poiData.js'
 import { loadPoiSummary } from '@/features/ai/AiClient.js'
-import { AiSearchModal } from '@/features/ai/AiSearchModal.js'
 import type { AiIntent } from '@/features/ai/intentSchema.js'
 import { nearbyIconSvg } from '@/features/poi-detail/PoiDetailPanel.js'
 import { createLeafletTargetMarker } from '@/features/map/targetMarker.js'
@@ -29,7 +28,6 @@ import { setPoiMetaRegistry, typeLabel, typeIcon } from '@/features/pois/poiMeta
 import { filterIconPath, PERSONAL_FILTER_ID } from '@/features/filters/filterModel.js'
 import { DEFAULT_PERSONAL_COLOR } from '@/features/custom-pois/CustomPoiMarkerManager.js'
 import { type StyleResolver } from '@/features/pois/PoiMarkerManager.js'
-import { SearchBar } from '@/features/search/SearchBar.js'
 import { LocalFavoritesStore } from '@/features/favorites/FavoritesStore.js'
 import { SyncedFavoritesStore } from '@/features/favorites/RemoteFavoritesStore.js'
 import { FavoritesListPanel } from '@/features/favorites/FavoritesListPanel.js'
@@ -59,7 +57,8 @@ import { initImport } from './importWiring.js'
 import { createTrackWiring } from './trackWiring.js'
 import { shouldCenterOnUser } from './startupCenter.js'
 import { createProfileWiring } from './profileWiring.js'
-import { createRoutePlannerWiring } from './routePlannerWiring.js'
+import { createSearchBoxWiring } from './searchBoxWiring.js'
+import { createUiCollapse } from './uiCollapse.js'
 import { TravelModeStore } from '@/features/route-planner/TravelModeStore.js'
 import { LocalProfileStore } from '@/features/profile/ProfileStore.js'
 import { createTrackPoiLoader } from './trackPoiLoader.js'
@@ -141,7 +140,7 @@ async function init() {
   // ── Filters ─────────────────────────────────────────────────────────────────
   const filterStore = new SyncedFilterStore(new LocalFilterStore())
   let openProfiles: () => void = () => {}
-  // Bound once the route planner exists (it needs trackWiring, which is created further down).
+  // Bound once the search box exists (its route planner needs trackWiring, which is created further down).
   let openPlanner: () => void = () => {}
   let offerPoiToPlanner: (poi: OsmPoi) => boolean = () => false
   const filterConfigPanel = new FilterConfigPanel(document.body, filterStore, { onOpenProfiles: () => openProfiles() })
@@ -322,10 +321,7 @@ async function init() {
     clearTimeout(refreshTimer)
     refreshTimer = setTimeout(() => void refresh(), 250)
   }
-  mapService.onBoundsChanged(bounds => {
-    searchBar.updateBounds(bounds)
-    refreshDebounced()
-  })
+  mapService.onBoundsChanged(() => refreshDebounced())
   setTimeout(() => void refresh(), 800)
 
   // ── Track import (GPX / Komoot) + POIs along the route ─────────────────────
@@ -378,16 +374,18 @@ async function init() {
   let mapReady = false
   setTimeout(() => { mapReady = true }, 800) // skip initial setView zoomstart
 
-  const collapseUI = () => {
-    if (!isMobile() || !mapReady) return
-    document.body.classList.add('ui-collapsed')
-    detailPanel.collapse()
-    trackWiring.collapsePanel()
-  }
-  const expandUI = () => document.body.classList.remove('ui-collapsed')
+  // The header stays while the search box is expanded (route form, AI dialog).
+  const uiCollapse = createUiCollapse({
+    isMobile,
+    isReady: () => mapReady,
+    isBoxExpanded: () => searchWiring.isExpanded(), // created further down
+    collapseDetail: () => detailPanel.collapse(),
+    collapseTrack: () => trackWiring.collapsePanel(),
+  })
+  const expandUI = () => uiCollapse.expand()
 
-  mapService.onDragStart(collapseUI)
-  mapService.onZoomStart(collapseUI)
+  mapService.onDragStart(() => uiCollapse.collapse())
+  mapService.onZoomStart(() => uiCollapse.collapse())
 
   // Float control buttons restore the full UI
   const floatMenu = document.getElementById('float-menu')
@@ -398,7 +396,7 @@ async function init() {
   floatMenu?.addEventListener('click', () => { expandUI(); btnMenu?.click() })
   floatSearch?.addEventListener('click', () => {
     expandUI()
-    document.querySelector<HTMLInputElement>('.search-input')?.focus()
+    searchWiring.focusSearch()
   })
   floatFilters?.addEventListener('click', () => expandUI())
 
@@ -418,15 +416,11 @@ async function init() {
   })
   detailPanel.onNearbySelect(item => nearbyWiring.select(item))
   detailPanel.onPlanPoint(role => {
-    if (session.selectedPoi) plannerWiring.planFromPoi(session.selectedPoi, role)
+    if (session.selectedPoi) searchWiring.planFromPoi(session.selectedPoi, role)
   })
 
-  // ── Search ────────────────────────────────────────────────────────
-  const searchBar = new SearchBar(document.getElementById('search-bar')!)
-  searchBar.onPlaceSelected(({ lat, lng }) => mapService.setCenter(lat, lng, 14))
-
-  // ── KI-Suche (Chat-Modal) ─────────────────────────────────────────────────────
-  // Translates a chat conversation into the existing FilterStore + geocode paths.
+  // ── KI-Suche ──────────────────────────────────────────────────────────────────
+  // Translates a confirmed chat intent into the existing FilterStore + geocode paths.
   const applyAiIntent = async (intent: AiIntent): Promise<void> => {
     for (const id of intent.enableFilters) {
       const f = filterStore.get(id)
@@ -443,14 +437,51 @@ async function init() {
     }
     void refresh()
   }
-  const aiModal = new AiSearchModal(document.body, { onApply: applyAiIntent })
-  searchBar.onAiSearch(query => aiModal.open(query))
 
-  // KI nur für eingeloggte Nutzer: ✨-Button ein-/ausblenden + Summary-Gate (aiAllowed).
+  // ── Search box: place search, route planner, AI dialog ──────────────────────
+  // Entries into the planner: route button of the box, menu, import dialog, POI detail, map pick.
+  const profileStore = new LocalProfileStore()
+  const searchWiring = createSearchBoxWiring({
+    container: document.getElementById('search-bar')!,
+    planner: {
+      geocode,
+      getUserPos: () => session.userPos,
+      requestUserPos: async () => {
+        const pos = await getUserLocation()
+        if (!pos) return null
+        session.userPos = { lat: pos[0], lon: pos[1] }
+        locationMarker.update(pos)
+        return session.userPos
+      },
+      pickPoint: (onPick, onCancel) => mapService.pickPoint(onPick, onCancel),
+      markers: { start: createLeafletTargetMarker(map), end: createLeafletTargetMarker(map) },
+      getProfiles: () => profileStore.get(),
+      modeStore: new TravelModeStore(),
+      importTrack: track => trackWiring.importTrack(track),
+      isMobile,
+      collapseDetail: () => detailPanel.collapse(),
+      poiLabel: poi => poi.tags.name ?? typeLabel(poi.type),
+      getViewbox: () => {
+        const b = mapService.getBounds()
+        return b ? { west: b.west, north: b.north, east: b.east, south: b.south } : undefined
+      },
+    },
+    centerOn: (lat, lon) => {
+      // The jump must not fold the header away: "Route hierher" is offered there now.
+      uiCollapse.hold()
+      mapService.setCenter(lat, lon, 14)
+    },
+    applyAiIntent,
+    expandUi: expandUI,
+    openImport: () => { closeAll(); trackWiring.openImport() },
+  })
+  openPlanner = () => { closeAll(); searchWiring.openRoute() }
+  offerPoiToPlanner = poi => searchWiring.offerPoi(poi)
+
+  // KI nur für eingeloggte Nutzer: ✨-Knopf und KI-Zeile der Suchbox + Summary-Gate (aiAllowed).
   const setAiAccess = (loggedIn: boolean): void => {
     aiAllowed = loggedIn
-    searchBar.setAiEnabled(loggedIn)
-    if (!loggedIn) aiModal.close()
+    searchWiring.setAiEnabled(loggedIn)
   }
   if (auth) {
     auth.onChange(user => setAiAccess(!!user))
@@ -507,39 +538,11 @@ async function init() {
   const datenschutzPanel = new DatenschutzPanel(document.body)
   const impressumPanel = new ImpressumPanel(document.body)
   const responsibilityPanel = new ResponsibilityPanel(document.body)
-  const profileStore = new LocalProfileStore()
   const profileWiring = createProfileWiring({
     store: profileStore, filterStore, dialogContainer: document.body, flash: flashInfo,
   })
   openProfiles = () => { closeAll(); profileWiring.open() }
 
-  // ── Route planner (menu entry, import dialog, POI detail, map pick) ─────────
-  const plannerWiring = createRoutePlannerWiring({
-    container: document.getElementById('content')!,
-    geocode,
-    getUserPos: () => session.userPos,
-    requestUserPos: async () => {
-      const pos = await getUserLocation()
-      if (!pos) return null
-      session.userPos = { lat: pos[0], lon: pos[1] }
-      locationMarker.update(pos)
-      return session.userPos
-    },
-    pickPoint: (onPick, onCancel) => mapService.pickPoint(onPick, onCancel),
-    markers: { start: createLeafletTargetMarker(map), end: createLeafletTargetMarker(map) },
-    getProfiles: () => profileStore.get(),
-    modeStore: new TravelModeStore(),
-    importTrack: track => trackWiring.importTrack(track),
-    isMobile,
-    collapseDetail: () => detailPanel.collapse(),
-    poiLabel: poi => poi.tags.name ?? typeLabel(poi.type),
-    getViewbox: () => {
-      const b = mapService.getBounds()
-      return b ? { west: b.west, north: b.north, east: b.east, south: b.south } : undefined
-    },
-  })
-  openPlanner = () => { closeAll(); plannerWiring.open() }
-  offerPoiToPlanner = poi => plannerWiring.offerPoi(poi)
   const helpPanel = new HelpPanel(document.body, {
     filterStore,
     profiles: profileWiring.helpProfiles,
@@ -558,7 +561,7 @@ async function init() {
     infoPanel.close(); datenschutzPanel.close(); impressumPanel.close()
     favoritesPanel.close(); notesPanel.close(); helpPanel.close()
     responsibilityPanel.close(); trackWiring.closeImport(); profileWiring.close()
-    plannerWiring.close()
+    searchWiring.close()
   }
 
   const menuItems: MenuEntry[] = [

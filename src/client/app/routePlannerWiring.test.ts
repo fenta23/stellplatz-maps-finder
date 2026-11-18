@@ -44,6 +44,8 @@ interface SetupOpts {
   readonly stored?: TravelMode | null
   readonly fetchFn?: typeof fetch
   readonly geocode?: (q: string) => Promise<NominatimResult[]>
+  readonly onClose?: () => void
+  readonly openImport?: () => void
 }
 
 function setup(o: SetupOpts = {}) {
@@ -78,6 +80,8 @@ function setup(o: SetupOpts = {}) {
     isMobile: () => o.mobile ?? false,
     collapseDetail,
     poiLabel: p => p.tags.name ?? 'Ort',
+    ...(o.onClose ? { onClose: o.onClose } : {}),
+    ...(o.openImport ? { openImport: o.openImport } : {}),
   })
   const q = <T extends HTMLElement>(r: string) => container.querySelector<T>(`[data-ref="${r}"]`)!
   const val = (r: string) => q<HTMLInputElement>(r).value
@@ -351,6 +355,81 @@ describe('createRoutePlannerWiring', () => {
     })
   })
 
+  describe('planToPlace', () => {
+    const place = { lat: 50.94, lon: 6.96, label: 'Köln, Nordrhein-Westfalen, Deutschland' }
+
+    it('sets the destination with the short label', () => {
+      const { wiring, val, end } = setup()
+      wiring.planToPlace(place)
+      expect(wiring.isOpen()).toBe(true)
+      expect(val('endInput')).toBe('Köln')
+      expect(end.pos).toEqual({ lat: 50.94, lon: 6.96 })
+      expect(end.label).toBe('Ziel: Köln')
+    })
+
+    it('takes "Mein Standort" as start when the position is known and the start empty', () => {
+      const { wiring, val, start } = setup({ userPos: here })
+      wiring.planToPlace(place)
+      expect(val('startInput')).toBe(MY_LOCATION_LABEL)
+      expect(start.pos).toEqual(here)
+    })
+
+    it('leaves an already chosen start alone', () => {
+      const { wiring, val } = setup({ userPos: here })
+      wiring.planFromPoi(poi, 'start')
+      wiring.planToPlace(place)
+      expect(val('startInput')).toBe('Camping Pirna')
+      expect(val('endInput')).toBe('Köln')
+    })
+
+    it('does not collapse the detail sheet', () => {
+      const { wiring, collapseDetail } = setup({ mobile: true })
+      wiring.planToPlace(place)
+      expect(collapseDetail).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('onClose, openImport, focus', () => {
+    it('calls onClose after the markers were cleared, and only when open', () => {
+      const seen: Array<[unknown, unknown]> = []
+      let h: ReturnType<typeof setup>
+      const onClose = vi.fn(() => { seen.push([h.start.pos, h.end.pos]) })
+      h = setup({ userPos: here, onClose })
+      h.wiring.close()
+      expect(onClose).not.toHaveBeenCalled()
+      h.wiring.planFromPoi(poi, 'end')
+      expect(h.start.pos).not.toBeNull()
+      h.wiring.close()
+      expect(onClose).toHaveBeenCalledTimes(1)
+      expect(seen).toEqual([[null, null]])
+    })
+
+    it('calls openImport from the link and keeps the planner open', () => {
+      const openImport = vi.fn()
+      const { wiring, q } = setup({ openImport })
+      wiring.open()
+      expect(q('importLink').hidden).toBe(false)
+      q<HTMLButtonElement>('importLink').click()
+      expect(openImport).toHaveBeenCalledTimes(1)
+      expect(wiring.isOpen()).toBe(true)
+    })
+
+    it('hides the import link without openImport', () => {
+      const { q } = setup()
+      expect(q('importLink').hidden).toBe(true)
+    })
+
+    it('focus() goes to the first empty field', () => {
+      const { wiring, q } = setup()
+      wiring.open()
+      wiring.focus()
+      expect(document.activeElement).toBe(q('startInput'))
+      wiring.planFromPoi(poi, 'start')
+      wiring.focus()
+      expect(document.activeElement).toBe(q('endInput'))
+    })
+  })
+
   describe('map pick and offerPoi', () => {
     it('offerPoi is false when the panel is not picking', () => {
       const { wiring } = setup()
@@ -364,11 +443,11 @@ describe('createRoutePlannerWiring', () => {
       wiring.open()
       q<HTMLButtonElement>('endPick').click()
       expect(pickPoint).toHaveBeenCalledTimes(1)
-      expect(document.body.classList.contains('planner-picking')).toBe(true)
+      expect(q('pick').hidden).toBe(false)
 
       expect(wiring.offerPoi(poi)).toBe(true)
       expect(val('endInput')).toBe('Camping Pirna')
-      expect(document.body.classList.contains('planner-picking')).toBe(false)
+      expect(q('pick').hidden).toBe(true)
       expect(picks[0]?.cancel).toHaveBeenCalledTimes(1)
 
       // MapService reports the cancelled pick afterwards: the field must stay.
@@ -393,7 +472,7 @@ describe('createRoutePlannerWiring', () => {
       q<HTMLButtonElement>('startPick').click()
       picks[0]?.onCancel?.()
       expect(val('startInput')).toBe('')
-      expect(document.body.classList.contains('planner-picking')).toBe(false)
+      expect(q('pick').hidden).toBe(true)
     })
   })
 
@@ -410,10 +489,10 @@ describe('createRoutePlannerWiring', () => {
       expect(end.pos).toBeNull()
     })
 
-    it('clears the markers when the panel is closed with its own button', () => {
-      const { wiring, start, end, q } = setup({ userPos: here })
+    it('clears the markers when the panel is closed with Escape', () => {
+      const { wiring, start, end } = setup({ userPos: here })
       wiring.planFromPoi(poi, 'end')
-      q<HTMLButtonElement>('close').click()
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
       expect(wiring.isOpen()).toBe(false)
       expect(start.pos).toBeNull()
       expect(end.pos).toBeNull()

@@ -2,9 +2,10 @@ import type { OsmPoi } from '@/features/pois/OverpassClient.js'
 import type { GeocodeOptions, NominatimResult } from '@/core/nominatim.js'
 import type { TargetMarker } from '@/features/map/targetMarker.js'
 import { RoutePlannerPanel } from '@/features/route-planner/RoutePlannerPanel.js'
-import type { PlaceSuggestion } from '@/features/route-planner/PlaceField.js'
+import { createPlaceSuggest } from '@/app/placeSuggest.js'
 import {
   defaultTravelMode,
+  shortPlaceLabel,
   type PlanPoint, type PlanRequest, type PlanRole, type TravelMode,
 } from '@/features/route-planner/plannerModel.js'
 import { fetchPlannedRoute, type RouteEndpoint } from '@/features/track/osrmRoute.js'
@@ -19,7 +20,7 @@ export const MY_LOCATION_LABEL = 'Mein Standort'
 const SUGGESTION_LIMIT = 5
 
 export interface RoutePlannerWiringDeps {
-  /** Panel host (`#content`). */
+  /** Slot der Suchbox, in den das Formular kommt. */
   readonly container: HTMLElement
   readonly geocode: (q: string, opts?: GeocodeOptions) => Promise<NominatimResult[]>
   /** Last known position of the user, if any. */
@@ -44,6 +45,10 @@ export interface RoutePlannerWiringDeps {
   readonly poiLabel: (poi: OsmPoi) => string
   /** Bias for the place search, e.g. the visible map area. */
   readonly getViewbox?: () => GeocodeOptions['viewbox'] | undefined
+  /** The planner was closed (button of the search box, Esc, success); after the markers are cleared. */
+  readonly onClose?: () => void
+  /** Opens the import dialog (link in the form). */
+  readonly openImport?: () => void
 }
 
 export interface RoutePlannerWiring {
@@ -51,6 +56,10 @@ export interface RoutePlannerWiring {
   close(): void
   isOpen(): boolean
   planFromPoi(poi: OsmPoi, role: PlanRole): void
+  /** Place chosen in the search line: take it as the destination. */
+  planToPlace(place: { readonly lat: number; readonly lon: number; readonly label: string }): void
+  /** Puts the focus on the first field that still needs input. */
+  focus(): void
   /** Marker tapped while the planner is picking: true = taken as the point (caller must NOT select the POI). */
   offerPoi(poi: OsmPoi): boolean
 }
@@ -76,12 +85,7 @@ export function createRoutePlannerWiring(deps: RoutePlannerWiringDeps): RoutePla
     deps.markers.end.clear()
   }
 
-  async function suggest(query: string): Promise<readonly PlaceSuggestion[]> {
-    const viewbox = deps.getViewbox?.()
-    const hits = await deps.geocode(query, { limit: SUGGESTION_LIMIT, ...(viewbox ? { viewbox } : {}) })
-    return hits.map(h => ({ label: h.display_name, lat: Number(h.lat), lon: Number(h.lon) }))
-      .filter(s => Number.isFinite(s.lat) && Number.isFinite(s.lon))
-  }
+  const suggest = createPlaceSuggest({ geocode: deps.geocode, getViewbox: deps.getViewbox, limit: SUGGESTION_LIMIT })
 
   async function locate(): Promise<LatLon | null> {
     return deps.getUserPos() ?? await deps.requestUserPos()
@@ -122,7 +126,8 @@ export function createRoutePlannerWiring(deps: RoutePlannerWiringDeps): RoutePla
       showMarker('start', s)
       showMarker('end', e)
     },
-    onClose: clearMarkers,
+    onClose: () => { clearMarkers(); deps.onClose?.() },
+    ...(deps.openImport ? { onOpenImport: deps.openImport } : {}),
   })
 
   /** "Mein Standort" is a snapshot: when the planner opens again, move held ones to where the user is now. */
@@ -145,23 +150,32 @@ export function createRoutePlannerWiring(deps: RoutePlannerWiringDeps): RoutePla
     showMarker('end', end)
   }
 
+  function planFrom(point: PlanPoint, role: PlanRole): void {
+    const pos = deps.getUserPos()
+    // "Als Ziel" with nothing else set yet: the user most likely wants to get there from here.
+    const needsStart = role === 'end' && !start && pos !== null
+    panel.open({ role, point })
+    refreshOwnPosition()
+    if (needsStart) {
+      panel.setPoint('start', { lat: pos.lat, lon: pos.lon, label: MY_LOCATION_LABEL, kind: 'gps' })
+    }
+  }
+
   return {
     open,
     close: () => panel.close(),
     isOpen: () => panel.isOpen(),
 
     planFromPoi(poi, role) {
-      const point = poiPoint(poi, deps.poiLabel(poi))
-      const pos = deps.getUserPos()
-      // "Als Ziel" with nothing else set yet: the user most likely wants to get there from here.
-      const needsStart = role === 'end' && !start && pos !== null
-      panel.open({ role, point })
-      refreshOwnPosition()
-      if (needsStart) {
-        panel.setPoint('start', { lat: pos.lat, lon: pos.lon, label: MY_LOCATION_LABEL, kind: 'gps' })
-      }
+      planFrom(poiPoint(poi, deps.poiLabel(poi)), role)
       if (deps.isMobile()) deps.collapseDetail()
     },
+
+    planToPlace(place) {
+      planFrom({ lat: place.lat, lon: place.lon, label: shortPlaceLabel(place.label), kind: 'place' }, 'end')
+    },
+
+    focus: () => panel.focusFirstEmpty(),
 
     offerPoi(poi) {
       const role = panel.pickingRole()

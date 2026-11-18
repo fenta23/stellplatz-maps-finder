@@ -1,0 +1,26 @@
+<div class="sbx" data-mode="search">
+  <form class="sbx-form" role="search" data-ref="form">
+    <input class="sbx-input" type="search" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="search" data-ref="input" />
+    <button class="sbx-btn sbx-clear" type="button" data-ref="clear" aria-label="Suche löschen" hidden>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+    </button>
+    <button class="sbx-btn sbx-ai" type="button" data-ref="aiBtn" aria-label="Mit KI suchen" title="Mit KI suchen">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg>
+    </button>
+    <button class="sbx-btn sbx-route" type="button" data-ref="routeBtn" aria-label="Route planen" title="Route planen" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></svg>
+      <span class="sbx-route-label" data-ref="routeLabel" hidden>Route hierher</span>
+    </button>
+  </form>
+  <div class="sbx-head" data-ref="head" hidden>
+    <span class="sbx-title" data-ref="title"></span>
+    <button class="sbx-btn sbx-close" type="button" data-ref="close" aria-label="Schließen" title="Schließen">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+    </button>
+  </div>
+  <ul data-ref="list"></ul>
+  <section class="sbx-panel" data-ref="panel" hidden>
+    <div data-ref="routeSlot" hidden></div>
+    <div data-ref="aiSlot" hidden></div>
+  </section>
+</div>
