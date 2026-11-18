@@ -7,6 +7,8 @@ const SVG_PLUS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 
 const SVG_GEAR = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>'
 
+const SVG_UNDO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11"/></svg>'
+
 const SVG_MORE = '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>'
 
 /**
@@ -68,6 +70,7 @@ export class FilterPanel {
   private menu!: HTMLElement
   private defsById = new Map<string, FilterDef>()
   private menuOpen = false
+  private onRestore: (() => void) | null = null
 
   constructor(
     private readonly container: HTMLElement,
@@ -109,6 +112,9 @@ export class FilterPanel {
 
     this.container.appendChild(this.separator())
 
+    const restore = this.restoreButton()
+    if (restore) this.container.appendChild(restore)
+
     this.chipsWrap = document.createElement('div')
     this.chipsWrap.className = 'filter-chips'
     for (const f of this.store.list()) {
@@ -147,6 +153,26 @@ export class FilterPanel {
     this.menuOpen = false
     this.relayout()
     if (wasOpen && this.moreBtn.style.display !== 'none') this.openMenu()
+  }
+
+  /** Zeigt am Anfang der Filterleiste „↩ Filter vor KI-Suche“; null blendet den Chip aus. */
+  setRestore(onRestore: (() => void) | null): void {
+    this.onRestore = onRestore
+    this.render()
+  }
+
+  private restoreButton(): HTMLButtonElement | null {
+    const cb = this.onRestore
+    if (!cb) return null
+    const title = 'Filter vor der KI-Suche wiederherstellen'
+    const btn = document.createElement('button')
+    btn.type = 'button'
+    btn.className = 'filter-restore'
+    btn.innerHTML = `${SVG_UNDO}<span>Filter vor KI-Suche</span>`
+    btn.title = title
+    btn.setAttribute('aria-label', title)
+    btn.addEventListener('click', () => cb())
+    return btn
   }
 
   /** Decide which chips stay on the row and which fall into the overflow menu. */

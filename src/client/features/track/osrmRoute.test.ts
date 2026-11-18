@@ -62,6 +62,104 @@ describe('buildRouteUrl', () => {
   })
 })
 
+describe('buildRouteUrl with via points', () => {
+  it('puts the via points between start and end, in order', () => {
+    const via = [{ lat: 51.02, lon: 13.8 }, { lat: 51.0, lon: 13.85, label: 'Heidenau' }]
+    expect(buildRouteUrl({ ...REQ, via })).toBe(
+      'https://routing.openstreetmap.de/routed-bike/route/v1/driving/13.7373,51.0504;13.8,51.02;13.85,51;13.9366,50.9588?overview=full&geometries=geojson',
+    )
+  })
+
+  it('an empty via list gives the plain start;end URL', () => {
+    expect(buildRouteUrl({ ...REQ, via: [] })).toBe(buildRouteUrl(REQ))
+  })
+})
+
+describe('fetchPlannedRoute: plan and via points', () => {
+  const VIA = { lat: 51.02, lon: 13.8 }
+  const viaBody = (over: Record<string, unknown> = {}) => okBody({
+    waypoints: [
+      { name: 'Wilsdruffer Straße', distance: 12 },
+      { name: 'Elberadweg', distance: 40, location: [13.8004, 51.0197] },
+      { name: 'Am Markt', distance: 30 },
+    ],
+    ...over,
+  })
+
+  it('returns the plan: requested start/end with their labels, and the mode', async () => {
+    const track = await fetchPlannedRoute(REQ, stub(jsonResponse(okBody())))
+    expect(track.plan).toEqual({
+      mode: 'bike',
+      waypoints: [
+        { lat: 51.0504, lon: 13.7373, label: 'Dresden' },
+        { lat: 50.9588, lon: 13.9366, label: 'Pirna' },
+      ],
+    })
+  })
+
+  it('labels unnamed ends with the road OSRM snapped to, so the name survives later edits', async () => {
+    const req: RouteRequest = { start: { lat: 51.0504, lon: 13.7373 }, end: { lat: 50.9588, lon: 13.9366 }, mode: 'foot' }
+    const track = await fetchPlannedRoute(req, stub(jsonResponse(okBody())))
+    expect(track.name).toBe('Wilsdruffer Straße → Kartenpunkt (Fuß)')
+    expect(track.plan?.waypoints.map(w => w.label)).toEqual(['Wilsdruffer Straße', 'Kartenpunkt'])
+  })
+
+  it('requests the via points and keeps them in the plan where OSRM snapped them', async () => {
+    const f = stub(jsonResponse(viaBody()))
+    const track = await fetchPlannedRoute({ ...REQ, via: [VIA] }, f)
+    expect(f.mock.calls[0]![0]).toBe(buildRouteUrl({ ...REQ, via: [VIA] }))
+    expect(track.plan?.waypoints).toEqual([
+      { lat: 51.0504, lon: 13.7373, label: 'Dresden' },
+      { lat: 51.0197, lon: 13.8004 },
+      { lat: 50.9588, lon: 13.9366, label: 'Pirna' },
+    ])
+  })
+
+  it('keeps the requested via position when OSRM gives no usable location', async () => {
+    const body = viaBody({ waypoints: [{ distance: 1 }, { distance: 1, location: ['x', 51] }, { distance: 1 }] })
+    const track = await fetchPlannedRoute({ ...REQ, via: [VIA] }, stub(jsonResponse(body)))
+    expect(track.plan?.waypoints[1]).toEqual(VIA)
+  })
+
+  it('names the end after the LAST waypoint, not the second one', async () => {
+    const req: RouteRequest = { start: REQ.start, end: { lat: 50.9588, lon: 13.9366 }, mode: 'bike', via: [VIA] }
+    const track = await fetchPlannedRoute(req, stub(jsonResponse(viaBody())))
+    expect(track.name).toBe('Dresden → Am Markt (Rad)')
+  })
+
+  it('start = end is a round trip with a via point, but still route-same-point without one', async () => {
+    const round: RouteRequest = { start: REQ.start, end: { ...REQ.start }, mode: 'bike' }
+    const none = stub(jsonResponse(okBody()))
+    expect(await kindOf(fetchPlannedRoute(round, none))).toBe('route-same-point')
+    expect(none).not.toHaveBeenCalled()
+
+    const f = stub(jsonResponse(viaBody()))
+    const track = await fetchPlannedRoute({ ...round, via: [VIA] }, f)
+    expect(f).toHaveBeenCalledTimes(1)
+    expect(track.plan?.waypoints).toHaveLength(3)
+  })
+
+  it('adds up the legs for the length limit', async () => {
+    // Start and end are 17 km apart, but the detour via the far point is over 1000 km.
+    const f = stub(jsonResponse(viaBody()))
+    expect(await kindOf(fetchPlannedRoute({ ...REQ, via: [{ lat: 56.5, lon: 13.8 }] }, f))).toBe('track-too-long')
+    expect(f).not.toHaveBeenCalled()
+  })
+
+  it('refuses more than 10 via points without asking the server', async () => {
+    const f = stub(jsonResponse(viaBody()))
+    const via = Array.from({ length: 11 }, (_, i) => ({ lat: 51 + i / 1000, lon: 13.8 }))
+    expect(await kindOf(fetchPlannedRoute({ ...REQ, via }, f))).toBe('route-too-many-vias')
+    expect(f).not.toHaveBeenCalled()
+    expect(await kindOf(fetchPlannedRoute({ ...REQ, via: via.slice(0, 10) }, stub(jsonResponse(viaBody()))))).toBeUndefined()
+  })
+
+  it('route-no-road when a via point snapped further than MAX_SNAP_M', async () => {
+    const body = viaBody({ waypoints: [{ distance: 1 }, { distance: MAX_SNAP_M + 1 }, { distance: 1 }] })
+    expect(await kindOf(fetchPlannedRoute({ ...REQ, via: [VIA] }, stub(jsonResponse(body))))).toBe('route-no-road')
+  })
+})
+
 describe('plannedRouteName', () => {
   it('formats start → end (mode)', () => {
     expect(plannedRouteName('Dresden', 'Pirna', 'bike')).toBe('Dresden → Pirna (Rad)')

@@ -239,6 +239,57 @@ body.ui-collapsed .leaflet-top {
     }
 }
 
+/* Handles of an editable planned route. They sit above the POI markers, so only the
+   18 px dot takes the pointer (on touch: 32 px around it) – the rest of the icon box
+   lets taps through to a place underneath. */
+.leaflet-marker-icon.track-handle {
+    background: none;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+}
+.track-handle.leaflet-interactive .track-handle-dot {
+    pointer-events: auto;
+    cursor: grab;
+}
+.track-handle.leaflet-interactive .track-handle-dot:active {
+    cursor: grabbing;
+}
+.track-handle-dot {
+    position: relative;
+    box-sizing: border-box;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 2px solid #fff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+    background: #fff;
+}
+.track-handle--start .track-handle-dot { background: #2E9E4F; }
+.track-handle--end .track-handle-dot { background: #C62828; }
+.track-handle--via .track-handle-dot { background: #fff; border-color: #2F6FB5; }
+.track-handle--hover .track-handle-dot {
+    width: 12px;
+    height: 12px;
+    opacity: 0.85;
+}
+.track-handle--busy {
+    opacity: 0.5;
+}
+.track-handle--busy.leaflet-interactive .track-handle-dot {
+    cursor: progress;
+}
+@media (pointer: coarse) {
+    .track-handle.leaflet-interactive .track-handle-dot::after {
+        content: '';
+        position: absolute;
+        inset: -9px;
+        border-radius: 50%;
+    }
+}
+
 /* Target of a tapped "In der Nähe" entry: badge with kind icon + permanent name. No ring/pulse (that is the selected POI). */
 .target-marker {
     background: none;

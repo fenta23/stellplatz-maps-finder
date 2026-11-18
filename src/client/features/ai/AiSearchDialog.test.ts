@@ -6,7 +6,7 @@ const intent: AiIntent = {
   place: 'Bodensee',
   enableFilters: [KNOWN_FILTER_IDS[0]!, KNOWN_FILTER_IDS[1]!],
   adHocFilters: [],
-  maxDistanceKm: null,
+  route: null,
 }
 const clarify = (reply = 'Wie meinst du das?'): AiChatResponse => ({ status: 'clarify', reply, intent: null })
 const ready: AiChatResponse = { status: 'ready', reply: 'Hier ist deine Auswahl.', intent }
@@ -87,6 +87,24 @@ describe('AiSearchDialog', () => {
     const btn = t.q<HTMLButtonElement>('.ai-result-apply')
     expect(btn.textContent).toBe('Auf Karte zeigen')
     expect(document.activeElement).toBe(btn)
+  })
+
+  it.each([
+    ['full', { from: 'Konstanz', to: 'Lindau', mode: 'bike' as const }, 'Konstanz → Lindau · Rad · 1 Kategorie'],
+    ['no from', { from: null, to: 'Lindau', mode: 'bike' as const }, 'Mein Standort → Lindau · Rad · 1 Kategorie'],
+    ['no mode', { from: 'Konstanz', to: 'Lindau', mode: null }, 'Konstanz → Lindau · 1 Kategorie'],
+  ])('route card (%s)', async (_n, route, recap) => {
+    const t = setup()
+    const ri: AiIntent = { place: 'Lindau', enableFilters: [KNOWN_FILTER_IDS[0]!], adHocFilters: [], route }
+    t.send.mockResolvedValue({ status: 'ready', reply: 'Route.', intent: ri })
+    t.dialog.open('x')
+    await t.flush()
+    expect(t.q('.ai-result-recap').textContent).toBe(recap)
+    const btn = t.q<HTMLButtonElement>('.ai-result-apply')
+    expect(btn.textContent).toBe('Route vorbereiten')
+    btn.click()
+    expect(t.onApply).toHaveBeenCalledWith(ri)
+    expect(t.dialog.isOpen()).toBe(false)
   })
 
   it('limit locks the input', async () => {

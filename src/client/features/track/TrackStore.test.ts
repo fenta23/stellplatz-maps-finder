@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { LocalTrackStore } from './TrackStore.js'
-import { MAX_CORRIDOR_M, MIN_CORRIDOR_M, MAX_SAVED_TRACKS, type Track } from './trackTypes.js'
+import { MAX_CORRIDOR_M, MIN_CORRIDOR_M, MAX_SAVED_TRACKS, type RoutePlan, type Track } from './trackTypes.js'
 
 const KEY = 'stellplatz:tracks'
 const OLD_KEY = 'stellplatz:track'
@@ -334,5 +334,122 @@ describe('LocalTrackStore', () => {
     off()
     s.clear()
     expect(cb).toHaveBeenCalledTimes(3)
+  })
+})
+
+describe('LocalTrackStore: plan of a planned route', () => {
+  const plan: RoutePlan = {
+    mode: 'bike',
+    waypoints: [{ lat: 50, lon: 10, label: 'A' }, { lat: 50.05, lon: 10.05 }, { lat: 50.1, lon: 10.1, label: 'B' }],
+  }
+  const planned = (over: Partial<Track> = {}): Track => sample({ name: 'A → B (Rad)', source: 'planned', plan, ...over })
+  /** Writes one stored entry with the given raw `plan` and reads it back with a fresh store. */
+  const reloadWithPlan = (raw: unknown, source = 'planned') => {
+    const entry = { ...planned(), source, plan: raw, id: 'x', addedAt: 1 }
+    localStorage.setItem(KEY, JSON.stringify({ v: 2, activeId: 'x', tracks: [entry] }))
+    return new LocalTrackStore().get()
+  }
+
+  it('saves the plan and reads it back after a reload', () => {
+    const saved = make().set(planned())
+    expect(saved.plan).toEqual(plan)
+    expect(new LocalTrackStore().get()).toEqual(saved)
+  })
+
+  it('a route stored without a plan still loads (not editable)', () => {
+    make().set(sample({ source: 'planned' }))
+    const again = new LocalTrackStore().get()
+    expect(again?.source).toBe('planned')
+    expect(again).not.toHaveProperty('plan')
+  })
+
+  it.each([
+    ['not an object', 'nope'],
+    ['unknown mode', { ...plan, mode: 'plane' }],
+    ['one waypoint only', { mode: 'bike', waypoints: [plan.waypoints[0]] }],
+    ['waypoints not an array', { mode: 'bike', waypoints: {} }],
+    ['latitude out of range', { mode: 'bike', waypoints: [{ lat: 91, lon: 10 }, plan.waypoints[2]] }],
+    ['coordinate not a number', { mode: 'bike', waypoints: [{ lat: '50', lon: 10 }, plan.waypoints[2]] }],
+    ['label not a string', { mode: 'bike', waypoints: [{ lat: 50, lon: 10, label: 7 }, plan.waypoints[2]] }],
+  ])('drops a broken plan (%s) but keeps the route', (_what, raw) => {
+    const got = reloadWithPlan(raw)
+    expect(got?.name).toBe('A → B (Rad)')
+    expect(got).not.toHaveProperty('plan')
+  })
+
+  it('reads a valid stored plan', () => {
+    expect(reloadWithPlan(plan)?.plan).toEqual(plan)
+  })
+
+  it('ignores a plan on an imported route', () => {
+    expect(reloadWithPlan(plan, 'gpx')).not.toHaveProperty('plan')
+  })
+
+  it('planning the same route again keeps the id and takes the new plan', () => {
+    const s = make()
+    const first = s.set(planned())
+    const other: RoutePlan = { ...plan, waypoints: [plan.waypoints[0]!, plan.waypoints[2]!] }
+    const second = s.set(planned({ plan: other }))
+    expect(second.id).toBe(first.id)
+    expect(s.list()).toHaveLength(1)
+    expect(s.get()?.plan).toEqual(other)
+    // …and saving it again without a plan does not wipe the stored one.
+    expect(s.set(sample({ name: 'A → B (Rad)', source: 'planned' })).plan).toEqual(other)
+  })
+})
+
+describe('LocalTrackStore: replace', () => {
+  const plan: RoutePlan = { mode: 'foot', waypoints: [{ lat: 50, lon: 10 }, { lat: 50.2, lon: 10.2 }] }
+  const edited = (): Track => ({
+    name: 'Neu', source: 'planned', points: [[50, 10], [50.3, 10.4], [50.2, 10.2]], lengthM: 42_000, corridorM: 50, plan,
+  })
+
+  it('swaps name, points, length and plan — id, age, corridor and the active state stay', () => {
+    const s = make()
+    const old = s.set(sample({ source: 'planned', corridorM: 900 }))
+    const seen = vi.fn()
+    s.onChange(seen)
+    s.replace(old.id, edited())
+    const now = s.get()!
+    expect(now).toEqual({ ...edited(), corridorM: 900, id: old.id, addedAt: old.addedAt })
+    expect(seen).toHaveBeenCalledTimes(1)
+    expect(seen).toHaveBeenCalledWith(now)
+    expect(new LocalTrackStore().get()).toEqual(now) // persisted
+  })
+
+  it('keeps the position in the list and leaves the other routes alone', () => {
+    const s = make()
+    const a = s.set(named('A'))
+    const b = s.set(named('B'))
+    s.replace(a.id, edited())
+    expect(s.list().map(t => t.id)).toEqual([b.id, a.id])
+    expect(s.list()[0]).toEqual(b)
+    expect(s.get()?.id).toBe(b.id) // replacing an inactive route does not activate it
+  })
+
+  it('drops the plan when the new track has none', () => {
+    const s = make()
+    const old = s.set(sample({ source: 'planned', plan }))
+    s.replace(old.id, sample({ source: 'planned', name: 'Ohne' }))
+    expect(s.get()?.name).toBe('Ohne')
+    expect(s.get()).not.toHaveProperty('plan')
+  })
+
+  it('does not merge with an equal saved route (no dedupe)', () => {
+    const s = make()
+    const a = s.set(named('A'))
+    const b = s.set(named('B'))
+    s.replace(b.id, named('A'))
+    expect(s.list().map(t => [t.id, t.name])).toEqual([[b.id, 'A'], [a.id, 'A']])
+  })
+
+  it('an unknown id changes nothing and does not notify', () => {
+    const s = make()
+    const old = s.set(sample())
+    const seen = vi.fn()
+    s.onChange(seen)
+    s.replace('nope', edited())
+    expect(seen).not.toHaveBeenCalled()
+    expect(s.list()).toEqual([old])
   })
 })

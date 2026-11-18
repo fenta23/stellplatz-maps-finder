@@ -21,11 +21,31 @@ export function sourceLabel(s: TrackSource): string {
 /** Travel mode of a planned route (picks the OSRM instance). */
 export type RouteMode = 'foot' | 'bike' | 'car'
 
+/** A point the planned route has to pass: start, via point or end. */
+export interface RouteWaypoint {
+  readonly lat: number
+  readonly lon: number
+  /** Name shown in the route name; absent for points set on the map (via points, dragged ends). */
+  readonly label?: string
+}
+
+/** How a planned route was calculated — kept with the route so it can be changed on the map later. */
+export interface RoutePlan {
+  readonly mode: RouteMode
+  /** Start, via points in route order, end — at least two. */
+  readonly waypoints: readonly RouteWaypoint[]
+}
+
+/** How many via points a planned route may have (start and end not counted). */
+export const MAX_VIA_POINTS = 10
+
 /** What an importer (GPX file, Komoot link, route planner) hands over: raw points in route order. */
 export interface ImportedTrack {
   readonly name: string
   readonly source: TrackSource
   readonly points: readonly TrackPoint[]
+  /** Only for `source: 'planned'`; routes planned before this field existed have none (not editable). */
+  readonly plan?: RoutePlan
 }
 
 /** The active track as shown and persisted: simplified points plus derived values. */

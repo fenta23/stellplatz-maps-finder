@@ -10,7 +10,10 @@
 
 import { haversineMeters } from '@/core/geo.js'
 import { TrackImportError } from './trackErrors.js'
-import { MAX_LENGTH_M, type ImportedTrack, type RouteMode, type TrackPoint } from './trackTypes.js'
+import {
+  MAX_LENGTH_M, MAX_VIA_POINTS,
+  type ImportedTrack, type RouteMode, type RouteWaypoint, type TrackPoint,
+} from './trackTypes.js'
 
 export const ROUTE_PLANNING_ENABLED = true
 /** A snapped waypoint further than this from the road network counts as "no road nearby". */
@@ -35,12 +38,19 @@ export interface RouteRequest {
   readonly start: RouteEndpoint
   readonly end: RouteEndpoint
   readonly mode: RouteMode
+  /** Points the route has to pass between start and end, in order. */
+  readonly via?: readonly RouteEndpoint[]
+}
+
+/** Start, via points, end. */
+function stops(req: RouteRequest): readonly RouteEndpoint[] {
+  return [req.start, ...(req.via ?? []), req.end]
 }
 
 /** The instance decides the profile; the path always says `driving`. Coordinates are lon,lat. */
 export function buildRouteUrl(req: RouteRequest): string {
-  const { start, end, mode } = req
-  return `${BASE}/routed-${mode}/route/v1/driving/${start.lon},${start.lat};${end.lon},${end.lat}?overview=full&geometries=geojson`
+  const coords = stops(req).map(p => `${p.lon},${p.lat}`).join(';')
+  return `${BASE}/routed-${req.mode}/route/v1/driving/${coords}?overview=full&geometries=geojson`
 }
 
 /** "Dresden → Pirna (Rad)" */
@@ -70,6 +80,24 @@ function endpointName(endpoint: RouteEndpoint, waypoint: unknown): string {
   return typeof name === 'string' && name.trim() ? name.trim() : FALLBACK_NAME
 }
 
+/**
+ * Where a via point is kept: on the road OSRM snapped it to, so its handle sits on
+ * the line. Start and end keep the requested place instead (see `fetchPlannedRoute`).
+ */
+function snappedVia(via: RouteEndpoint, waypoint: unknown): RouteWaypoint {
+  const loc = (waypoint as { location?: unknown } | null | undefined)?.location
+  const lon = Array.isArray(loc) ? loc[0] : undefined
+  const lat = Array.isArray(loc) ? loc[1] : undefined
+  const snapped = isFiniteNum(lat) && isFiniteNum(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180
+  const label = via.label?.trim()
+  return { lat: snapped ? lat : via.lat, lon: snapped ? lon : via.lon, ...(label ? { label } : {}) }
+}
+
+/**
+ * The result carries its `plan` (start, via points, end, mode) so the route can be
+ * changed on the map later. Start and end keep the requested coordinates and get the
+ * resolved name as label — the route name then stays the same when a via point is added.
+ */
 export async function fetchPlannedRoute(
   req: RouteRequest,
   fetchFn: typeof fetch = (...a) => fetch(...a),
@@ -79,9 +107,15 @@ export async function fetchPlannedRoute(
   const { enabled = ROUTE_PLANNING_ENABLED, timeoutMs = DEFAULT_TIMEOUT_MS } = options
   if (!enabled) throw new TrackImportError('route-disabled')
 
+  const via = req.via ?? []
+  if (via.length > MAX_VIA_POINTS) throw new TrackImportError('route-too-many-vias')
+
   // Straight-line checks first: no network request for obviously useless input.
-  const airM = haversineMeters(req.start, req.end)
-  if (airM < MIN_AIR_M) throw new TrackImportError('route-same-point')
+  // With via points start = end is a legitimate round trip.
+  const all = stops(req)
+  let airM = 0
+  for (let i = 1; i < all.length; i++) airM += haversineMeters(all[i - 1]!, all[i]!)
+  if (via.length === 0 && airM < MIN_AIR_M) throw new TrackImportError('route-same-point')
   if (airM > MAX_LENGTH_M) throw new TrackImportError('track-too-long')
 
   const timeoutSignal = AbortSignal.timeout(timeoutMs)
@@ -127,6 +161,17 @@ export async function fetchPlannedRoute(
     throw new TrackImportError('route-same-point')
   }
 
-  const name = plannedRouteName(endpointName(req.start, wps[0]), endpointName(req.end, wps[1]), req.mode)
-  return { name, source: 'planned', points }
+  const startName = endpointName(req.start, wps[0])
+  const endName = endpointName(req.end, wps[all.length - 1])
+  const planned: RouteWaypoint[] = [
+    { lat: req.start.lat, lon: req.start.lon, label: startName },
+    ...via.map((v, i) => snappedVia(v, wps[i + 1])),
+    { lat: req.end.lat, lon: req.end.lon, label: endName },
+  ]
+  return {
+    name: plannedRouteName(startName, endName, req.mode),
+    source: 'planned',
+    points,
+    plan: { mode: req.mode, waypoints: planned },
+  }
 }

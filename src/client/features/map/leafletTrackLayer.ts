@@ -1,6 +1,10 @@
 import L from 'leaflet'
-import type { TrackLayer, MapInsets } from '@/features/track/TrackLayer.js'
+import type { TrackLayer, TrackEditing, MapInsets } from '@/features/track/TrackLayer.js'
 import type { TrackPoint } from '@/features/track/trackTypes.js'
+import { attachEditHandles } from './trackEditHandles.js'
+
+/** Line opacity while a recalculation is running. */
+const BUSY_OPACITY = 0.45
 
 const LINE_COLOR = '#2F6FB5'
 const LINE_COLOR_SATELLITE = '#FF1493'
@@ -25,20 +29,29 @@ const endMarker = (color: string) => ({
  * Leaflet implementation of the TrackLayer port. Everything lives in one
  * layer group owned here. The default overlay pane (z-index 400) sits above
  * the tiles (200) and below the marker pane (600) used by the POI cluster
- * group, so the line never covers POI markers. Lines are non-interactive so
- * clicks fall through to markers and the map.
+ * group, so the line never covers POI markers. Without editing, lines are
+ * non-interactive so clicks fall through to markers and the map. With editing
+ * (`setEditing`) the coloured line is interactive (events still bubble to the
+ * map) and the waypoints get draggable handles (see trackEditHandles.ts).
  *
  * `renderer` is injectable: production defaults to a canvas renderer (fast
- * for up to 20,000 points); jsdom has no canvas 2d context, so tests pass SVG.
+ * for up to 20,000 points; `tolerance` widens the hit area for fingers); jsdom
+ * has no canvas 2d context, so tests pass SVG. `canEdit` locks all edit
+ * interaction from outside (e.g. while a map pick is running).
  */
 export function createLeafletTrackLayer(
   map: L.Map,
-  renderer: L.Renderer = L.canvas({ padding: 0.5 }),
+  renderer: L.Renderer = L.canvas({ padding: 0.5, tolerance: 10 }),
+  opts: { readonly canEdit?: () => boolean } = {},
 ): TrackLayer {
+  const canEdit = opts.canEdit ?? (() => true)
   const group = L.layerGroup()
   let line: L.Polyline | null = null
   let bounds: L.LatLngBounds | null = null
   let satellite = false
+  let points: readonly TrackPoint[] = []
+  let editing: TrackEditing | null = null
+  let disposeEditing: (() => void) | null = null
 
   const color = () => (satellite ? LINE_COLOR_SATELLITE : LINE_COLOR)
 
@@ -48,6 +61,8 @@ export function createLeafletTrackLayer(
   let connector: L.Polyline | null = null
 
   const clearTrack = () => {
+    disposeEditing?.()
+    disposeEditing = null
     group.clearLayers()
     group.remove()
     line = null
@@ -59,18 +74,34 @@ export function createLeafletTrackLayer(
     connector = null
   }
 
-  return {
-    show(points: readonly TrackPoint[]) {
-      clearTrack()
-      if (points.length === 0) return
-      const latlngs = points.map(([lat, lon]) => L.latLng(lat, lon))
-      bounds = L.latLngBounds(latlngs)
-      const casing = L.polyline(latlngs, { ...baseLine, renderer, color: '#fff', weight: 7, opacity: 0.9 })
-      line = L.polyline(latlngs, { ...baseLine, renderer, color: color(), weight: 4, opacity: 1 })
-      group.addLayer(casing).addLayer(line)
+  // Builds the whole track (and, when editing, its handles) from the remembered state.
+  const draw = () => {
+    clearTrack()
+    if (points.length === 0) return
+    const latlngs = points.map(([lat, lon]) => L.latLng(lat, lon))
+    bounds = L.latLngBounds(latlngs)
+    const casing = L.polyline(latlngs, { ...baseLine, renderer, color: '#fff', weight: 7, opacity: 0.9 })
+    line = L.polyline(latlngs, {
+      ...baseLine, renderer, color: color(), weight: 4, opacity: editing?.busy ? BUSY_OPACITY : 1,
+      interactive: editing !== null,
+    })
+    group.addLayer(casing).addLayer(line)
+    if (!editing) {
       group.addLayer(L.circleMarker(latlngs[0]!, { ...endMarker(START_COLOR), renderer }))
       group.addLayer(L.circleMarker(latlngs[latlngs.length - 1]!, { ...endMarker(END_COLOR), renderer }))
-      group.addTo(map)
+    }
+    group.addTo(map)
+    if (editing) disposeEditing = attachEditHandles(map, line, editing, canEdit)
+  }
+
+  return {
+    setEditing(next: TrackEditing | null) {
+      editing = next
+      draw()
+    },
+    show(next: readonly TrackPoint[]) {
+      points = next
+      draw()
     },
     fitBounds(insets: MapInsets = {}) {
       if (!bounds) return
@@ -97,6 +128,7 @@ export function createLeafletTrackLayer(
     },
     clearConnector,
     clear() {
+      points = []
       clearTrack()
       clearConnector()
     },

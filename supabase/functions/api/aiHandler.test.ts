@@ -25,7 +25,8 @@ vi.mock('../_shared/aiClient.ts', () => ({
 }))
 
 import { handleAi } from './aiHandler.ts'
-import { DEFAULT_FILTERS, FILTER_ICONS } from '../../../src/client/features/filters/filterModel.ts'
+import { DEFAULT_FILTERS, FILTER_ICONS, MAX_SELECTOR_CONDITIONS } from '../../../src/client/features/filters/filterModel.ts'
+import { TRAVEL_MODES } from '../../../src/client/features/route-planner/plannerModel.ts'
 
 const env: Record<string, string> = { AI_REQUIRE_AUTH: 'false' }
 
@@ -98,6 +99,48 @@ describe('handleAi summarize', () => {
     const res = await handleAi(summarize(), null)
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({ summary: 'Kostenloser Parkplatz für Wohnmobile.' })
+  })
+})
+
+async function systemPrompt(): Promise<string> {
+  chatCompletion.mockResolvedValue('{"status":"offtopic","reply":"x","intent":null}')
+  await handleAi(chat(), null)
+  const messages = chatCompletion.mock.calls[0]![0] as { role: string; content: string }[]
+  return messages.find(m => m.role === 'system')!.content
+}
+
+describe('chat route intent', () => {
+  it('passes intent.route through unchanged', async () => {
+    const intent = {
+      place: 'Lindau',
+      enableFilters: ['bakery'],
+      adHocFilters: [],
+      route: { from: 'Konstanz', to: 'Lindau', mode: 'bike' },
+    }
+    chatCompletion.mockResolvedValue(JSON.stringify({ status: 'ready', reply: 'Route vorbereitet.', intent }))
+    const data = await (await handleAi(chat('mit dem Rad von Konstanz nach Lindau'), null)).json() as { status: string; intent: unknown }
+    expect(data.status).toBe('ready')
+    expect(data.intent).toEqual(intent)
+  })
+
+  it('prompt documents the route shape and every travel mode', async () => {
+    const system = await systemPrompt()
+    for (const k of ['"route"', '"from"', '"to"', '"mode"']) expect(system).toContain(k)
+    for (const m of TRAVEL_MODES) expect(system, `prompt misses mode ${m}`).toContain(`"${m}"`)
+  })
+
+  it('prompt states the selector condition limit', async () => {
+    const system = await systemPrompt()
+    expect(system).toContain(`Höchstens ${MAX_SELECTOR_CONDITIONS} Tag-Bedingungen`)
+  })
+
+  it('prompt no longer mentions maxDistanceKm', async () => {
+    expect(await systemPrompt()).not.toContain('maxDistanceKm')
+  })
+
+  it('requests up to 600 tokens', async () => {
+    await systemPrompt()
+    expect(chatCompletion.mock.calls[0]![1]).toMatchObject({ maxTokens: 600 })
   })
 })
 

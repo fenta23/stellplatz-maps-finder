@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest'
 import { createRoutePlannerWiring, PLAN_FAILED_MESSAGE, MY_LOCATION_LABEL } from './routePlannerWiring.js'
 import type { OsmPoi } from '@/features/pois/OverpassClient.js'
 import type { TargetMarker } from '@/features/map/targetMarker.js'
-import type { NominatimResult } from '@/core/nominatim.js'
+import type { GeocodeOptions, NominatimResult } from '@/core/nominatim.js'
 import type { TravelMode } from '@/features/route-planner/plannerModel.js'
 import type { Track } from '@/features/track/trackTypes.js'
 
@@ -43,7 +43,7 @@ interface SetupOpts {
   readonly profiles?: readonly string[]
   readonly stored?: TravelMode | null
   readonly fetchFn?: typeof fetch
-  readonly geocode?: (q: string) => Promise<NominatimResult[]>
+  readonly geocode?: (q: string, opts?: GeocodeOptions) => Promise<NominatimResult[]>
   readonly onClose?: () => void
   readonly openImport?: () => void
 }
@@ -514,6 +514,113 @@ describe('createRoutePlannerWiring', () => {
       input.value = 'x'
       input.dispatchEvent(new Event('input'))
       expect(end.pos).toBeNull()
+    })
+  })
+
+  describe('planFromNames', () => {
+    const hit = (lat: number, lon: number, name: string): NominatimResult[] =>
+      [{ lat: String(lat), lon: String(lon), display_name: `${name}, Deutschland` }]
+    const byName = (table: Record<string, NominatimResult[]>) =>
+      async (q: string): Promise<NominatimResult[]> => table[q] ?? []
+    const box = (lat: number, lon: number) =>
+      ({ west: lon - 1.5, north: lat + 1.5, east: lon + 1.5, south: lat - 1.5 })
+
+    it('fills both fields: start without viewbox, destination biased around the start; never computes', async () => {
+      const fetchFn = okFetch()
+      const h = setup({
+        fetchFn,
+        geocode: byName({ Konstanz: hit(47.66, 9.18, 'Konstanz'), Hamburg: hit(53.55, 10, 'Hamburg') }),
+      })
+      const p = h.wiring.planFromNames({ from: 'Konstanz', to: 'Hamburg', mode: null })
+      expect(h.wiring.isOpen()).toBe(true)
+      expect(h.val('startInput')).toBe('Konstanz')
+      expect(h.val('endInput')).toBe('Hamburg')
+      await p
+      expect(h.geocode).toHaveBeenCalledWith('Konstanz', { limit: 1 })
+      expect(h.geocode).toHaveBeenCalledWith('Hamburg', { limit: 1, viewbox: box(47.66, 9.18) })
+      expect(h.start.pos).toEqual({ lat: 47.66, lon: 9.18 })
+      expect(h.start.label).toBe('Start: Konstanz')
+      expect(h.end.label).toBe('Ziel: Hamburg')
+      expect(h.q<HTMLButtonElement>('go').disabled).toBe(false)
+      expect(h.importTrack).not.toHaveBeenCalled()
+      expect(fetchFn).not.toHaveBeenCalled()
+    })
+
+    it('sets the mode when given and leaves it when null', async () => {
+      const a = setup({ profiles: ['camper'] })
+      await a.wiring.planFromNames({ from: null, to: 'X', mode: 'bike' })
+      expect(a.modeBtn('bike').getAttribute('aria-checked')).toBe('true')
+      const b = setup({ profiles: ['camper'] })
+      await b.wiring.planFromNames({ from: null, to: 'X', mode: null })
+      expect(b.modeBtn('car').getAttribute('aria-checked')).toBe('true')
+    })
+
+    it('from null with a known position: "Mein Standort", destination biased around it', async () => {
+      const h = setup({ userPos: here, geocode: byName({ Dresden: hit(51.05, 13.74, 'Dresden') }) })
+      await h.wiring.planFromNames({ from: null, to: 'Dresden', mode: null })
+      expect(h.val('startInput')).toBe(MY_LOCATION_LABEL)
+      expect(h.start.pos).toEqual(here)
+      expect(h.geocode).toHaveBeenCalledTimes(1)
+      expect(h.geocode).toHaveBeenCalledWith('Dresden', { limit: 1, viewbox: box(here.lat, here.lon) })
+    })
+
+    it('from null asks for the position when it is not known yet', async () => {
+      const h = setup({ requested: here })
+      await h.wiring.planFromNames({ from: null, to: 'Dresden', mode: null })
+      expect(h.requestUserPos).toHaveBeenCalledTimes(1)
+      expect(h.val('startInput')).toBe(MY_LOCATION_LABEL)
+    })
+
+    it('from null without a position: start stays empty, destination without viewbox, no error', async () => {
+      const h = setup({ geocode: byName({ Dresden: hit(51.05, 13.74, 'Dresden') }) })
+      await h.wiring.planFromNames({ from: null, to: 'Dresden', mode: null })
+      expect(h.val('startInput')).toBe('')
+      expect(h.val('endInput')).toBe('Dresden')
+      expect(h.geocode).toHaveBeenCalledWith('Dresden', { limit: 1 })
+      expect(h.q('status').textContent).toBe('')
+      expect(h.q<HTMLButtonElement>('go').disabled).toBe(true)
+    })
+
+    it('start not found: text stays, destination resolved without viewbox', async () => {
+      const h = setup({ geocode: byName({ Hamburg: hit(53.55, 10, 'Hamburg') }) })
+      await h.wiring.planFromNames({ from: 'Nirgendwo', to: 'Hamburg', mode: null })
+      expect(h.val('startInput')).toBe('Nirgendwo')
+      expect(h.q('status').textContent).toBe('„Nirgendwo“ nicht gefunden – bitte Start wählen')
+      expect(h.geocode).toHaveBeenCalledWith('Hamburg', { limit: 1 })
+      expect(h.val('endInput')).toBe('Hamburg')
+      expect(h.end.pos).toEqual({ lat: 53.55, lon: 10 })
+      expect(h.start.pos).toBeNull()
+    })
+
+    it('destination not found: error status in the panel', async () => {
+      const h = setup({ geocode: byName({ Konstanz: hit(47.66, 9.18, 'Konstanz') }) })
+      await h.wiring.planFromNames({ from: 'Konstanz', to: 'Nirgendwo', mode: null })
+      expect(h.val('endInput')).toBe('Nirgendwo')
+      expect(h.q('status').textContent).toBe('„Nirgendwo“ nicht gefunden – bitte Ziel wählen')
+      expect(h.q('status').classList.contains('planner-status-error')).toBe(true)
+      expect(h.q<HTMLButtonElement>('go').disabled).toBe(true)
+    })
+
+    it('treats non-finite coordinates as no hit', async () => {
+      const h = setup({ geocode: async () => [{ lat: 'x', lon: '1', display_name: 'Kaputt' }] })
+      await h.wiring.planFromNames({ from: 'A', to: 'B', mode: null })
+      expect(h.start.pos).toBeNull()
+      expect(h.q('status').textContent).toContain('nicht gefunden')
+    })
+
+    it('afterwards "Route berechnen" works as usual', async () => {
+      const fetchFn = okFetch()
+      const h = setup({
+        fetchFn,
+        geocode: byName({ Konstanz: hit(47.66, 9.18, 'Konstanz'), Hamburg: hit(53.55, 10, 'Hamburg') }),
+      })
+      await h.wiring.planFromNames({ from: 'Konstanz', to: 'Hamburg', mode: 'bike' })
+      h.q<HTMLButtonElement>('go').click()
+      await flush()
+      expect(String(fetchFn.mock.calls[0]?.[0])).toContain('routed-bike')
+      expect(h.importTrack).toHaveBeenCalledTimes(1)
+      expect(h.importTrack.mock.calls[0]?.[0]?.source).toBe('planned')
+      expect(h.wiring.isOpen()).toBe(false)
     })
   })
 })
