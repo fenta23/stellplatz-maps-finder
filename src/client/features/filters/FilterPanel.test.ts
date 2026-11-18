@@ -109,4 +109,52 @@ describe('computeVisibleCount', () => {
   it('handles an empty chip list', () => {
     expect(computeVisibleCount([], 100, gap, more)).toBe(0)
   })
+
+  describe('restore chip', () => {
+    it('is absent by default', () => {
+      const el = makeContainer()
+      new FilterPanel(el, new LocalFilterStore(), { onAdd: noop, onOpenConfig: noop })
+      expect(el.querySelector('.filter-restore')).toBeNull()
+    })
+
+    it('appears after the add button and before the filter chips', () => {
+      const el = makeContainer()
+      const panel = new FilterPanel(el, new LocalFilterStore(), { onAdd: noop, onOpenConfig: noop })
+      panel.setRestore(noop)
+      const btn = el.querySelector<HTMLButtonElement>('.filter-restore')!
+      expect(btn.type).toBe('button')
+      expect(btn.textContent).toBe('Filter vor KI-Suche')
+      expect(btn.title).toBe('Filter vor der KI-Suche wiederherstellen')
+      expect(btn.getAttribute('aria-label')).toBe('Filter vor der KI-Suche wiederherstellen')
+      expect(btn.querySelector('svg')).toBeTruthy()
+      const kids = Array.from(el.children)
+      expect(kids.indexOf(btn)).toBeGreaterThan(kids.indexOf(el.querySelector('.filter-add')!))
+      expect(kids.indexOf(btn)).toBeLessThan(kids.indexOf(el.querySelector('.filter-chips')!))
+    })
+
+    it('survives a re-render caused by a store change', () => {
+      const el = makeContainer()
+      const store = new LocalFilterStore()
+      const panel = new FilterPanel(el, store, { onAdd: noop, onOpenConfig: noop })
+      panel.setRestore(noop)
+      store.setEnabled('parking', false)
+      expect(el.querySelectorAll('.filter-restore')).toHaveLength(1)
+    })
+
+    it('calls the callback on click', () => {
+      const el = makeContainer()
+      const fn = vi.fn()
+      new FilterPanel(el, new LocalFilterStore(), { onAdd: noop, onOpenConfig: noop }).setRestore(fn)
+      el.querySelector<HTMLButtonElement>('.filter-restore')!.click()
+      expect(fn).toHaveBeenCalledTimes(1)
+    })
+
+    it('is removed by setRestore(null)', () => {
+      const el = makeContainer()
+      const panel = new FilterPanel(el, new LocalFilterStore(), { onAdd: noop, onOpenConfig: noop })
+      panel.setRestore(noop)
+      panel.setRestore(null)
+      expect(el.querySelector('.filter-restore')).toBeNull()
+    })
+  })
 })

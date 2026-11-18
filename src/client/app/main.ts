@@ -59,6 +59,7 @@ import { shouldCenterOnUser } from './startupCenter.js'
 import { createProfileWiring } from './profileWiring.js'
 import { createSearchBoxWiring } from './searchBoxWiring.js'
 import { createUiCollapse } from './uiCollapse.js'
+import { AiFilterUndoStore, applyAiFilterPlan, planAiFilterApply, restoreAiFilters } from './aiFilterApply.js'
 import { TravelModeStore } from '@/features/route-planner/TravelModeStore.js'
 import { LocalProfileStore } from '@/features/profile/ProfileStore.js'
 import { createTrackPoiLoader } from './trackPoiLoader.js'
@@ -420,17 +421,29 @@ async function init() {
   })
 
   // ── KI-Suche ──────────────────────────────────────────────────────────────────
-  // Translates a confirmed chat intent into the existing FilterStore + geocode paths.
-  const applyAiIntent = async (intent: AiIntent): Promise<void> => {
-    for (const id of intent.enableFilters) {
-      const f = filterStore.get(id)
-      if (!f) continue
-      if (f.hidden) filterStore.setHidden(id, false)
-      filterStore.setEnabled(id, true)
-    }
-    for (const def of intent.adHocFilters) filterStore.put(def)
+  // An AI search shows exactly what was asked for: the other filters are switched
+  // off (not deleted) and the chip in the filter bar brings the previous state back.
+  const aiFilterUndo = new AiFilterUndoStore()
+  const restoreFiltersBeforeAi = (): void => {
+    const snapshot = aiFilterUndo.get()
+    if (snapshot) restoreAiFilters(filterStore, snapshot)
+    aiFilterUndo.set(null)
+    filterPanel.setRestore(null)
+  }
+  if (aiFilterUndo.get()) filterPanel.setRestore(restoreFiltersBeforeAi)
 
-    if (intent.place) {
+  const applyAiIntent = async (intent: AiIntent): Promise<void> => {
+    const plan = planAiFilterApply(filterStore.list(), intent, aiFilterUndo.get())
+    if (plan) {
+      applyAiFilterPlan(filterStore, plan)
+      aiFilterUndo.set(plan.snapshot)
+      filterPanel.setRestore(restoreFiltersBeforeAi)
+    }
+
+    // A route wish goes to the planner (search box wiring) — no jump to its destination.
+    if (intent.place && !intent.route) {
+      // No viewbox on purpose: the AI names the place the user meant, and the bias
+      // towards the visible map prefers like-named streets and houses nearby.
       // geocode() resolves [] on failure — filters still apply either way.
       const [hit] = await geocode(intent.place, { limit: 1 })
       if (hit) mapService.setCenter(Number(hit.lat), Number(hit.lon), 12)

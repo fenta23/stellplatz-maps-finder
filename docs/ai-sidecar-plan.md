@@ -82,7 +82,8 @@ echtes Tool-Calling):
       { "name": "Dusche", "iconId": "shower", "selectors": [
         { "elements": ["node"], "tags": [{ "key": "amenity", "value": "shower" }] } ] }
     ],
-    "maxDistanceKm": 30                  // → clientseitige Marker-Nachfilterung, optional
+    "route": null                        // oder { "from": "Konstanz" | null, "to": "Lindau", "mode": "foot"|"bike"|"car"|null }
+                                         // → belegt das Routenformular der Suchbox vor (keine automatische Berechnung)
   }
 }
 // … bei themenfremder Anfrage:
@@ -200,8 +201,10 @@ Code: Edge-Task `chat` in `aiHandler.ts` (Turn-Limit, Scope-Guard, JSON+Retry,
 optionales Auth-Gate). Frontend: `intentSchema.ts` (Allowlist-Validierung, getestet),
 `AiSearchDialog.ts` + `aiSearchDialog.html`, `AiClient.sendAiChat`, „✨"-Button in der
 `SearchBox` (`onAiSearch`), Apply-Wiring in `app/main.ts` (`applyAiIntent` → FilterStore + Geocode).
-Tests: `intentSchema.test.ts` (18). **maxDistanceKm** wird validiert/durchgereicht, aber
-die clientseitige Marker-Nachfilterung ist noch **nicht** angeschlossen (Folge-Schritt).
+Tests: `intentSchema.test.ts`. Das frühere `maxDistanceKm` ist entfernt (wurde nie angeschlossen).
+Eine KI-Suche **ersetzt** die aktiven Filter (`app/aiFilterApply.ts`), der Chip „Filter vor KI-Suche"
+in der Filterleiste stellt den vorherigen Stand wieder her. Routenwünsche (`route`) gehen an den
+Planer (`planFromNames` in `app/routePlannerWiring.ts`).
 
 Baut auf Phase-1-Infrastruktur (gleicher Handler, gleicher Provider-Wrapper).
 

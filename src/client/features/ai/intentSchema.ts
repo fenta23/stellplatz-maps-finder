@@ -2,6 +2,7 @@ import {
   DEFAULT_FILTERS, FILTER_COLORS, FILTER_ICONS, isValidSelector,
   type FilterDef, type OsmSelector, type OsmElementKind, type TagCondition,
 } from '@/features/filters/filterModel.js'
+import { isTravelMode, type TravelMode } from '@/features/route-planner/plannerModel.js'
 
 // Validation of the AI chat response. This is the SECURITY layer of the
 // scope-guard: whatever the model emits, only values that survive these checks
@@ -9,11 +10,18 @@ import {
 
 export type AiStatus = 'clarify' | 'ready' | 'offtopic' | 'limit' | 'error'
 
+export interface AiRouteIntent {
+  /** Ortsname; null = eigener Standort. */
+  readonly from: string | null
+  readonly to: string
+  readonly mode: TravelMode | null
+}
+
 export interface AiIntent {
   readonly place: string | null
   readonly enableFilters: readonly string[]
   readonly adHocFilters: readonly FilterDef[]
-  readonly maxDistanceKm: number | null
+  readonly route: AiRouteIntent | null
 }
 
 export interface AiChatResponse {
@@ -88,12 +96,28 @@ function buildAdHocFilter(raw: unknown, index: number): FilterDef | null {
   }
 }
 
+function trimmedOrNull(v: unknown): string | null {
+  return typeof v === 'string' && v.trim() ? v.trim() : null
+}
+
+/** Validate the optional route wish; null when missing or unusable. */
+export function validateRoute(raw: unknown): AiRouteIntent | null {
+  const r = asRecord(raw)
+  if (!r) return null
+  const to = trimmedOrNull(r['to'])
+  if (!to) return null
+  const from = trimmedOrNull(r['from'])
+  if (from && from.toLowerCase() === to.toLowerCase()) return null
+  const mode = isTravelMode(r['mode']) ? r['mode'] : null
+  return { from, to, mode }
+}
+
 /** Validate a raw intent object; returns a clean AiIntent (possibly empty) or null. */
 export function validateIntent(raw: unknown): AiIntent | null {
   const r = asRecord(raw)
   if (!r) return null
 
-  const place = typeof r['place'] === 'string' && r['place'].trim() ? r['place'].trim() : null
+  const place = trimmedOrNull(r['place'])
 
   const enableRaw = Array.isArray(r['enableFilters']) ? r['enableFilters'] : []
   const enableFilters = [...new Set(
@@ -106,10 +130,9 @@ export function validateIntent(raw: unknown): AiIntent | null {
     .map((f, i) => buildAdHocFilter(f, i))
     .filter((f): f is FilterDef => f !== null)
 
-  const km = Number(r['maxDistanceKm'])
-  const maxDistanceKm = Number.isFinite(km) && km >= 1 && km <= 3000 ? Math.round(km) : null
+  const route = validateRoute(r['route'])
 
-  return { place, enableFilters, adHocFilters, maxDistanceKm }
+  return { place, enableFilters, adHocFilters, route }
 }
 
 /** True when an intent actually does something to the map. */
@@ -117,7 +140,8 @@ export function intentHasActions(intent: AiIntent | null): boolean {
   if (!intent) return false
   return intent.place !== null ||
     intent.enableFilters.length > 0 ||
-    intent.adHocFilters.length > 0
+    intent.adHocFilters.length > 0 ||
+    intent.route !== null
 }
 
 /** Normalise a raw model/edge response into a safe AiChatResponse. */

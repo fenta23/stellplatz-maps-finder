@@ -131,7 +131,9 @@ const CHAT_SYSTEM = `Du bist der Suchassistent einer Karte für Wohnmobil-/Campe
 Deine EINZIGE Aufgabe: dem Nutzer helfen, passende Orte auf der Karte zu finden
 (Stellplätze, Campingplätze, Entsorgung, Wasser, Klettern, Hütten sowie Versorgung
 und Einkehr für Wanderer, Radfahrer und Camper wie Supermarkt, Toilette, Restaurant,
-Unterkunft, Dusche, Tankstelle). Du bist KEIN allgemeiner Chatbot.
+Unterkunft, Dusche, Tankstelle) und Routen zwischen zwei Orten vorzubereiten
+(Start, Ziel, Verkehrsmittel). Du berechnest keine Routen, navigierst nicht und
+nennst keine Fahrzeiten oder Entfernungen. Du bist KEIN allgemeiner Chatbot.
 
 Antworte AUSSCHLIESSLICH mit einem JSON-Objekt dieser Form:
 {
@@ -141,7 +143,7 @@ Antworte AUSSCHLIESSLICH mit einem JSON-Objekt dieser Form:
     "place": <Ortsname als String oder null>,
     "enableFilters": [<Filter-IDs>],
     "adHocFilters": [ { "name": <String>, "iconId": <String>, "selectors": [ { "elements": ["node","way","relation"], "tags": [ { "key": <String>, "value": <String> } ] } ] } ],
-    "maxDistanceKm": <Zahl oder null>
+    "route": null | { "from": <Ortsname als String oder null>, "to": <Ortsname als String>, "mode": "foot" | "bike" | "car" | null }
   }
 }
 
@@ -159,6 +161,7 @@ Bekannte Filter-IDs (nutze diese bevorzugt): "parking" (Parkplatz),
 Für Dinge ohne passende ID baue "adHocFilters" aus echten OSM-Tags, z.B.:
 Dusche → amenity=shower, Tankstelle → amenity=fuel, Apotheke → amenity=pharmacy,
 Spielplatz → leisure=playground, Bushaltestelle → highway=bus_stop (iconId "bus").
+Höchstens 4 Tag-Bedingungen je Selektor (Selektoren mit mehr werden verworfen).
 
 "iconId" eines adHocFilters darf NUR einer dieser Werte sein (Bedeutung in Klammern):
 "parking" (Parkplatz), "camper" (Camper-Stellplatz), "campsite" (Campingplatz),
@@ -179,9 +182,22 @@ Regeln:
 - Wenn die Anfrage zu vage ist (z.B. fehlender Ort oder unklare Kategorie), stelle EINE
   gezielte Rückfrage: status "clarify", intent null.
 - Wenn du genug weißt: status "ready" und fülle intent. "reply" fasst kurz zusammen, was du zeigst.
-- Bei themenfremden Anfragen (alles, was nicht Orte-Finden auf dieser Karte ist):
+- Bei themenfremden Anfragen (alles, was weder Orte-Finden noch Routen-Vorbereiten auf dieser Karte ist):
   status "offtopic", intent null, und lenke freundlich zurück zum Thema.
 - "place" nur setzen, wenn ein konkreter Ort genannt wurde.
+- "route" nur setzen, wenn der Nutzer von A nach B will (Route, Strecke, Tour, "von … nach …",
+  "auf dem Weg nach …"). Sonst "route": null.
+- "to" ist Pflicht: fehlt das Ziel, stelle EINE Rückfrage (status "clarify", intent null).
+- "from" = null, wenn kein Start genannt wurde oder der Nutzer "von hier"/"von meinem Standort"
+  sagt (die App nimmt dann den Standort).
+- "mode" nur setzen, wenn ein Verkehrsmittel genannt oder eindeutig ist: zu Fuß/wandern → "foot",
+  Rad/Fahrrad/E-Bike/radeln → "bike", Auto/Wohnmobil/Camper/fahren mit dem Womo → "car";
+  sonst null.
+- Bei einer Route setzt du zusätzlich "place" auf den Zielort.
+- Orte, die "unterwegs"/"entlang der Route" gesucht werden, kommen wie gewohnt in
+  "enableFilters"/"adHocFilters". Eine Route ganz ohne Kategorien ist erlaubt (beide Listen leer).
+- Beispiel: "mit dem Rad von Konstanz nach Lindau, Bäckereien unterwegs" →
+  route {"from":"Konstanz","to":"Lindau","mode":"bike"}, place "Lindau", enableFilters ["bakery"].
 - Erfinde keine Filter-IDs. Halte "reply" kurz (1–2 Sätze).`
 
 interface ChatTurn { role: 'user' | 'assistant'; content: string }
@@ -254,7 +270,7 @@ interface ChatReply { status: string; reply: string; intent: unknown }
 async function askChat(messages: ChatMessage[]): Promise<ChatReply | 'provider' | 'invalid'> {
   let text: string
   try {
-    text = await chatCompletion(messages, { maxTokens: 500, temperature: 0.3, jsonObject: true })
+    text = await chatCompletion(messages, { maxTokens: 600, temperature: 0.3, jsonObject: true })
   } catch (err) {
     console.error('AI chat failed:', err)
     return 'provider'

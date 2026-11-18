@@ -11,7 +11,7 @@ import { KNOWN_FILTER_IDS, type AiChatResponse, type AiIntent } from '@/features
 const poi: OsmPoi = { id: 7, osmType: 'node', type: 'campsite', lat: 50.95, lon: 13.93, tags: { name: 'Camping Pirna' } }
 const here = { lat: 51.05, lon: 13.74 }
 const koeln: NominatimResult = { lat: '50.94', lon: '6.96', display_name: 'Köln, Nordrhein-Westfalen, Deutschland' }
-const intent: AiIntent = { place: 'Bodensee', enableFilters: [KNOWN_FILTER_IDS[0]!], adHocFilters: [], maxDistanceKm: null }
+const intent: AiIntent = { place: 'Bodensee', enableFilters: [KNOWN_FILTER_IDS[0]!], adHocFilters: [], route: null }
 const ready: AiChatResponse = { status: 'ready', reply: 'Hier ist deine Auswahl.', intent }
 
 const okFetch = () => vi.fn<typeof fetch>(async () => new Response(JSON.stringify({
@@ -297,6 +297,60 @@ describe('createSearchBoxWiring', () => {
       expect(t.applyAiIntent).toHaveBeenCalledWith(intent)
       expect(t.aiDialog().hidden).toBe(true)
       expect(t.mode()).toBe('search')
+    })
+
+    it('a route wish switches to the route form and prefills it, without computing', async () => {
+      const routeIntent: AiIntent = {
+        place: 'Lindau', enableFilters: [KNOWN_FILTER_IDS[0]!], adHocFilters: [],
+        route: { from: 'Konstanz', to: 'Lindau', mode: 'bike' },
+      }
+      const s = setup({ sendResponse: { status: 'ready', reply: 'Ich bereite die Route vor.', intent: routeIntent } })
+      s.geocode.mockImplementation(async (name: string) => [
+        { lat: name === 'Konstanz' ? '47.66' : '47.55', lon: name === 'Konstanz' ? '9.17' : '9.68', display_name: `${name}, Deutschland` },
+      ])
+      s.wiring.setAiEnabled(true)
+      s.type('mit dem Rad von Konstanz nach Lindau')
+      await vi.advanceTimersByTimeAsync(400)
+      s.mousedown(s.aiRow()!)
+      await flush()
+      s.container.querySelector<HTMLButtonElement>('.ai-result-apply')!.click()
+      await flush()
+
+      expect(s.applyAiIntent).toHaveBeenCalledWith(routeIntent)
+      expect(s.mode()).toBe('route')
+      expect(s.aiDialog().hidden).toBe(true)
+      expect(s.plannerPanel().hidden).toBe(false)
+      expect(s.q<HTMLInputElement>('startInput').value).toBe('Konstanz')
+      expect(s.q<HTMLInputElement>('endInput').value).toBe('Lindau')
+      expect(s.container.querySelector('[data-mode="bike"]')!.getAttribute('aria-checked')).toBe('true')
+      expect(s.q<HTMLButtonElement>('go').disabled).toBe(false)
+      expect(document.activeElement).toBe(s.q('go'))
+      // Prefilled only: the user presses "Route berechnen".
+      expect(s.fetchFn).not.toHaveBeenCalled()
+      expect(s.importTrack).not.toHaveBeenCalled()
+    })
+
+    it('a route wish whose destination is not found stays in the form with the name and a hint', async () => {
+      const routeIntent: AiIntent = {
+        place: 'Nirgendwo', enableFilters: [], adHocFilters: [],
+        route: { from: null, to: 'Nirgendwo', mode: null },
+      }
+      const s = setup({ userPos: here, sendResponse: { status: 'ready', reply: 'Ich bereite die Route vor.', intent: routeIntent } })
+      s.geocode.mockResolvedValue([])
+      s.wiring.setAiEnabled(true)
+      s.q<HTMLButtonElement>('aiBtn').click()
+      const input = s.aiDialog().querySelector<HTMLInputElement>('.ai-input')!
+      input.value = 'Route nach Nirgendwo'
+      s.aiDialog().querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+      await flush()
+      s.container.querySelector<HTMLButtonElement>('.ai-result-apply')!.click()
+      await flush()
+
+      expect(s.mode()).toBe('route')
+      expect(s.q<HTMLInputElement>('startInput').value).toBe(MY_LOCATION_LABEL)
+      expect(s.q<HTMLInputElement>('endInput').value).toBe('Nirgendwo')
+      expect(s.q<HTMLButtonElement>('go').disabled).toBe(true)
+      expect(s.container.querySelector('.planner-status')!.textContent).toContain('nicht gefunden')
     })
 
     it('Escape in AI mode closes the dialog and returns to search', async () => {
