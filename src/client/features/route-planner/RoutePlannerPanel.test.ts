@@ -453,6 +453,186 @@ describe('RoutePlannerPanel – modes', () => {
   })
 })
 
+describe('RoutePlannerPanel – selectMode', () => {
+  it('selects the mode like a click and reports only real changes', () => {
+    const { panel, modeBtn, deps } = setup({ initialMode: () => 'car' })
+    panel.open()
+    panel.selectMode('bike')
+    expect(modeBtn('bike').getAttribute('aria-checked')).toBe('true')
+    expect(modeBtn('car').getAttribute('aria-checked')).toBe('false')
+    expect(deps.onModeChange).toHaveBeenCalledWith('bike')
+    panel.selectMode('bike')
+    expect(deps.onModeChange).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('RoutePlannerPanel – resolvePoint', () => {
+  const found = (label: string, lat = 1): PlanPoint => ({ lat, lon: 2, label, kind: 'place' })
+  const deferred = () => {
+    let res!: (p: PlanPoint | null) => void
+    let rej!: (e: unknown) => void
+    const promise = new Promise<PlanPoint | null>((a, b) => { res = a; rej = b })
+    return { promise, res, rej, fn: () => promise }
+  }
+  const SEARCHING = 'Orte werden gesucht…'
+
+  it('shows the text at once, sets the point after resolving, and enables go only with both', async () => {
+    const { panel, val, go, status, flush, deps } = setup()
+    panel.open()
+    const a = deferred()
+    const b = deferred()
+    void panel.resolvePoint('start', 'Konstanz', a.fn)
+    void panel.resolvePoint('end', 'Hamburg', b.fn)
+    expect(val('startInput')).toBe('Konstanz')
+    expect(val('endInput')).toBe('Hamburg')
+    expect(status().textContent).toBe(SEARCHING)
+    expect(go().disabled).toBe(true)
+    a.res(found('Konstanz'))
+    await flush()
+    expect(deps.onPointsChange).toHaveBeenLastCalledWith(found('Konstanz'), null)
+    expect(go().disabled).toBe(true)
+    expect(status().textContent).toBe(SEARCHING)
+    b.res(found('Hamburg', 5))
+    await flush()
+    expect(go().disabled).toBe(false)
+    expect(status().textContent).toBe('')
+    expect(deps.onPointsChange).toHaveBeenLastCalledWith(found('Konstanz'), found('Hamburg', 5))
+  })
+
+  it('replaces the text with the label of the hit', async () => {
+    const { panel, val, flush } = setup()
+    panel.open()
+    void panel.resolvePoint('end', 'hamburg', async () => found('Hamburg'))
+    await flush()
+    expect(val('endInput')).toBe('Hamburg')
+  })
+
+  it('no hit: keeps the text, no point, error status, go disabled', async () => {
+    const { panel, val, go, status, flush, deps } = setup()
+    panel.open()
+    void panel.resolvePoint('start', 'Nirgendwo', async () => null)
+    await flush()
+    expect(val('startInput')).toBe('Nirgendwo')
+    expect(status().textContent).toBe('„Nirgendwo“ nicht gefunden – bitte Start wählen')
+    expect(status().classList.contains('planner-status-error')).toBe(true)
+    expect(go().disabled).toBe(true)
+    expect(deps.onPointsChange).not.toHaveBeenCalled()
+  })
+
+  it('a throwing resolve behaves like no hit', async () => {
+    const { panel, val, status, flush } = setup()
+    panel.open()
+    void panel.resolvePoint('end', 'Kaputt', async () => { throw new Error('net') })
+    await flush()
+    expect(val('endInput')).toBe('Kaputt')
+    expect(status().textContent).toBe('„Kaputt“ nicht gefunden – bitte Ziel wählen')
+  })
+
+  it('the error of one role survives the success of the other and goes with the next action on it', async () => {
+    const { panel, status, flush, typeInto } = setup()
+    panel.open()
+    const a = deferred()
+    const b = deferred()
+    void panel.resolvePoint('start', 'Nirgendwo', a.fn)
+    void panel.resolvePoint('end', 'Hamburg', b.fn)
+    a.res(null)
+    await flush()
+    expect(status().textContent).toBe(SEARCHING)
+    b.res(found('Hamburg'))
+    await flush()
+    expect(status().textContent).toBe('„Nirgendwo“ nicht gefunden – bitte Start wählen')
+    expect(status().classList.contains('planner-status-error')).toBe(true)
+    typeInto('startInput', 'Ber')
+    expect(status().textContent).toBe('')
+  })
+
+  it('drops the result after typing into the field', async () => {
+    const { panel, val, flush, typeInto, status, deps } = setup()
+    panel.open()
+    const a = deferred()
+    void panel.resolvePoint('start', 'Konstanz', a.fn)
+    typeInto('startInput', 'Ulm')
+    expect(status().textContent).toBe('')
+    a.res(found('Konstanz'))
+    await flush()
+    expect(val('startInput')).toBe('Ulm')
+    expect(deps.onPointsChange).not.toHaveBeenCalled()
+  })
+
+  it('drops the result after setPoint', async () => {
+    const { panel, val, flush } = setup()
+    panel.open()
+    const a = deferred()
+    void panel.resolvePoint('start', 'Konstanz', a.fn)
+    panel.setPoint('start', poi)
+    a.res(found('Konstanz'))
+    await flush()
+    expect(val('startInput')).toBe('Stellplatz am See')
+  })
+
+  it('drops the result after swapping', async () => {
+    const { panel, val, q, flush } = setup()
+    panel.open()
+    const a = deferred()
+    void panel.resolvePoint('start', 'Konstanz', a.fn)
+    q('swap').click()
+    expect(val('endInput')).toBe('Konstanz')
+    a.res(found('Konstanz'))
+    await flush()
+    expect(val('endInput')).toBe('Konstanz')
+    expect(val('startInput')).toBe('')
+  })
+
+  it('drops the result after a pick started for that role', async () => {
+    const { panel, flush, picks, q, deps } = setup()
+    panel.open()
+    const a = deferred()
+    void panel.resolvePoint('start', 'Konstanz', a.fn)
+    q('startPick').click()
+    a.res(found('Konstanz'))
+    await flush()
+    expect(deps.onPointsChange).not.toHaveBeenCalled()
+    expect(panel.pickingRole()).toBe('start')
+    expect(picks).toHaveLength(1)
+  })
+
+  it('ends a running pick of that role', () => {
+    const { panel, q, picks } = setup()
+    panel.open()
+    q('startPick').click()
+    void panel.resolvePoint('start', 'Konstanz', () => new Promise(() => {}))
+    expect(panel.pickingRole()).toBeNull()
+    expect(picks[0]!.cancel).toHaveBeenCalledTimes(1)
+  })
+
+  it('drops the result after close() and open()', async () => {
+    const { panel, val, flush, status, deps } = setup()
+    panel.open()
+    const a = deferred()
+    void panel.resolvePoint('start', 'Konstanz', a.fn)
+    panel.close()
+    panel.open()
+    a.res(found('Konstanz'))
+    await flush()
+    expect(val('startInput')).toBe('Konstanz')
+    expect(deps.onPointsChange).not.toHaveBeenCalled()
+    expect(status().textContent).toBe('')
+  })
+
+  it('drops a late GPS result after close() and open()', async () => {
+    let resolve!: (p: { lat: number; lon: number } | null) => void
+    const { panel, q, val, flush, deps } = setup({ locate: () => new Promise(r => { resolve = r }) })
+    panel.open()
+    q('startLocate').click()
+    panel.close()
+    panel.open()
+    resolve({ lat: 1, lon: 2 })
+    await flush()
+    expect(val('startInput')).toBe('')
+    expect(deps.onPointsChange).not.toHaveBeenCalled()
+  })
+})
+
 describe('RoutePlannerPanel – run', () => {
   async function ready(over: Partial<RoutePlannerDeps> = {}) {
     const s = setup(over)

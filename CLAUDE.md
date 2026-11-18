@@ -8,7 +8,7 @@
 ```
 npm install       # deps
 npm run dev       # Vite :5173 (API via VITE_API_BASE aus .env oder lokaler Proxy :54321)
-npm test          # unit tests (Vitest, 1676 tests)
+npm test          # unit tests (Vitest, 1735 tests)
 npm run test:int  # integration tests vs Edge Function
 npm run build     # → dist/client/
 ```
@@ -26,7 +26,7 @@ Bekannte Störungen (OSM-Cloud-IP-Block, KI-Provider, Migrationen): `docs/troubl
 
 ## Frontend (`src/client/`) — vertical slices
 ```
-app/        main.ts (Wiring), session.ts (State), selection.ts, poiRefresher.ts, trackWiring.ts, trackPoiLoader.ts, routePlannerWiring.ts, searchBoxWiring.ts (Koordinator Suchbox), uiCollapse.ts, placeSuggest.ts
+app/        main.ts (Wiring), session.ts (State), selection.ts, poiRefresher.ts, trackWiring.ts, trackPoiLoader.ts, routePlannerWiring.ts, searchBoxWiring.ts (Koordinator Suchbox), uiCollapse.ts, placeSuggest.ts, aiFilterApply.ts (KI-Suche ersetzt Filter, mit Rückweg)
 core/       config.ts (apiUrl), template.ts (clone/ref), bind.ts (renderList), PlaceField (Ortsfeld mit Vorschlägen)
 features/
   menu/       SideMenu + clearAppCache
@@ -36,7 +36,7 @@ features/
   track/      Route-Import (GPX, Komoot-Link) + Routenberechnung (OSRM) `osrmRoute.ts` + Geometrie + TrackStore + TrackImportDialog + corridor + TrackPanel (POIs entlang der Route) + gpxExport; bis zu 10 gespeicherte Routen in `stellplatz:tracks`
   route-planner/ RoutePlannerPanel (Formular im Slot der Suchbox) + TravelModeStore (Start/Ziel, Verkehrsmittel); PlaceField liegt in `core/`; Verdrahtung in `app/routePlannerWiring.ts`
   search/     SearchBox (aufklappbar: Suchzeile + Modi Route/KI)
-  ai/         AiClient, intentSchema, AiSearchDialog (KI-Suche in der Suchbox)
+  ai/         AiClient, intentSchema (Allowlist; Intent = Ort, Filter, Route), AiSearchDialog (KI-Suche in der Suchbox)
   filters/    FilterPanel
   profile/    Profile Wandern/Radfahren/Camping (Presets, ProfileStore, ProfileDialog)
   favorites/  FavoritesStore (local + Supabase-Sync)
@@ -61,6 +61,7 @@ _shared/    utils.ts (CORS, Query-Validation, BBox-Snap, Supabase-Client, Rate-L
 
 ## Routenplaner
 - Berechnung per OSRM bei FOSSGIS (`routing.openstreetmap.de`), direkt aus dem Browser (kein Edge-Function-Proxy); Einstieg über die Suchbox (Route-Knopf, „Route hierher“, Menü „Route planen“); Ergebnis wird wie ein Import als Route (Quelle „Geplant“) gespeichert
+- KI-Routenwunsch (`intent.route`) belegt Start/Ziel/Verkehrsmittel nur vor (`planFromNames`), berechnet wird erst auf Knopfdruck; Prompt in `supabase/functions/api/aiHandler.ts` – Änderungen dort brauchen `npm run deploy:edge`
 - Kill-Switch `ROUTE_PLANNING_ENABLED` in `features/track/osrmRoute.ts`; keine Navigation, `routed-foot` ist kein Wanderrouting
 
 ## POI-Kacheln

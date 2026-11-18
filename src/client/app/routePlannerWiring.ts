@@ -18,6 +18,8 @@ type LatLon = { readonly lat: number; readonly lon: number }
 export const PLAN_FAILED_MESSAGE = 'Die Route konnte nicht berechnet werden.'
 export const MY_LOCATION_LABEL = 'Mein Standort'
 const SUGGESTION_LIMIT = 5
+/** Half-width of the destination bias box around the start. */
+const DEST_BIAS_DEG = 1.5
 
 export interface RoutePlannerWiringDeps {
   /** Slot der Suchbox, in den das Formular kommt. */
@@ -62,6 +64,8 @@ export interface RoutePlannerWiring {
   focus(): void
   /** Marker tapped while the planner is picking: true = taken as the point (caller must NOT select the POI). */
   offerPoi(poi: OsmPoi): boolean
+  /** Route wish in place names (AI): prefill start, destination and mode. Never computes on its own. */
+  planFromNames(req: { readonly from: string | null; readonly to: string; readonly mode: TravelMode | null }): Promise<void>
 }
 
 const MARKER_PREFIX: Record<PlanRole, string> = { start: 'Start', end: 'Ziel' }
@@ -161,6 +165,59 @@ export function createRoutePlannerWiring(deps: RoutePlannerWiringDeps): RoutePla
     }
   }
 
+  /** First geocoder hit as a plan point; failures and non-finite coordinates count as no hit. */
+  async function geocodeFirst(name: string, opts: GeocodeOptions): Promise<PlanPoint | null> {
+    const hit = (await deps.geocode(name, opts))[0]
+    if (!hit) return null
+    const lat = Number(hit.lat)
+    const lon = Number(hit.lon)
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null
+    return { lat, lon, label: shortPlaceLabel(hit.display_name), kind: 'place' }
+  }
+
+  async function planFromNames(req: {
+    readonly from: string | null
+    readonly to: string
+    readonly mode: TravelMode | null
+  }): Promise<void> {
+    panel.open()
+    refreshOwnPosition()
+    if (req.mode) panel.selectMode(req.mode)
+
+    // Resolves to where the start ended up, so the destination search can be biased towards it.
+    let startAnchor: Promise<LatLon | null>
+    if (req.from === null) {
+      startAnchor = (async () => {
+        const pos = await locate().catch(() => null)
+        // Own position is optional: without it the user picks the start themselves.
+        panel.setPoint('start', pos ? { lat: pos.lat, lon: pos.lon, label: MY_LOCATION_LABEL, kind: 'gps' } : null)
+        return pos
+      })()
+    } else {
+      let found: LatLon | null = null
+      const from = req.from
+      const p = panel.resolvePoint('start', from, async () => {
+        const point = await geocodeFirst(from, { limit: 1 })
+        found = point
+        return point
+      })
+      startAnchor = p.then(() => found)
+    }
+
+    const to = req.to
+    const endDone = panel.resolvePoint('end', to, async () => {
+      const anchor = await startAnchor
+      const viewbox = anchor
+        ? {
+          west: anchor.lon - DEST_BIAS_DEG, north: anchor.lat + DEST_BIAS_DEG,
+          east: anchor.lon + DEST_BIAS_DEG, south: anchor.lat - DEST_BIAS_DEG,
+        }
+        : undefined
+      return geocodeFirst(to, viewbox ? { limit: 1, viewbox } : { limit: 1 })
+    })
+    await Promise.all([startAnchor, endDone])
+  }
+
   return {
     open,
     close: () => panel.close(),
@@ -174,6 +231,8 @@ export function createRoutePlannerWiring(deps: RoutePlannerWiringDeps): RoutePla
     planToPlace(place) {
       planFrom({ lat: place.lat, lon: place.lon, label: shortPlaceLabel(place.label), kind: 'place' }, 'end')
     },
+
+    planFromNames,
 
     focus: () => panel.focusFirstEmpty(),
 
