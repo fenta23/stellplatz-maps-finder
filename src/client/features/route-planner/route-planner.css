@@ -1,0 +1,261 @@
+/* ── Routenplaner: schwebendes Panel mit Start/Ziel, Verkehrsmittel, Berechnen ──
+   Mobil (≤600px, Breakpoint der App): oben über die volle Breite.
+   Desktop (≥601px): 340px-Spalte links.
+   Body-Klassen: planner-open (Panel sichtbar), planner-picking (Karten-Pick läuft). */
+.planner-panel {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    right: 8px;
+    z-index: 990;
+    padding: 10px 12px 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    color: var(--ink);
+}
+.planner-panel[hidden] {
+    display: none;
+}
+@media (min-width: 601px) {
+    .planner-panel {
+        top: 12px;
+        left: 12px;
+        right: auto;
+        width: 340px;
+        z-index: 950;
+    }
+}
+
+.planner-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+.planner-title {
+    font-weight: 600;
+}
+.planner-close,
+.planner-icon-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: none;
+    color: var(--ink-muted);
+    cursor: pointer;
+}
+.planner-close:hover,
+.planner-icon-btn:hover {
+    background: var(--surface-2);
+    color: var(--ink);
+}
+.planner-close svg,
+.planner-icon-btn svg {
+    width: 19px;
+    height: 19px;
+    display: block;
+}
+
+.planner-fields {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.planner-field {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.planner-dot {
+    flex-shrink: 0;
+    width: 10px;
+    height: 10px;
+    margin: 0 4px;
+    border-radius: 50%;
+    border: 2px solid var(--accent);
+    background: var(--surface);
+}
+.planner-dot-end {
+    background: var(--accent);
+}
+.planner-input-wrap {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+}
+.planner-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 8px 10px;
+    border: 1.5px solid var(--border-soft);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--ink);
+    /* ≥16px, sonst zoomt iOS beim Fokus. */
+    font-size: 16px;
+}
+.planner-input::placeholder {
+    color: var(--ink-faint);
+}
+.planner-input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+.planner-suggestions {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    z-index: 1;
+    margin: 0;
+    padding: 0;
+    max-height: 220px;
+    overflow-y: auto;
+    list-style: none;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow);
+}
+.planner-suggestions[hidden] {
+    display: none;
+}
+.planner-suggestion {
+    padding: 9px 13px;
+    cursor: pointer;
+    font-size: 0.82rem;
+    color: var(--ink);
+    border-bottom: 1px solid var(--border-soft);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.planner-suggestion:last-child {
+    border-bottom: none;
+}
+.planner-suggestion:hover,
+.planner-suggestion[aria-selected="true"] {
+    background: var(--surface-2);
+}
+.planner-suggestion-empty {
+    cursor: default;
+    color: var(--ink-muted);
+}
+.planner-suggestion-empty:hover {
+    background: none;
+}
+.planner-swap {
+    align-self: center;
+    width: 28px;
+    height: 28px;
+}
+.planner-swap svg {
+    width: 16px;
+    height: 16px;
+}
+
+.planner-modes {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+}
+.planner-mode {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 7px 8px;
+    border: 1.5px solid var(--border-soft);
+    border-radius: var(--radius-pill);
+    background: var(--surface);
+    color: var(--ink);
+    font: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+.planner-mode svg {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+}
+.planner-mode[aria-checked="true"] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+.planner-mode:focus-visible,
+.planner-go:focus-visible {
+    outline: 2px solid var(--accent-strong);
+    outline-offset: 2px;
+}
+
+.planner-go {
+    display: block;
+    width: 100%;
+    margin-top: 10px;
+    padding: 10px 12px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: var(--accent);
+    color: #fff;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+.planner-go:hover:not(:disabled) {
+    background: var(--accent-strong);
+}
+.planner-go:disabled,
+.planner-input:disabled,
+.planner-icon-btn:disabled,
+.planner-mode:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
+.planner-status {
+    min-height: 1.3em;
+    margin: 6px 0 0;
+    font-size: 0.85rem;
+    color: var(--ink-muted);
+}
+.planner-status.planner-status-error {
+    color: var(--danger);
+}
+
+/* Pick-Modus: nur eine Zeile, die Karte bleibt bedienbar. */
+.planner-panel.planner-panel-picking {
+    padding: 8px 12px;
+}
+.planner-pick {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.9rem;
+}
+.planner-pick[hidden] {
+    display: none;
+}
+.planner-pick-cancel {
+    padding: 4px 6px;
+    border: none;
+    background: none;
+    color: var(--accent-strong);
+    font: inherit;
+    font-weight: 600;
+    text-decoration: underline;
+    cursor: pointer;
+}
+.planner-full[hidden] {
+    display: none;
+}

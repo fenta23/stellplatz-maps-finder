@@ -8,7 +8,7 @@
 ```
 npm install       # deps
 npm run dev       # Vite :5173 (API via VITE_API_BASE aus .env oder lokaler Proxy :54321)
-npm test          # unit tests (Vitest, 1384 tests)
+npm test          # unit tests (Vitest, 1574 tests)
 npm run test:int  # integration tests vs Edge Function
 npm run build     # → dist/client/
 ```
@@ -26,14 +26,15 @@ Bekannte Störungen (OSM-Cloud-IP-Block, KI-Provider, Migrationen): `docs/troubl
 
 ## Frontend (`src/client/`) — vertical slices
 ```
-app/        main.ts (Wiring), session.ts (State), selection.ts, poiRefresher.ts, trackWiring.ts, trackPoiLoader.ts
+app/        main.ts (Wiring), session.ts (State), selection.ts, poiRefresher.ts, trackWiring.ts, trackPoiLoader.ts, routePlannerWiring.ts
 core/       config.ts (apiUrl), template.ts (clone/ref), bind.ts (renderList)
 features/
   menu/       SideMenu + clearAppCache
   map/        MapService + leafletAdapter + locationMarker + leafletTrackLayer; Basiskarten (Karte, Satellit, Fahrradkarte, Topo) mit Ebenen-Umschalter
   pois/       OverpassClient + poiTiles (statische Kacheln) + PoiMarkerManager + poiMeta
   poi-detail/ PoiDetailPanel + poiData (Bilder, Nearby, Notes)
-  track/      Route-Import (GPX, Komoot-Link) + Geometrie + TrackStore + TrackImportDialog + corridor + TrackPanel (POIs entlang der Route) + gpxExport; bis zu 10 gespeicherte Routen in `stellplatz:tracks`
+  track/      Route-Import (GPX, Komoot-Link) + Routenberechnung (OSRM) `osrmRoute.ts` + Geometrie + TrackStore + TrackImportDialog + corridor + TrackPanel (POIs entlang der Route) + gpxExport; bis zu 10 gespeicherte Routen in `stellplatz:tracks`
+  route-planner/ RoutePlannerPanel + PlaceField + TravelModeStore (Start/Ziel, Verkehrsmittel); Verdrahtung in `app/routePlannerWiring.ts`
   search/     SearchBar
   filters/    FilterPanel
   profile/    Profile Wandern/Radfahren/Camping (Presets, ProfileStore, ProfileDialog)
@@ -56,6 +57,10 @@ _shared/    utils.ts (CORS, Query-Validation, BBox-Snap, Supabase-Client, Rate-L
 - **POI-Cache**: Supabase Postgres (Tabelle `poi_cache`, BBox-Snap 0.2°, TTL 30 Tage)
 - **CORS**: Erlaubt `fenta23.github.io`, `capacitor://localhost`, `http://localhost:5173` + `ALLOWED_ORIGINS`-Env
 - Deploy: `npx supabase functions deploy api --no-verify-jwt`
+
+## Routenplaner
+- Berechnung per OSRM bei FOSSGIS (`routing.openstreetmap.de`), direkt aus dem Browser (kein Edge-Function-Proxy); Ergebnis wird wie ein Import als Route (Quelle „Geplant“) gespeichert
+- Kill-Switch `ROUTE_PLANNING_ENABLED` in `features/track/osrmRoute.ts`; keine Navigation, `routed-foot` ist kein Wanderrouting
 
 ## POI-Kacheln
 - Eingebaute Filter kommen aus statischen Kacheln (Daten-Repo `fenta23/camp-finder-data`, wöchentlich aus Geofabrik), eigene/KI-Filter live via Overpass; Fallback auf Overpass

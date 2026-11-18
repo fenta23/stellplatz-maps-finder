@@ -298,6 +298,186 @@ describe('MapService base layer chooser', () => {
 })
 
 // jsdom applies no stylesheets, so the CSS is checked as text.
+describe('MapService.pickPoint', () => {
+  let host: HTMLDivElement
+  let svc: MapService
+  const at = (lat: number, lng: number): void => { svc.getMap().fire('click', { latlng: L.latLng(lat, lng) }) }
+  const rightClick = (): void => { svc.getMap().fire('contextmenu', { latlng: L.latLng(1, 2) }) }
+  const esc = (): void => { document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })) }
+  const placing = (): boolean => host.classList.contains('placing-poi')
+
+  beforeEach(() => {
+    localStorage.clear()
+    host = document.createElement('div')
+    host.style.width = '400px'
+    host.style.height = '400px'
+    document.body.appendChild(host)
+    svc = new MapService(host)
+  })
+  afterEach(() => { host.remove(); vi.restoreAllMocks() })
+
+  it('reports the next map click exactly once and does not call onCancel', () => {
+    const onPick = vi.fn()
+    const onCancel = vi.fn()
+    svc.pickPoint(onPick, onCancel)
+    at(48.1, 11.5)
+    at(49, 12)
+    expect(onPick).toHaveBeenCalledExactlyOnceWith(48.1, 11.5)
+    expect(onCancel).not.toHaveBeenCalled()
+  })
+
+  it('cleans up flag and CSS class after a successful pick and after a cancel', () => {
+    const cancel = svc.pickPoint(vi.fn())
+    expect(svc.isPlacing).toBe(true)
+    expect(placing()).toBe(true)
+    at(1, 2)
+    expect(svc.isPlacing).toBe(false)
+    expect(placing()).toBe(false)
+    svc.pickPoint(vi.fn())
+    expect(placing()).toBe(true)
+    cancel() // stale handle: must not end the new pick
+    expect(svc.isPlacing).toBe(true)
+    esc()
+    expect(svc.isPlacing).toBe(false)
+    expect(placing()).toBe(false)
+  })
+
+  it('Escape cancels once and a later click picks nothing', () => {
+    const onPick = vi.fn()
+    const onCancel = vi.fn()
+    svc.pickPoint(onPick, onCancel)
+    esc()
+    esc()
+    at(1, 2)
+    expect(onCancel).toHaveBeenCalledOnce()
+    expect(onPick).not.toHaveBeenCalled()
+    expect(svc.isPlacing).toBe(false)
+  })
+
+  it('right-click/long-press cancels the pick and never reaches onContextMenu listeners', () => {
+    const onPick = vi.fn()
+    const onCancel = vi.fn()
+    const onContextMenu = vi.fn()
+    svc.onContextMenu(onContextMenu)
+    svc.pickPoint(onPick, onCancel)
+    rightClick()
+    expect(onCancel).toHaveBeenCalledOnce()
+    expect(onContextMenu).not.toHaveBeenCalled()
+    expect(onPick).not.toHaveBeenCalled()
+    expect(placing()).toBe(false)
+    // after the pick the context menu works again
+    rightClick()
+    expect(onContextMenu).toHaveBeenCalledOnce()
+  })
+
+  it('the returned cancel function ends the pick, calls onCancel once and is idempotent', () => {
+    const onPick = vi.fn()
+    const onCancel = vi.fn()
+    const cancel = svc.pickPoint(onPick, onCancel)
+    cancel()
+    cancel()
+    at(1, 2)
+    expect(onCancel).toHaveBeenCalledOnce()
+    expect(onPick).not.toHaveBeenCalled()
+    expect(svc.isPlacing).toBe(false)
+  })
+
+  it('regression: a cancelled pick does not fire together with the next pick', () => {
+    const first = vi.fn()
+    const second = vi.fn()
+    svc.pickPoint(first)
+    esc()
+    svc.pickPoint(second)
+    at(48, 11)
+    expect(first).not.toHaveBeenCalled()
+    expect(second).toHaveBeenCalledExactlyOnceWith(48, 11)
+  })
+
+  it('regression: a cancelled pick leaves no map or document listeners behind', () => {
+    const map = svc.getMap()
+    const ctxBefore = (map as unknown as { _events: Record<string, unknown[] | undefined> })._events.contextmenu?.length ?? 0
+    const added = vi.spyOn(document, 'addEventListener')
+    const removed = vi.spyOn(document, 'removeEventListener')
+    const keydowns = (spy: typeof added): number => spy.mock.calls.filter(c => c[0] === 'keydown').length
+    expect(map.listens('click')).toBe(false)
+    for (const abort of [esc, rightClick, () => svc.cancelPlacement()]) {
+      svc.startPlacement()
+      abort()
+      expect(map.listens('click')).toBe(false)
+      expect((map as unknown as { _events: Record<string, unknown[] | undefined> })._events.contextmenu?.length ?? 0).toBe(ctxBefore)
+      expect(keydowns(removed)).toBe(keydowns(added))
+    }
+  })
+
+  it('regression: a placement cancelled before another one emits only once', () => {
+    const onPlacement = vi.fn()
+    svc.onPlacement(onPlacement)
+    svc.startPlacement()
+    rightClick()
+    svc.startPlacement()
+    at(48, 11)
+    at(49, 12)
+    expect(onPlacement).toHaveBeenCalledExactlyOnceWith(48, 11)
+  })
+
+  it('a new pickPoint cancels the running one (its onCancel fires) and takes over', () => {
+    const firstPick = vi.fn()
+    const firstCancel = vi.fn()
+    const secondPick = vi.fn()
+    const secondCancel = vi.fn()
+    svc.pickPoint(firstPick, firstCancel)
+    svc.pickPoint(secondPick, secondCancel)
+    expect(firstCancel).toHaveBeenCalledOnce()
+    expect(svc.isPlacing).toBe(true)
+    expect(placing()).toBe(true)
+    at(5, 6)
+    expect(firstPick).not.toHaveBeenCalled()
+    expect(secondPick).toHaveBeenCalledExactlyOnceWith(5, 6)
+    expect(secondCancel).not.toHaveBeenCalled()
+    expect(firstCancel).toHaveBeenCalledOnce()
+  })
+
+  it('a stale cancel handle does not end a newer pick', () => {
+    const stale = svc.pickPoint(vi.fn())
+    const onPick = vi.fn()
+    const onCancel = vi.fn()
+    svc.pickPoint(onPick, onCancel)
+    stale()
+    expect(onCancel).not.toHaveBeenCalled()
+    expect(svc.isPlacing).toBe(true)
+    at(7, 8)
+    expect(onPick).toHaveBeenCalledExactlyOnceWith(7, 8)
+  })
+
+  it('a planner pick does not trigger onPlacement, startPlacement still does', () => {
+    const onPlacement = vi.fn()
+    svc.onPlacement(onPlacement)
+    const onPick = vi.fn()
+    svc.pickPoint(onPick)
+    at(1, 2)
+    expect(onPick).toHaveBeenCalledOnce()
+    expect(onPlacement).not.toHaveBeenCalled()
+    svc.startPlacement()
+    at(3, 4)
+    expect(onPlacement).toHaveBeenCalledExactlyOnceWith(3, 4)
+  })
+
+  it('startPlacement stays a no-op during a running pick; cancelPlacement ends the pick', () => {
+    const onPlacement = vi.fn()
+    svc.onPlacement(onPlacement)
+    const onCancel = vi.fn()
+    svc.pickPoint(vi.fn(), onCancel)
+    svc.startPlacement()
+    expect(onCancel).not.toHaveBeenCalled()
+    svc.cancelPlacement()
+    expect(onCancel).toHaveBeenCalledOnce()
+    expect(svc.isPlacing).toBe(false)
+    expect(placing()).toBe(false)
+    at(1, 2)
+    expect(onPlacement).not.toHaveBeenCalled()
+  })
+})
+
 describe('map.css', () => {
   const css = readFileSync('src/client/features/map/map.css', 'utf8')
 

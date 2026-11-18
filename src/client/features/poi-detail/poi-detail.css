@@ -277,6 +277,11 @@
 .btn-maps {
     grid-column: 1 / -1;
 }
+/* Route planner row: "Als Start" / "Als Ziel" side by side below the links. */
+.panel-actions-grid button.btn-secondary {
+    font-family: inherit;
+    cursor: pointer;
+}
 .panel-actions-grid.has-p4n .btn-maps {
     grid-column: auto;
 }

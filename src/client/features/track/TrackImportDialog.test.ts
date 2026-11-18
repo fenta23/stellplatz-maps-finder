@@ -57,6 +57,32 @@ describe('TrackImportDialog', () => {
     expect(q('status').getAttribute('aria-live')).toBe('polite')
   })
 
+  describe('plan section', () => {
+    it('is hidden without the onPlan dep', () => {
+      const { q } = setup()
+      expect(q('planSection').hidden).toBe(true)
+    })
+
+    it('is visible with the dep, sits between saved routes and Komoot, and calls it on click', () => {
+      const onPlan = vi.fn()
+      const { dialog, q } = setup({ onPlan })
+      dialog.open()
+      expect(q('planSection').hidden).toBe(false)
+      expect(q('planBtn').textContent).toBe('Route planen')
+      expect(q('saved').nextElementSibling).toBe(q('planSection'))
+      expect(q('planSection').nextElementSibling).toBe(q('komootSection'))
+      q<HTMLButtonElement>('planBtn').click()
+      expect(onPlan).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not close the dialog itself', () => {
+      const { dialog, q } = setup({ onPlan: vi.fn() })
+      dialog.open()
+      q<HTMLButtonElement>('planBtn').click()
+      expect(dialog.isOpen()).toBe(true)
+    })
+  })
+
   it('hides the Komoot section when disabled', () => {
     const { q } = setup({ komootEnabled: false })
     expect(q('komootSection').hidden).toBe(true)
@@ -232,6 +258,12 @@ describe('TrackImportDialog', () => {
       expect(rows[0]!.querySelector('.track-saved-name')!.textContent).toBe('Tour b')
       expect(rows[0]!.querySelector('.track-saved-meta')!.textContent).toBe('12,3 km · GPX')
       expect(rows[1]!.querySelector('.track-saved-meta')!.textContent).toBe('86,4 km · Komoot')
+    })
+
+    it('labels planned routes as "Geplant"', () => {
+      const { container, dialog } = setup({ getSavedTracks: () => [other('p', { source: 'planned', lengthM: 18_432 })] })
+      dialog.open()
+      expect(container.querySelector('.track-saved-meta')!.textContent).toBe('18,4 km · Geplant')
     })
 
     it('renders names as text, never as markup', () => {

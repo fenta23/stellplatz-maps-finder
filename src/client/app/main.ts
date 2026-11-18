@@ -59,6 +59,8 @@ import { initImport } from './importWiring.js'
 import { createTrackWiring } from './trackWiring.js'
 import { shouldCenterOnUser } from './startupCenter.js'
 import { createProfileWiring } from './profileWiring.js'
+import { createRoutePlannerWiring } from './routePlannerWiring.js'
+import { TravelModeStore } from '@/features/route-planner/TravelModeStore.js'
 import { LocalProfileStore } from '@/features/profile/ProfileStore.js'
 import { createTrackPoiLoader } from './trackPoiLoader.js'
 import { LocalTrackStore } from '@/features/track/TrackStore.js'
@@ -67,7 +69,7 @@ import { initCustomPois } from './customPoiWiring.js'
 import { initAuthSync } from './authWiring.js'
 import { geocode } from '@/core/nominatim.js'
 import {
-  SVG_STAR, SVG_NOTE, SVG_USER, SVG_TRASH, SVG_INFO, SVG_UPLOAD, SVG_SHIELD, SVG_BUILDING, SVG_HELP, SVG_LEAF, SVG_ROUTE, SVG_PROFILE,
+  SVG_STAR, SVG_NOTE, SVG_USER, SVG_TRASH, SVG_INFO, SVG_UPLOAD, SVG_SHIELD, SVG_BUILDING, SVG_HELP, SVG_LEAF, SVG_ROUTE, SVG_ROUTE_PLAN, SVG_PROFILE,
 } from './icons.js'
 // Cross-cutting responsive overrides — must load AFTER all feature CSS so the
 // media-query rules win over feature base rules of equal specificity.
@@ -139,6 +141,9 @@ async function init() {
   // ── Filters ─────────────────────────────────────────────────────────────────
   const filterStore = new SyncedFilterStore(new LocalFilterStore())
   let openProfiles: () => void = () => {}
+  // Bound once the route planner exists (it needs trackWiring, which is created further down).
+  let openPlanner: () => void = () => {}
+  let offerPoiToPlanner: (poi: OsmPoi) => boolean = () => false
   const filterConfigPanel = new FilterConfigPanel(document.body, filterStore, { onOpenProfiles: () => openProfiles() })
   setPoiMetaRegistry({
     label: id => filterStore.get(id)?.name,
@@ -229,7 +234,7 @@ async function init() {
   }
   const markerManager = new PoiMarkerManager(
     createLeafletMarkerAdapter(map),
-    poi => void selection.select(poi),
+    poi => { if (!offerPoiToPlanner(poi)) void selection.select(poi) },
     osmFilterIds(),
     styleResolver,
   )
@@ -242,7 +247,7 @@ async function init() {
 
   // ── Custom POIs ─────────────────────────────────────────────────────────────
   const adapter = createLeafletMarkerAdapter(map)
-  const customPois = initCustomPois({ adapter, mapService, getSelection: () => selection, color: filterStore.get(PERSONAL_FILTER_ID)?.color ?? DEFAULT_PERSONAL_COLOR })
+  const customPois = initCustomPois({ adapter, mapService, getSelection: () => selection, onMarkerTap: poi => offerPoiToPlanner(poi), color: filterStore.get(PERSONAL_FILTER_ID)?.color ?? DEFAULT_PERSONAL_COLOR })
   const personalInit = filterStore.get(PERSONAL_FILTER_ID)
   customPois.markerManager.setVisible(personalInit ? !personalInit.hidden && personalInit.enabled : true)
   customPois.refreshMarkers()
@@ -333,6 +338,8 @@ async function init() {
     dialogContainer: document.body,
     panelContainer: document.body,
     flash: flashInfo,
+    // The import dialog offers "Route planen": swap it for the planner.
+    onOpenPlanner: () => { trackWiring.closeImport(); openPlanner() },
     createLoader: callbacks => createTrackPoiLoader({ getOsmFilters, tiles: poiTiles, ...callbacks }),
     refresher,
     setMarkers: pois => markerManager.updatePois(pois),
@@ -410,6 +417,9 @@ async function init() {
     showHighlight(session.selectedPoi) // badge changed
   })
   detailPanel.onNearbySelect(item => nearbyWiring.select(item))
+  detailPanel.onPlanPoint(role => {
+    if (session.selectedPoi) plannerWiring.planFromPoi(session.selectedPoi, role)
+  })
 
   // ── Search ────────────────────────────────────────────────────────
   const searchBar = new SearchBar(document.getElementById('search-bar')!)
@@ -497,10 +507,39 @@ async function init() {
   const datenschutzPanel = new DatenschutzPanel(document.body)
   const impressumPanel = new ImpressumPanel(document.body)
   const responsibilityPanel = new ResponsibilityPanel(document.body)
+  const profileStore = new LocalProfileStore()
   const profileWiring = createProfileWiring({
-    store: new LocalProfileStore(), filterStore, dialogContainer: document.body, flash: flashInfo,
+    store: profileStore, filterStore, dialogContainer: document.body, flash: flashInfo,
   })
   openProfiles = () => { closeAll(); profileWiring.open() }
+
+  // ── Route planner (menu entry, import dialog, POI detail, map pick) ─────────
+  const plannerWiring = createRoutePlannerWiring({
+    container: document.getElementById('content')!,
+    geocode,
+    getUserPos: () => session.userPos,
+    requestUserPos: async () => {
+      const pos = await getUserLocation()
+      if (!pos) return null
+      session.userPos = { lat: pos[0], lon: pos[1] }
+      locationMarker.update(pos)
+      return session.userPos
+    },
+    pickPoint: (onPick, onCancel) => mapService.pickPoint(onPick, onCancel),
+    markers: { start: createLeafletTargetMarker(map), end: createLeafletTargetMarker(map) },
+    getProfiles: () => profileStore.get(),
+    modeStore: new TravelModeStore(),
+    importTrack: track => trackWiring.importTrack(track),
+    isMobile,
+    collapseDetail: () => detailPanel.collapse(),
+    poiLabel: poi => poi.tags.name ?? typeLabel(poi.type),
+    getViewbox: () => {
+      const b = mapService.getBounds()
+      return b ? { west: b.west, north: b.north, east: b.east, south: b.south } : undefined
+    },
+  })
+  openPlanner = () => { closeAll(); plannerWiring.open() }
+  offerPoiToPlanner = poi => plannerWiring.offerPoi(poi)
   const helpPanel = new HelpPanel(document.body, {
     filterStore,
     profiles: profileWiring.helpProfiles,
@@ -519,11 +558,13 @@ async function init() {
     infoPanel.close(); datenschutzPanel.close(); impressumPanel.close()
     favoritesPanel.close(); notesPanel.close(); helpPanel.close()
     responsibilityPanel.close(); trackWiring.closeImport(); profileWiring.close()
+    plannerWiring.close()
   }
 
   const menuItems: MenuEntry[] = [
     { icon: SVG_STAR, label: 'Favoriten', onSelect: () => { closeAll(); favoritesPanel.open() } },
     { icon: SVG_NOTE, label: 'Notizen', onSelect: () => { closeAll(); notesPanel.open() } },
+    { icon: SVG_ROUTE_PLAN, label: 'Route planen', onSelect: () => openPlanner() },
     { icon: SVG_ROUTE, label: 'Route importieren (GPX/Komoot)', onSelect: () => { closeAll(); trackWiring.openImport() } },
     { icon: SVG_PROFILE, label: 'Profil', onSelect: () => { closeAll(); profileWiring.open() } },
     { icon: SVG_LEAF, label: 'Verantwortungsvoll unterwegs', onSelect: () => { closeAll(); responsibilityPanel.open() } },

@@ -43,7 +43,7 @@ const poi = (id: number, type = 'campsite', name?: string): OsmPoi =>
 const hit = (p: OsmPoi, kmAlong: number): CorridorHit<OsmPoi> =>
   ({ item: p, kmAlong, kmToEnd: 80 - kmAlong, offsetM: 120 })
 
-function setup(initial: Track | null = null, fetchFn?: typeof fetch) {
+function setup(initial: Track | null = null, fetchFn?: typeof fetch, onOpenPlanner?: () => void) {
   const container = document.createElement('div')
   const panelBox = document.createElement('div')
   document.body.append(container, panelBox)
@@ -81,6 +81,7 @@ function setup(initial: Track | null = null, fetchFn?: typeof fetch) {
     panelContainer: panelBox,
     downloadFile,
     scheduleStartupFit: run => { scheduled.push(run) },
+    onOpenPlanner,
   })
   const q = <T extends HTMLElement>(r: string) => container.querySelector<T>(`[data-ref="${r}"]`)!
   const pq = <T extends HTMLElement>(r: string) => panelBox.querySelector<T>(`[data-ref="${r}"]`)!
@@ -186,6 +187,60 @@ describe('createTrackWiring', () => {
     await flush()
     expect(fetchFn).toHaveBeenCalled()
     expect(store.get()?.source).toBe('komoot')
+  })
+
+  describe('importTrack', () => {
+    const planned: Track = {
+      name: 'Dresden → Pirna (Rad)', source: 'planned', points: [[51.05, 13.74], [51.0, 13.85], [50.96, 13.94]], lengthM: 18_432, corridorM: 500,
+    }
+
+    it('acts like an import: stores, draws, fits bounds and flashes', () => {
+      stubViewport(true)
+      const { wiring, store, layer, calls, flash } = setup()
+      calls.length = 0
+      wiring.importTrack(planned)
+      expect(store.get()?.name).toBe('Dresden → Pirna (Rad)')
+      expect(store.get()?.source).toBe('planned')
+      expect(layer.shown).toEqual(planned.points)
+      expect(calls).toEqual(['show', 'fit'])
+      expect(flash).toHaveBeenCalledWith('Route geladen: Dresden → Pirna (Rad) · 18,4 km')
+    })
+
+    it('mobile: folds the sheet first and fits with the collapsed inset', () => {
+      stubViewport(false)
+      const { wiring, layer } = setup()
+      wiring.importTrack(planned)
+      expect(document.body.classList.contains('track-collapsed')).toBe(true)
+      expect(layer.fitArgs).toEqual([{ left: 0, bottom: 52 }])
+    })
+
+    it('importing the same planned route again re-activates it instead of duplicating', () => {
+      stubViewport(true)
+      const { wiring, store } = setup()
+      wiring.importTrack(planned)
+      wiring.importTrack({ ...planned, name: 'Anderes' })
+      wiring.importTrack(planned)
+      expect(store.list()).toHaveLength(2)
+      expect(store.get()?.name).toBe('Dresden → Pirna (Rad)')
+    })
+  })
+
+  describe('onOpenPlanner', () => {
+    it('hides the plan section without the dep', () => {
+      const { wiring, q } = setup()
+      wiring.openImport()
+      expect(q('planSection').hidden).toBe(true)
+    })
+
+    it('passes it to the dialog as "Route planen" without closing the dialog itself', () => {
+      const onOpenPlanner = vi.fn()
+      const { wiring, q } = setup(null, undefined, onOpenPlanner)
+      wiring.openImport()
+      expect(q('planSection').hidden).toBe(false)
+      q<HTMLButtonElement>('planBtn').click()
+      expect(onOpenPlanner).toHaveBeenCalledTimes(1)
+      expect(wiring.isImportOpen()).toBe(true)
+    })
   })
 
   it('"Auf Karte zeigen" fits bounds and closes the dialog', () => {

@@ -53,7 +53,7 @@ describe('PoiDetailPanel', () => {
     expect(a?.getAttribute('href')).not.toMatch(/origin|saddr|travelmode|dirflg/)
   })
 
-  it('renders no routing UI (route summary, start, Route hierhin, Von hier)', () => {
+  it('renders none of the removed routing UI (route summary, start, Route hierhin, Von hier)', () => {
     const container = document.createElement('div')
     new PoiDetailPanel(container).show(poi)
     expect(container.querySelector('.route-summary')).toBeNull()
@@ -62,6 +62,50 @@ describe('PoiDetailPanel', () => {
     expect(container.querySelector('.btn-set-start')).toBeNull()
     expect(container.textContent).not.toContain('Route hierhin')
     expect(container.textContent).not.toContain('Von hier')
+  })
+
+  it('reports the planner role when "Als Start" / "Als Ziel" is clicked, also for custom POIs', () => {
+    const container = document.createElement('div')
+    const panel = new PoiDetailPanel(container)
+    const roles: string[] = []
+    panel.onPlanPoint(role => roles.push(role))
+    for (const view of [{}, { config: { isCustom: true } }]) {
+      panel.show(poi, view)
+      const start = container.querySelector<HTMLButtonElement>('[data-ref=planStart]')!
+      const end = container.querySelector<HTMLButtonElement>('[data-ref=planEnd]')!
+      expect(start.textContent).toBe('Als Start')
+      expect(end.textContent).toBe('Als Ziel')
+      expect(start.classList.contains('btn-plan-start')).toBe(true)
+      expect(end.classList.contains('btn-plan-end')).toBe(true)
+      start.click()
+      end.click()
+    }
+    expect(roles).toEqual(['start', 'end', 'start', 'end'])
+  })
+
+  it('stays collapsed when a plan listener collapses the panel (the click must not bubble into "tap the strip to expand")', () => {
+    // Regression: on mobile the planner folds the detail up after "Als Ziel". The same click then
+    // bubbled to the panel's collapsed-strip handler, saw `_collapsed` and expanded it again.
+    const container = document.createElement('div')
+    const panel = new PoiDetailPanel(container)
+    panel.onPlanPoint(() => panel.collapse())
+    panel.show(poi)
+    container.querySelector<HTMLButtonElement>('[data-ref=planEnd]')!.click()
+    expect(container.querySelector('.poi-detail-panel--collapsed')).not.toBeNull()
+    panel.expand()
+    container.querySelector<HTMLButtonElement>('[data-ref=planStart]')!.click()
+    expect(container.querySelector('.poi-detail-panel--collapsed')).not.toBeNull()
+  })
+
+  it('stops reporting the planner role after unsubscribing', () => {
+    const container = document.createElement('div')
+    const panel = new PoiDetailPanel(container)
+    const listener = vi.fn()
+    const off = panel.onPlanPoint(listener)
+    panel.show(poi)
+    off()
+    container.querySelector<HTMLButtonElement>('.btn-plan-start')!.click()
+    expect(listener).not.toHaveBeenCalled()
   })
 
   it('links to Google Maps, park4night only for logged-in users', () => {

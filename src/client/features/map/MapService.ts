@@ -324,6 +324,8 @@ export class MapService {
   private readonly baseLayerChangeListeners: Array<(key: string) => void> = []
   private debounceTimer: ReturnType<typeof setTimeout> | null = null
   private _isPlacing = false
+  /** Cancel handle of the running pick (also identifies it); null when idle. */
+  private activePick: (() => void) | null = null
 
   constructor(
     container: HTMLElement,
@@ -461,30 +463,60 @@ export class MapService {
     }
   }
 
-  /** Enter placement mode — next map click places a POI. */
+  /**
+   * One-shot map pick: the next map click calls `onPick(lat, lng)`. Esc, right-click/long-press,
+   * the returned function or a new `pickPoint` call end the pick without a result and call
+   * `onCancel` exactly once (never after a successful pick). A new call replaces a running pick.
+   * The returned cancel function is idempotent and only affects its own pick.
+   * Long-press/right-click stays suppressed (no `onContextMenu`) for the whole pick.
+   */
+  pickPoint(onPick: (lat: number, lng: number) => void, onCancel?: () => void): () => void {
+    this.activePick?.()
+    let active = true
+    const container = this.map.getContainer()
+    const cleanup = (): void => {
+      active = false
+      this.map.off('click', onClick)
+      this.map.off('contextmenu', onContext)
+      document.removeEventListener('keydown', onKey)
+      if (this.activePick === cancel) {
+        this.activePick = null
+        this._isPlacing = false
+        container.classList.remove('placing-poi')
+      }
+    }
+    const cancel = (): void => {
+      if (!active) return
+      cleanup()
+      onCancel?.()
+    }
+    const onClick = (e: L.LeafletMouseEvent): void => {
+      if (!active) return
+      cleanup()
+      onPick(e.latlng.lat, e.latlng.lng)
+    }
+    const onContext = (): void => cancel()
+    const onKey = (e: KeyboardEvent): void => { if (e.key === 'Escape') cancel() }
+    this.activePick = cancel
+    this._isPlacing = true
+    container.classList.add('placing-poi')
+    this.map.on('click', onClick)
+    this.map.on('contextmenu', onContext)
+    document.addEventListener('keydown', onKey)
+    return cancel
+  }
+
+  /** Enter placement mode — next map click places a POI. No-op while a pick is running. */
   startPlacement(): void {
     if (this._isPlacing) return
-    this._isPlacing = true
-    this.map.getContainer().classList.add('placing-poi')
-    const handler = (e: L.LeafletMouseEvent) => {
-      if (!this._isPlacing) return
-      this.cancelPlacement()
-      for (const l of this.placementListeners) l(e.latlng.lat, e.latlng.lng)
-    }
-    this.map.once('click', handler)
-    const escHandler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { this.cancelPlacement(); document.removeEventListener('keydown', escHandler) }
-    }
-    document.addEventListener('keydown', escHandler)
-    const cancelClick = () => this.cancelPlacement() // right-click cancels
-    this.map.once('contextmenu', cancelClick)
+    this.pickPoint((lat, lng) => {
+      for (const l of this.placementListeners) l(lat, lng)
+    })
   }
 
   /** Exit placement mode without placing. */
   cancelPlacement(): void {
-    if (!this._isPlacing) return
-    this._isPlacing = false
-    this.map.getContainer().classList.remove('placing-poi')
+    this.activePick?.()
   }
 
   onPlacement(listener: (lat: number, lng: number) => void): () => void {
