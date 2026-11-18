@@ -37,5 +37,6 @@ export function prepareTrack(imported: ImportedTrack, corridorM = DEFAULT_CORRID
     points,
     lengthM,
     corridorM,
+    ...(imported.plan ? { plan: imported.plan } : {}),
   }
 }

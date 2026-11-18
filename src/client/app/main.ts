@@ -59,6 +59,7 @@ import { shouldCenterOnUser } from './startupCenter.js'
 import { createProfileWiring } from './profileWiring.js'
 import { createSearchBoxWiring } from './searchBoxWiring.js'
 import { createUiCollapse } from './uiCollapse.js'
+import { createRouteEditWiring } from './routeEditWiring.js'
 import { TravelModeStore } from '@/features/route-planner/TravelModeStore.js'
 import { LocalProfileStore } from '@/features/profile/ProfileStore.js'
 import { createTrackPoiLoader } from './trackPoiLoader.js'
@@ -328,9 +329,12 @@ async function init() {
   // Created before the filter/collapse hooks below, which talk to it. While a
   // track is active the refresher is suspended and the map shows only the
   // corridor POIs.
+  const trackStore = new LocalTrackStore()
+  // No dragging of the route while a point is being picked on the map (planner, own place).
+  const trackLayer = createLeafletTrackLayer(map, undefined, { canEdit: () => !mapService.isPlacing })
   const trackWiring = createTrackWiring({
-    store: new LocalTrackStore(),
-    layer: createLeafletTrackLayer(map),
+    store: trackStore,
+    layer: trackLayer,
     dialogContainer: document.body,
     panelContainer: document.body,
     flash: flashInfo,
@@ -348,6 +352,8 @@ async function init() {
     }),
   })
   isTrackActive = () => trackWiring.isTrackActive()
+  // After the track wiring: its store listener draws the line before this one sets the handles.
+  createRouteEditWiring({ store: trackStore, layer: trackLayer, flash: flashInfo })
 
   filterStore.onChange(() => {
     // A new/edited filter or parking switched on needs data not loaded yet.

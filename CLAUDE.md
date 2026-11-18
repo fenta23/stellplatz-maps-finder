@@ -8,7 +8,7 @@
 ```
 npm install       # deps
 npm run dev       # Vite :5173 (API via VITE_API_BASE aus .env oder lokaler Proxy :54321)
-npm test          # unit tests (Vitest, 1676 tests)
+npm test          # unit tests (Vitest, 1775 tests)
 npm run test:int  # integration tests vs Edge Function
 npm run build     # → dist/client/
 ```
@@ -26,7 +26,7 @@ Bekannte Störungen (OSM-Cloud-IP-Block, KI-Provider, Migrationen): `docs/troubl
 
 ## Frontend (`src/client/`) — vertical slices
 ```
-app/        main.ts (Wiring), session.ts (State), selection.ts, poiRefresher.ts, trackWiring.ts, trackPoiLoader.ts, routePlannerWiring.ts, searchBoxWiring.ts (Koordinator Suchbox), uiCollapse.ts, placeSuggest.ts
+app/        main.ts (Wiring), session.ts (State), selection.ts, poiRefresher.ts, trackWiring.ts, trackPoiLoader.ts, routePlannerWiring.ts, routeEditWiring.ts, searchBoxWiring.ts (Koordinator Suchbox), uiCollapse.ts, placeSuggest.ts
 core/       config.ts (apiUrl), template.ts (clone/ref), bind.ts (renderList), PlaceField (Ortsfeld mit Vorschlägen)
 features/
   menu/       SideMenu + clearAppCache
@@ -61,7 +61,8 @@ _shared/    utils.ts (CORS, Query-Validation, BBox-Snap, Supabase-Client, Rate-L
 
 ## Routenplaner
 - Berechnung per OSRM bei FOSSGIS (`routing.openstreetmap.de`), direkt aus dem Browser (kein Edge-Function-Proxy); Einstieg über die Suchbox (Route-Knopf, „Route hierher“, Menü „Route planen“); Ergebnis wird wie ein Import als Route (Quelle „Geplant“) gespeichert
-- Kill-Switch `ROUTE_PLANNING_ENABLED` in `features/track/osrmRoute.ts`; keine Navigation, `routed-foot` ist kein Wanderrouting
+- Geplante Routen sind auf der Karte änderbar: Linie ziehen = Zwischenpunkt (max. 10), Start/Ziel/Zwischenpunkt-Griffe verschieben, Tipp auf Zwischenpunkt entfernt ihn. Der Plan (Punkte + Verkehrsmittel) liegt als `plan` an der Route; eine Anfrage pro Loslassen, ersetzt dieselbe Route (`TrackStore.replace`). Logik: `features/track/routeEdit.ts`, Griffe: `features/map/trackEditHandles.ts`, Verdrahtung: `app/routeEditWiring.ts`. GPX/Komoot und Routen ohne `plan` bleiben unveränderlich
+- Kill-Switch `ROUTE_PLANNING_ENABLED` in `features/track/osrmRoute.ts` (schaltet auch das Ändern ab); keine Navigation, `routed-foot` ist kein Wanderrouting
 
 ## POI-Kacheln
 - Eingebaute Filter kommen aus statischen Kacheln (Daten-Repo `fenta23/camp-finder-data`, wöchentlich aus Geofabrik), eigene/KI-Filter live via Overpass; Fallback auf Overpass

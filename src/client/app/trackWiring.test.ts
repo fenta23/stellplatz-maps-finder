@@ -27,6 +27,7 @@ function fakeLayer() {
   } = {
     shown: null,
     connector: null,
+    setEditing() { /* owned by routeEditWiring */ },
     showConnector(from, to) { this.connector = [from, to] },
     clearConnector() { this.connector = null },
     show(p) { this.shown = p; calls.push('show') },
@@ -410,6 +411,48 @@ describe('createTrackWiring: POIs along the route', () => {
     expect(refresher.suspend).toHaveBeenCalledTimes(1)
     expect(rows()).toHaveLength(1) // rows stay until the loader delivers
     expect(pq('name').textContent).toBe('Eifelrunde')
+  })
+
+  describe('a route edited in place (store.replace: same id, new line)', () => {
+    const edited: Track = { ...track, name: 'Eifelrunde', points: [[50, 7], [50.06, 7.02], [50.1, 7.1]], lengthM: 91_000 }
+
+    it('redraws the line, updates the panel and reloads the POIs — without fitting the map', () => {
+      const { store, layer, calls, loader, pq, emit, rows } = setup(track)
+      emit([hit(poi(1), 3)])
+      calls.length = 0
+      store.replace(store.get()!.id, edited)
+      expect(layer.shown).toEqual(edited.points)
+      expect(calls).toEqual(['show'])
+      expect(loader.load).toHaveBeenCalledTimes(2)
+      expect(loader.load).toHaveBeenLastCalledWith(expect.objectContaining({ points: edited.points, lengthM: 91_000 }))
+      expect(loader.setCorridor).not.toHaveBeenCalled()
+      expect(pq('meta').textContent).toContain('91,0')
+      // As with a route switch, the old rows stay until the loader delivers for the new line.
+      emit([hit(poi(2), 4), hit(poi(3), 9)])
+      expect(rows()).toHaveLength(2)
+    })
+
+    it('keeps the corridor POIs owner: no resume of the viewport refresher', () => {
+      const { store, refresher } = setup(track)
+      store.replace(store.get()!.id, edited)
+      expect(refresher.resume).not.toHaveBeenCalled()
+      expect(refresher.refresh).not.toHaveBeenCalled()
+    })
+
+    it('a new name alone (same line) updates the panel too', () => {
+      const { store, pq, loader } = setup(track)
+      store.replace(store.get()!.id, { ...track, name: 'Umbenannt' })
+      expect(pq('name').textContent).toBe('Umbenannt')
+      expect(loader.load).toHaveBeenCalledTimes(2)
+    })
+
+    it('replacing with an identical line and name does nothing (no reload)', () => {
+      const { store, calls, loader } = setup(track)
+      calls.length = 0
+      store.replace(store.get()!.id, { ...track, points: track.points.map(p => [p[0], p[1]] as const) })
+      expect(calls).toEqual([])
+      expect(loader.load).toHaveBeenCalledTimes(1)
+    })
   })
 
   it('removing the track cancels, hides the panel, resumes and refreshes the viewport', () => {
