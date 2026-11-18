@@ -1,5 +1,5 @@
 import {
-  MAX_CORRIDOR_M, MIN_CORRIDOR_M, MAX_SAVED_TRACKS,
+  MAX_CORRIDOR_M, MIN_CORRIDOR_M, MAX_SAVED_TRACKS, isTrackSource,
   type SavedTrack, type Track, type TrackPoint,
 } from './trackTypes.js'
 
@@ -29,7 +29,7 @@ function parseTrackFields(d: unknown): Track | null {
   if (!d || typeof d !== 'object') return null
   const r = d as Record<string, unknown>
   if (typeof r.name !== 'string') return null
-  if (r.source !== 'gpx' && r.source !== 'komoot') return null
+  if (!isTrackSource(r.source)) return null
   if (!isNum(r.lengthM) || r.lengthM < 0 || !isNum(r.corridorM)) return null
   if (!Array.isArray(r.points) || r.points.length < 2) return null
   const points: TrackPoint[] = []

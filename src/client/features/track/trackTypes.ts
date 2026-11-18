@@ -3,9 +3,25 @@
 /** `[lat, lon]` — a tuple instead of an object keeps a 20,000-point track small in localStorage. */
 export type TrackPoint = readonly [lat: number, lon: number]
 
-export type TrackSource = 'gpx' | 'komoot'
+export type TrackSource = 'gpx' | 'komoot' | 'planned'
 
-/** What an importer (GPX file, Komoot link) hands over: raw points in route order. */
+const TRACK_SOURCES: ReadonlySet<unknown> = new Set<TrackSource>(['gpx', 'komoot', 'planned'])
+
+export function isTrackSource(v: unknown): v is TrackSource {
+  return TRACK_SOURCES.has(v)
+}
+
+const SOURCE_LABELS: Readonly<Record<TrackSource, string>> = { gpx: 'GPX', komoot: 'Komoot', planned: 'Geplant' }
+
+/** Short German label of where a route came from. */
+export function sourceLabel(s: TrackSource): string {
+  return SOURCE_LABELS[s]
+}
+
+/** Travel mode of a planned route (picks the OSRM instance). */
+export type RouteMode = 'foot' | 'bike' | 'car'
+
+/** What an importer (GPX file, Komoot link, route planner) hands over: raw points in route order. */
 export interface ImportedTrack {
   readonly name: string
   readonly source: TrackSource

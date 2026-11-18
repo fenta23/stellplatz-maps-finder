@@ -12,7 +12,8 @@ Kartenbasierte Web-App für **Wandernde**, **Radfahrende** und **Camper**: Parkp
 - 🗺️ **Interaktive Karte** (Leaflet) mit automatischem POI-Laden beim Scrollen/Zoomen — Kartenstil **CARTO Voyager** (clean, erdig) + wählbare Kartenebenen über „Ebenen“: **Satellit** (Esri), **Fahrradkarte** (OpenCycleMap bzw. CyclOSM) und **Topografische Karte** (OpenTopoMap); die Auswahl wird gemerkt
 - 🅿️ **Parkplätze** (öffentlich vs. privat unterschieden), 🚐 **Camper-Stellplätze**, ⛺ **Campingplätze**, 🚿 **Entsorgungsstationen**, 🚰 **Frischwasserpunkte**
 - 🔍 **Suche** mit Nominatim-Autocomplete (viewport-basiert)
-- 🧭 **Navigation** per Deep-Link an Google Maps bzw. Apple Maps — die App plant keine Routen selbst
+- 🛣️ **Routen importieren oder planen** — Komoot-Link oder GPX laden, oder im Routenplaner Start und Ziel festlegen (Ortssuche, „Mein Standort“, Punkt auf der Karte, oder im POI-Detail „Als Start“/„Als Ziel“) und Fuß, Rad oder Auto wählen. Die Route erscheint auf der Karte; die Orte entlang der Strecke werden nach Kilometern gelistet (Abstand und Abschnitt einstellbar, GPX-Export), bis zu zehn Routen bleiben lokal gespeichert
+- 🧭 **Navigation** per Deep-Link an Google Maps bzw. Apple Maps — die App navigiert nicht selbst (kein Turn-by-Turn)
 - ❤️ **Favoriten** — Herz-Button im Panel, Herz-Badge auf dem Marker; paginierte Favoriten-Liste im Menü („⭐ Favoriten") mit Tippen → zentrieren. Lokal in localStorage, bei Login zu Supabase synchronisiert (geräteübergreifend)
 - 📝 **Persönliche Notizen** — eigenes Notizfeld pro Ort im Detailpanel; paginierte Notizen-Liste im Menü („📝 Notizen"). Lokal + bei Login zu Supabase synchronisiert
 - 📸 **Bilder** aus OSM-Tags, Wikimedia Commons und Mapillary
@@ -29,6 +30,7 @@ Kartenbasierte Web-App für **Wandernde**, **Radfahrende** und **Camper**: Parkp
 | Karte | [Leaflet](https://leafletjs.com) + [markercluster](https://github.com/Leaflet/Leaflet.markercluster) · [CARTO Voyager](https://carto.com) / [Esri](https://www.esri.com) / [Thunderforest](https://www.thunderforest.com) / [CyclOSM](https://www.cyclosm.org) / [OpenTopoMap](https://opentopomap.org) Tiles |
 | POI-Daten | [Overpass API](https://overpass-api.de) (OpenStreetMap) |
 | Geocoding | [Nominatim](https://nominatim.org) |
+| Routenberechnung | [OSRM](https://project-osrm.org) bei [FOSSGIS](https://routing.openstreetmap.de) (OpenStreetMap-Daten), direkt aus dem Browser |
 | Navigation | Deep-Link an Google Maps / Apple Maps |
 | Frontend | Vanilla TypeScript, [Vite](https://vite.dev), PWA ([vite-plugin-pwa](https://vite-pwa-org.netlify.app)) |
 | Backend | [Supabase Edge Functions](https://supabase.com/edge-functions) (Deno) — Proxy + Cache |

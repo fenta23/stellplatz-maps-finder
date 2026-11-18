@@ -10,6 +10,7 @@ Hier stehen Störungen, die schon einmal aufgetreten sind: woran man sie erkennt
 | Karte bleibt leer, keine POI-Marker | Overpass blockt Cloud-IPs | [OSM-Dienste blocken Cloud-IPs](#osm-dienste-blocken-cloud-ips) |
 | Eingebaute POIs laden wieder langsam (9–19 s), Konsole: `POI tiles failed, falling back to Overpass` | POI-Kacheln nicht erreichbar | [POI-Kacheln](#poi-kacheln) |
 | POI-Stand im Info-Panel älter als eine Woche | Wöchentlicher Kachel-Build gescheitert | [POI-Kacheln](#poi-kacheln) |
+| Routenplaner: „… gerade ausgelastet“ (429) bzw. „… gerade nicht erreichbar“ (5xx, Timeout) | FOSSGIS-OSRM überlastet oder down | [Routenplaner (FOSSGIS-OSRM)](#routenplaner-fossgis-osrm) |
 | KI-Suche: „Die KI-Suche ist gerade nicht erreichbar.“ | KI-Provider lehnt ab (Key, Guthaben, Secrets) | [KI-Provider-Ausfall](#ki-provider-ausfall) |
 | POI-Zusammenfassung fehlt, `/api/ai` → `502` | dto. | [KI-Provider-Ausfall](#ki-provider-ausfall) |
 | KI-Suche: „Das habe ich nicht verstanden …“ | Modell liefert unbrauchbares JSON (seit #90 kein Provider-Fehler mehr) | Prompt bzw. Modell prüfen |
@@ -38,11 +39,28 @@ Kommt lokal `200` und über die Edge Function `403`, ist es dieser Block.
 | Dienst | Client-Code | Verwendet von |
 |---|---|---|
 | Overpass (POIs) | `src/client/core/overpassFetch.ts` | `OverpassClient`, `nearbyClient` |
-| Nominatim | `src/client/core/nominatim.ts` | Suchleiste, KI-Suche, Google-Maps-Import |
+| Nominatim | `src/client/core/nominatim.ts` | Suchleiste, KI-Suche, Google-Maps-Import, Ortsfelder im Routenplaner |
+| OSRM bei FOSSGIS (`routing.openstreetmap.de`) | `src/client/features/track/osrmRoute.ts` | Routenplaner (`app/routePlannerWiring.ts`) |
 
 `/api/overpass`, `/api/nearby` und `/api/geocode` gibt es serverseitig noch, der Client ruft sie aber nicht mehr auf. Beim Import gilt weiter die Nominatim-Policy von höchstens 1 Anfrage pro Sekunde.
 
 Nicht betroffen sind bisher `/api/mapillary` und `/api/ai`. Map-Tiles laufen grundsätzlich nie über den Proxy.
+
+### Routenplaner (FOSSGIS-OSRM)
+
+Der Routenplaner ruft die öffentlichen OSRM-Instanzen von FOSSGIS (`routing.openstreetmap.de`, Profile `routed-foot`, `routed-bike`, `routed-car`) direkt aus dem Browser ab. Es gibt keine Edge Function dafür, ein Deploy ist nie nötig.
+
+| Symptom (Meldung im Planer) | Ursache | Maßnahme |
+|---|---|---|
+| „Die Routenberechnung ist gerade ausgelastet …“ | HTTP `429` von FOSSGIS | später erneut versuchen; bei Dauerzustand Nutzungsbedingungen/Limits prüfen |
+| „Die Routenberechnung ist gerade nicht erreichbar …“ | HTTP `5xx`, Timeout (15 s), Netzfehler oder unerwarteter OSRM-Code | Dienst per `curl` prüfen (s. u.), sonst Notausgang |
+| „Der Routenplaner ist derzeit abgeschaltet.“ | Kill-Switch steht auf `false` | gewollt |
+
+**Diagnose:** `curl -s "https://routing.openstreetmap.de/routed-bike/route/v1/driving/12.37,51.34;12.40,51.31?overview=false"` liefert bei laufendem Dienst `"code":"Ok"`.
+
+**Notausgang:** `ROUTE_PLANNING_ENABLED` in `src/client/features/track/osrmRoute.ts` auf `false` setzen. Der Planer meldet dann „derzeit abgeschaltet“, der Rest der App und der Import (GPX, Komoot) laufen weiter. Es genügt ein Frontend-Deploy.
+
+`routed-foot` ist ein Fußgängerprofil, kein Wanderrouting; es bevorzugt keine Wanderwege.
 
 ---
 

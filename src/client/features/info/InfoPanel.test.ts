@@ -21,6 +21,8 @@ describe("InfoPanel", () => {
     expect(c.textContent).toContain("Leaflet");
     expect(c.textContent).toContain("Kartendaten");
     expect(c.textContent).toContain("OpenStreetMap");
+    expect(c.textContent).toContain("OSRM");
+    expect(c.textContent).toContain("FOSSGIS");
   });
 
   it("shows the POI tile date once known", async () => {

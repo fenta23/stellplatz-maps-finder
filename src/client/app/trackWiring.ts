@@ -3,7 +3,7 @@ import { TrackPanel, formatOffset, formatKmAlong, type TrackPanelRow } from '@/f
 import { withinStretch, type CorridorHit } from '@/features/track/corridor.js'
 import { buildGpxExport, exportFileName, type GpxWaypoint } from '@/features/track/gpxExport.js'
 import { downloadTextFile } from '@/features/track/downloadTextFile.js'
-import type { SavedTrack, TrackPosition } from '@/features/track/trackTypes.js'
+import type { SavedTrack, Track, TrackPosition } from '@/features/track/trackTypes.js'
 import { poiKey, type OsmPoi } from '@/features/pois/OverpassClient.js'
 import { MSG_CHUNKS_FAILED, type TrackPoiLoader } from './trackPoiLoader.js'
 import type { TrackLayer } from '@/features/track/TrackLayer.js'
@@ -56,6 +56,8 @@ export interface TrackWiringDeps {
    * that was already active at startup. Default: after two animation frames.
    */
   readonly scheduleStartupFit?: ((run: () => void) => void) | undefined
+  /** "Route planen" in the import dialog; without it the dialog hides that section. */
+  readonly onOpenPlanner?: (() => void) | undefined
 }
 
 export const RETRY_SUFFIX = ' – erneut versuchen'
@@ -85,6 +87,8 @@ export interface TrackWiring {
   readonly openImport: () => void
   readonly closeImport: () => void
   readonly isImportOpen: () => boolean
+  /** Takes a finished route like an import: saves and activates it, folds the sheet, fits, flashes. */
+  readonly importTrack: (track: Track) => void
   readonly setSatellite: (on: boolean) => void
 }
 
@@ -239,18 +243,20 @@ export function createTrackWiring(deps: TrackWiringDeps): TrackWiring {
     })
   }
 
+  function importTrack(track: Track): void {
+    store.set(track)
+    // Mobile: fold the sheet first so the route is fitted above the strip only.
+    panel.collapseOnMobile()
+    layer.fitBounds(panel.mapInsets())
+    flash(`Route geladen: ${track.name} · ${formatKm(track.lengthM)}`)
+  }
+
   const dialog = new TrackImportDialog(dialogContainer, {
     getActiveTrack: () => store.get(),
     getSavedTracks: () => store.list(),
     importLink: (input, signal) => importFromKomootLink(input, fetchFn, signal),
     importFile: file => readGpxFile(file),
-    onImported: track => {
-      store.set(track)
-      // Mobile: fold the sheet first so the route is fitted above the strip only.
-      panel.collapseOnMobile()
-      layer.fitBounds(panel.mapInsets())
-      flash(`Route geladen: ${track.name} · ${formatKm(track.lengthM)}`)
-    },
+    onImported: track => importTrack(track),
     onShowActive: () => { layer.fitBounds(panel.mapInsets()); dialog.close() },
     onRemoveActive: () => { store.clear(); flash('Route geschlossen – sie bleibt gespeichert'); dialog.close() },
     onActivate: id => {
@@ -263,6 +269,7 @@ export function createTrackWiring(deps: TrackWiringDeps): TrackWiring {
       flash(`Route geladen: ${saved.name} · ${formatKm(saved.lengthM)}`)
     },
     onDelete: id => { store.remove(id); flash('Route gelöscht') },
+    ...(deps.onOpenPlanner ? { onPlan: deps.onOpenPlanner } : {}),
   })
 
   return {
@@ -280,6 +287,7 @@ export function createTrackWiring(deps: TrackWiringDeps): TrackWiring {
     openImport: () => dialog.open(),
     closeImport: () => dialog.close(),
     isImportOpen: () => dialog.isOpen(),
+    importTrack,
     setSatellite: on => layer.setSatellite(on),
   }
 }

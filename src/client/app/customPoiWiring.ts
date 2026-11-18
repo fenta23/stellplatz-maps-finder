@@ -4,6 +4,7 @@ import { CustomPoiEditor } from '@/features/custom-pois/CustomPoiEditor.js'
 import { SyncedCustomPoiStore, createSupabaseCustomPoiBackend, type CustomPoiBackend } from '@/features/custom-pois/RemoteCustomPoiStore.js'
 import { LocalCustomPoiStore } from '@/features/custom-pois/CustomPoiStore.js'
 import type { CustomPoi } from '@/features/custom-pois/CustomPoi.js'
+import type { OsmPoi } from '@/features/pois/OverpassClient.js'
 import type { MapService } from '@/features/map/MapService.js'
 import type { Selection } from './selection.js'
 import { customPoiToOsmPoi } from '@/features/poi-detail/PoiDetailPanel.js'
@@ -15,6 +16,8 @@ export interface CustomPoiWiringDeps {
    *  read it through a getter that resolves once it's assigned. */
   readonly getSelection: () => Selection
   readonly color: string
+  /** A marker was tapped: return true to swallow the tap (e.g. the route planner takes it as a point). */
+  readonly onMarkerTap?: (poi: OsmPoi) => boolean
 }
 
 export interface CustomPoiWiringResult {
@@ -38,8 +41,11 @@ export function initCustomPois(deps: CustomPoiWiringDeps): CustomPoiWiringResult
   const markerManager = new CustomPoiMarkerManager(
     adapter,
     poi => {
+      const osmPoi = customPoiToOsmPoi(poi)
+      // Swallowed taps must not change what edit/delete act on.
+      if (deps.onMarkerTap?.(osmPoi)) return
       currentCustomPoi = poi
-      void getSelection().select(customPoiToOsmPoi(poi))
+      void getSelection().select(osmPoi)
     },
     color,
   )

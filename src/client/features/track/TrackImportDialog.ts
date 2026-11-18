@@ -4,7 +4,7 @@ import { createEventScope, type EventScope } from '@/core/events.js'
 import { KOMOOT_IMPORT_ENABLED } from './komoot.js'
 import { prepareTrack } from './trackImport.js'
 import { trackImportErrorMessage } from './trackErrors.js'
-import type { ImportedTrack, SavedTrack, Track } from './trackTypes.js'
+import { sourceLabel, type ImportedTrack, type SavedTrack, type Track } from './trackTypes.js'
 import panelHtml from './trackImportDialog.html?raw'
 
 export interface TrackImportDialogDeps {
@@ -19,6 +19,8 @@ export interface TrackImportDialogDeps {
   onActivate(id: string): void
   /** Deletes a saved route (also used for the active one). */
   onDelete(id: string): void
+  /** "Route planen": without this dep the section stays hidden. The caller decides whether to close the dialog. */
+  onPlan?(): void
   /** Defaults to KOMOOT_IMPORT_ENABLED. */
   readonly komootEnabled?: boolean
 }
@@ -57,6 +59,9 @@ export class TrackImportDialog {
     this.fileBtn = ref(this.panel, 'fileBtn')
     this.fileInput = ref(this.panel, 'fileInput')
     this.statusEl = ref(this.panel, 'status')
+    const planSection = ref(this.panel, 'planSection')
+    planSection.hidden = !deps.onPlan
+    ref(planSection, 'planBtn').addEventListener('click', () => deps.onPlan?.())
     ref(this.panel, 'komootSection').hidden = !(deps.komootEnabled ?? KOMOOT_IMPORT_ENABLED)
 
     this.panel.querySelector('.fav-close')?.addEventListener('click', () => this.close())
@@ -126,7 +131,7 @@ export class TrackImportDialog {
     name.textContent = t.name
     const meta = document.createElement('span')
     meta.className = 'track-saved-meta'
-    meta.textContent = `${formatKm(t.lengthM)} · ${t.source === 'komoot' ? 'Komoot' : 'GPX'}`
+    meta.textContent = `${formatKm(t.lengthM)} · ${sourceLabel(t.source)}`
     info.append(name, meta)
     const show = document.createElement('button')
     show.type = 'button'

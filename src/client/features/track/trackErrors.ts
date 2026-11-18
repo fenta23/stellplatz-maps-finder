@@ -12,6 +12,12 @@ export type TrackImportErrorKind =
   | 'komoot-not-found'
   | 'komoot-unreachable'
   | 'komoot-disabled'
+  | 'route-disabled'
+  | 'route-same-point'
+  | 'route-busy'
+  | 'route-not-found'
+  | 'route-no-road'
+  | 'route-unreachable'
 
 export class TrackImportError extends Error {
   readonly kind: TrackImportErrorKind
@@ -34,6 +40,12 @@ const MESSAGES: Readonly<Record<TrackImportErrorKind, string>> = {
   'komoot-not-found': 'Tour nicht gefunden – bitte den Link prüfen.',
   'komoot-unreachable': 'Komoot ist gerade nicht erreichbar – bitte die Tour als GPX hochladen.',
   'komoot-disabled': 'Der Komoot-Import ist derzeit abgeschaltet – bitte die Tour als GPX hochladen.',
+  'route-disabled': 'Der Routenplaner ist derzeit abgeschaltet.',
+  'route-same-point': 'Start und Ziel liegen am selben Ort.',
+  'route-busy': 'Die Routenberechnung ist gerade ausgelastet – bitte gleich noch einmal versuchen.',
+  'route-not-found': 'Keine Route zwischen Start und Ziel gefunden – anderes Verkehrsmittel oder andere Punkte versuchen.',
+  'route-no-road': 'Start oder Ziel liegt zu weit von einem Weg entfernt – bitte einen Punkt näher an einer Straße wählen.',
+  'route-unreachable': 'Die Routenberechnung ist gerade nicht erreichbar – bitte später erneut versuchen.',
 }
 
 /** German message for the import dialog; unknown errors get a generic text. */

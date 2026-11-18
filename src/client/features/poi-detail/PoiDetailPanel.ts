@@ -77,6 +77,7 @@ export class PoiDetailPanel {
   private readonly favListeners: Array<() => void> = []
   private readonly noteListeners: Array<(text: string) => void> = []
   private readonly nearbyListeners: Array<(item: NearbyItem) => void> = []
+  private readonly planListeners: Array<(role: 'start' | 'end') => void> = []
   private nearbyItems: NearbyItem[] = []
   private _collapsed = false
 
@@ -94,6 +95,8 @@ export class PoiDetailPanel {
   onFavoriteToggle = (listener: () => void): (() => void) => subscribe(this.favListeners, listener)
   onNoteSave = (listener: (text: string) => void): (() => void) => subscribe(this.noteListeners, listener)
   onNearbySelect = (listener: (item: NearbyItem) => void): (() => void) => subscribe(this.nearbyListeners, listener)
+  /** Reports which route-planner role the shown POI was chosen for; the caller knows the POI. */
+  onPlanPoint = (listener: (role: 'start' | 'end') => void): (() => void) => subscribe(this.planListeners, listener)
 
   // ── Public collapse/expand (mobile map-drag) ────────────────────────────────
   /** Shrink to header-only strip. No-op when the panel is hidden. */
@@ -221,6 +224,17 @@ export class PoiDetailPanel {
     } else {
       grid.classList.remove('has-p4n')
     }
+
+    // Route planner: report only the role, the caller knows the selected POI.
+    // The click must not bubble: a listener may collapse the panel (mobile), and the panel's own
+    // "tap the collapsed strip to expand" handler would undo that with the very same click.
+    const reportPlanRole = (role: 'start' | 'end') => (e: Event) => {
+      e.stopPropagation()
+      this.closeMenu() // the document-level handler that normally does this no longer sees the click
+      for (const l of this.planListeners) l(role)
+    }
+    ref(view, 'planStart').addEventListener('click', reportPlanRole('start'))
+    ref(view, 'planEnd').addEventListener('click', reportPlanRole('end'))
 
     // Detail sections visibility
     if (isCustom) {

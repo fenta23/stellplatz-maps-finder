@@ -12,6 +12,12 @@ const KINDS: readonly TrackImportErrorKind[] = [
   'komoot-not-found',
   'komoot-unreachable',
   'komoot-disabled',
+  'route-disabled',
+  'route-same-point',
+  'route-busy',
+  'route-not-found',
+  'route-no-road',
+  'route-unreachable',
 ]
 
 describe('trackImportErrorMessage', () => {
@@ -25,6 +31,17 @@ describe('trackImportErrorMessage', () => {
   it('has distinct texts per kind', () => {
     const msgs = new Set(KINDS.map((k) => trackImportErrorMessage(new TrackImportError(k))))
     expect(msgs.size).toBe(KINDS.length)
+  })
+
+  it.each([
+    ['route-disabled', 'Der Routenplaner ist derzeit abgeschaltet.'],
+    ['route-same-point', 'Start und Ziel liegen am selben Ort.'],
+    ['route-busy', 'Die Routenberechnung ist gerade ausgelastet – bitte gleich noch einmal versuchen.'],
+    ['route-not-found', 'Keine Route zwischen Start und Ziel gefunden – anderes Verkehrsmittel oder andere Punkte versuchen.'],
+    ['route-no-road', 'Start oder Ziel liegt zu weit von einem Weg entfernt – bitte einen Punkt näher an einer Straße wählen.'],
+    ['route-unreachable', 'Die Routenberechnung ist gerade nicht erreichbar – bitte später erneut versuchen.'],
+  ] as const)('uses the agreed wording for %s', (kind, text) => {
+    expect(trackImportErrorMessage(new TrackImportError(kind))).toBe(text)
   })
 
   it('ignores the detail in the user message', () => {

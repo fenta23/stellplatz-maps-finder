@@ -34,6 +34,13 @@ describe('LocalTrackStore', () => {
     expect(again.list()).toEqual([saved])
   })
 
+  it('keeps a planned route across a reload', () => {
+    const saved = make().set(sample({ name: 'Dresden → Pirna (Rad)', source: 'planned' }))
+    const again = new LocalTrackStore()
+    expect(again.get()).toEqual(saved)
+    expect(again.get()?.source).toBe('planned')
+  })
+
   it('uses a generated id when none is injected', () => {
     const a = new LocalTrackStore().set(named('a'))
     const b = new LocalTrackStore().set(named('b'))
@@ -128,6 +135,16 @@ describe('LocalTrackStore', () => {
       s.set(named('b'))
       s.setCorridor(700) // of b
       const again = s.set(sample({ points: [[50, 10], [50.1, 10.1]] }))
+      expect(again.id).toBe(a.id)
+      expect(s.list().map(t => t.name)).toEqual(['Tour', 'b'])
+      expect(s.get()?.id).toBe(a.id)
+    })
+
+    it('re-activates the same planned route instead of duplicating it', () => {
+      const s = make()
+      const a = s.set(sample({ source: 'planned' }))
+      s.set(named('b'))
+      const again = s.set(sample({ source: 'planned' }))
       expect(again.id).toBe(a.id)
       expect(s.list().map(t => t.name)).toEqual(['Tour', 'b'])
       expect(s.get()?.id).toBe(a.id)
