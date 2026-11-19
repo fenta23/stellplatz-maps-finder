@@ -88,3 +88,17 @@ _shared/    utils.ts (CORS, Query-Validation, BBox-Snap, Supabase-Client, Rate-L
 - Jedes Feature hat Unit Tests
 - **Jeder Bug bekommt einen Test** — ein Regressionstest, der den Bug reproduziert (gegen den alten Code rot, mit dem Fix grün), gehört zum Bugfix dazu
 - Changelog in CHANGELOG.md (Keep a Changelog) — NACH jedem Commit/PR ergänzen, nicht erst am Ende!
+
+## Agent skills
+
+### Issue tracker
+
+Issues liegen in GitHub Issues (fenta23/stellplatz-maps-finder), Zugriff per `gh`-CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Standard-Vokabular: needs-triage, needs-info, ready-for-agent, ready-for-human, wontfix. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `GLOSSARY.md` + `docs/adr/` im Repo-Root (werden bei Bedarf angelegt). See `docs/agents/domain.md`.
