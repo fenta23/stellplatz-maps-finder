@@ -52,6 +52,15 @@ export function activeFirst(filters: readonly FilterDef[]): FilterDef[] {
 }
 
 export const PERSONAL_FILTER_ID = 'personal'
+
+/**
+ * Frühere Standardnamen eingebauter Filter. Ein gespeicherter Name, der hier
+ * steht, war nie vom Nutzer gewählt und wird beim Laden durch den aktuellen
+ * Standardnamen ersetzt (siehe `normalize()` im FilterStore).
+ */
+export const FORMER_DEFAULT_NAMES: Readonly<Record<string, readonly string[]>> = {
+  [PERSONAL_FILTER_ID]: ['Eigene POIs'],
+}
 export const ALL_ELEMENT_KINDS: readonly OsmElementKind[] = ['node', 'way', 'relation']
 
 // ── Icon registry (shared with custom-POI editor) ───────────────────────────
@@ -137,7 +146,7 @@ export const DEFAULT_FILTERS: readonly FilterDef[] = [
     selectors: [{ elements: NWR, tags: [{ key: 'sport', value: 'climbing' }] }],
   },
   {
-    id: PERSONAL_FILTER_ID, name: 'Eigene POIs', iconId: 'pin', color: '#D81B60',
+    id: PERSONAL_FILTER_ID, name: 'Eigene Orte', iconId: 'pin', color: '#D81B60',
     enabled: true, kind: 'personal', builtin: true, order: 6,
     selectors: [],
   },

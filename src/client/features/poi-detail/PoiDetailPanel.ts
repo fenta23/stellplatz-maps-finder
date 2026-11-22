@@ -85,7 +85,7 @@ export class PoiDetailPanel {
   constructor(private readonly container: HTMLElement, private readonly now: () => Date = () => new Date()) {
     this.panel = document.createElement('aside')
     this.panel.className = 'poi-detail-panel hidden'
-    this.panel.setAttribute('aria-label', 'POI Details')
+    this.panel.setAttribute('aria-label', 'Ortsdetails')
     this.container.appendChild(this.panel)
     this.wireGlobalEvents()
   }

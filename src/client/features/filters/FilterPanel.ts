@@ -106,7 +106,7 @@ export class FilterPanel {
     this.container.appendChild(this.iconButton({
       className: 'filter-btn filter-add',
       svg: SVG_PLUS,
-      title: 'Eigenen POI hinzufügen',
+      title: 'Eigenen Ort hinzufügen',
       onClick: () => this.deps.onAdd(),
     }))
 

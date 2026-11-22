@@ -1,5 +1,5 @@
 import {
-  DEFAULT_FILTERS, BUILTIN_FILTER_IDS, FILTER_ICONS, isValidSelector,
+  DEFAULT_FILTERS, BUILTIN_FILTER_IDS, FILTER_ICONS, FORMER_DEFAULT_NAMES, isValidSelector,
   type FilterDef,
 } from './filterModel.js'
 
@@ -35,13 +35,20 @@ function isValidUserFilter(d: FilterDef): boolean {
   )
 }
 
+/** A built-in's stored name, unless it is empty or a former default (then the current default). */
+function storedBuiltinName(stored: string | undefined, base: FilterDef): string {
+  const name = stored?.trim()
+  if (!name || FORMER_DEFAULT_NAMES[base.id]?.includes(name)) return base.name
+  return name
+}
+
 /** Normalise an incoming def: built-ins keep their default selectors/kind (tags locked). */
 function normalize(def: FilterDef): FilterDef | null {
   if (BUILTIN_FILTER_IDS.has(def.id)) {
     const base = DEFAULT_FILTERS.find(d => d.id === def.id)!
     return {
       ...base,
-      name: def.name?.trim() || base.name,
+      name: storedBuiltinName(def.name, base),
       iconId: FILTER_ICONS.some(i => i.id === def.iconId) ? def.iconId : base.iconId,
       color: def.color || base.color,
       enabled: def.enabled,

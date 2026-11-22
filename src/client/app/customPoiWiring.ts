@@ -67,7 +67,7 @@ export function initCustomPois(deps: CustomPoiWiringDeps): CustomPoiWiringResult
   const deleteCurrent = () => {
     const p = currentCustomPoi
     if (!p) return
-    if (!confirm('Diesen POI wirklich löschen?')) return
+    if (!confirm('Diesen Ort wirklich löschen?')) return
     store.remove(p.id)
     currentCustomPoi = undefined
     refreshMarkers()

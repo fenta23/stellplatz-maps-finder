@@ -25,7 +25,7 @@ describe('ProfileDialog', () => {
     const { container, dialog } = setup()
     expect(container.textContent).toContain('Wofür nutzt du die App?')
     expect(container.querySelectorAll('.profile-card')).toHaveLength(3)
-    expect(container.textContent).toContain('Eigene Filter und eigene POIs bleiben unverändert.')
+    expect(container.textContent).toContain('Eigene Filter und eigene Orte bleiben unverändert.')
     expect(dialog.isOpen()).toBe(false)
     dialog.open()
     expect(dialog.isOpen()).toBe(true)

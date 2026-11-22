@@ -83,16 +83,16 @@ describe('AiSearchDialog', () => {
     t.send.mockResolvedValue(ready)
     t.dialog.open('x')
     await t.flush()
-    expect(t.q('.ai-result-recap').textContent).toBe('📍 Bodensee · 2 Kategorien')
+    expect(t.q('.ai-result-recap').textContent).toBe('📍 Bodensee · 2 Filter')
     const btn = t.q<HTMLButtonElement>('.ai-result-apply')
     expect(btn.textContent).toBe('Auf Karte zeigen')
     expect(document.activeElement).toBe(btn)
   })
 
   it.each([
-    ['full', { from: 'Konstanz', to: 'Lindau', mode: 'bike' as const }, 'Konstanz → Lindau · Rad · 1 Kategorie'],
-    ['no from', { from: null, to: 'Lindau', mode: 'bike' as const }, 'Mein Standort → Lindau · Rad · 1 Kategorie'],
-    ['no mode', { from: 'Konstanz', to: 'Lindau', mode: null }, 'Konstanz → Lindau · 1 Kategorie'],
+    ['full', { from: 'Konstanz', to: 'Lindau', mode: 'bike' as const }, 'Konstanz → Lindau · Rad · 1 Filter'],
+    ['no from', { from: null, to: 'Lindau', mode: 'bike' as const }, 'Mein Standort → Lindau · Rad · 1 Filter'],
+    ['no mode', { from: 'Konstanz', to: 'Lindau', mode: null }, 'Konstanz → Lindau · 1 Filter'],
   ])('route card (%s)', async (_n, route, recap) => {
     const t = setup()
     const ri: AiIntent = { place: 'Lindau', enableFilters: [KNOWN_FILTER_IDS[0]!], adHocFilters: [], route }

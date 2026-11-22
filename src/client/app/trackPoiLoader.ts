@@ -25,7 +25,7 @@ const RADIUS_SLACK_M = 30
 export const MSG_LOADING = 'Lade Orte entlang der Route…'
 export const MSG_TOO_LONG = 'Eigene Filter werden entlang sehr langer Routen (über 300 km) nicht geladen.'
 export const MSG_CHUNKS_FAILED = 'Einige Abschnitte konnten nicht geladen werden.'
-export const MSG_TOO_MANY = 'Sehr viele Orte – Abstand verkleinern oder Kategorien ausblenden.'
+export const MSG_TOO_MANY = 'Sehr viele Orte – Abstand verkleinern oder Filter ausblenden.'
 
 export interface TrackPoiLoaderDeps {
   /** Same list the viewport refresher gets (visible OSM filters). */

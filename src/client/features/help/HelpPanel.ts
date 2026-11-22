@@ -259,13 +259,13 @@ export class HelpPanel {
           </span>
           <span class="help-extra-chip">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s-8-4.5-8-11.8A8 8 0 0 1 12 2a8 8 0 0 1 8 8.2c0 7.3-8 11.8-8 11.8z"/><circle cx="12" cy="10" r="3"/></svg>
-            Eigene POIs
+            Eigene Orte
           </span>
         </div>
       </section>
       <div class="help-beta-notice">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>
-        <span>App in aktiver Entwicklung (Beta). Funktionen können sich noch ändern. POI-Daten kommen von OpenStreetMap und können unvollständig sein.</span>
+        <span>App in aktiver Entwicklung (Beta). Funktionen können sich noch ändern. Ortsdaten kommen von OpenStreetMap und können unvollständig sein.</span>
       </div>
     `
     return wrap

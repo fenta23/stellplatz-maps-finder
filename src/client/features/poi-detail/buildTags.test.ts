@@ -7,7 +7,7 @@ const base: OsmPoi = { id: 1, type: 'parking', lat: 0, lon: 0, tags: {} }
 describe('buildTags', () => {
   it('always includes type', () => {
     const rows = buildTags(base)
-    expect(rows).toContainEqual({ label: 'Typ', value: 'Parkplatz' })
+    expect(rows).toContainEqual({ label: 'Filter', value: 'Parkplatz' })
   })
 
   it('adds opening_hours when present', () => {

@@ -13,7 +13,7 @@ export function buildTags(poi: OsmPoi): TagRow[] {
   const add = (label: string, value: string | undefined) => { if (value) rows.push({ label, value }) }
   const addLink = (label: string, href: string, value: string) => rows.push({ label, value, href })
 
-  add('Typ', typeLabel(poi.type))
+  add('Filter', typeLabel(poi.type))
   add('Zugang', ACCESS_LABELS[t['access'] ?? ''] ?? t['access'])
   add('Öffnungszeiten', t.opening_hours)
 
