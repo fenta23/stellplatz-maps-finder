@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Code:** `#statusbar-strip` in `index.html`; Regressionstest `app/statusBarStrip.test.ts`.
 
 ### Changed
+- **KI-Zusammenfassung für Wanderer, Radfahrer und Camper.** Bisher schrieb die KI jeden Ort für Reisende mit Wohnmobil – auch eine Berghütte oder einen Fahrradladen. Jetzt beschreibt sie zuerst, was der Ort ist, und hebt hervor, was für die passende Gruppe zählt. Wohnmobile erwähnt sie nur noch bei Orten für Camper oder wenn die OSM-Daten es ausdrücklich angeben. Auch die KI-Suche versteht sich nicht mehr als reiner Camper-Assistent.
+  - **Code:** `SUMMARY_SYSTEM` und Einleitung von `CHAT_SYSTEM` in `supabase/functions/api/aiHandler.ts`; Cache-Key enthält jetzt `SUMMARY_PROMPT_VERSION`, damit alte Zusammenfassungen neu erzeugt werden. Braucht `npm run deploy:edge`.
 - **Kartenknöpfe aufgeräumt: eine Leiste rechts oben.** Ebenen, „Zu meinem Standort“ und „Route importieren“ lagen bisher in drei Ecken verteilt (Zoom oben links, Ebenen oben rechts, Standort/Route unten links). Jetzt sitzen sie in einer senkrechten Leiste rechts oben – unter dem Header bzw. bei eingeklapptem Header auf Höhe der schwebenden Leiste. Sie springt nicht mehr mit Routen- oder POI-Sheet mit. Der Route-Import bleibt ein Tipp.
   - **Ebenen:** Das Auswahlfeld klappt links neben der Leiste nach unten auf und endet über einem offenen Sheet; reicht der Platz nicht, scrollt es.
   - **Handy/Touch:** Zoom-Knöpfe ausgeblendet (Zwei-Finger-Zoom und Doppeltipp genügen), Knöpfe 44px groß. Am Rechner bleibt der Zoom oben links.
