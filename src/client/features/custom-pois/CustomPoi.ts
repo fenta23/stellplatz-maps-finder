@@ -4,19 +4,19 @@ export interface CustomPoi {
   readonly lat: number
   readonly lon: number
   readonly name: string
-  readonly street?: string
-  readonly housenumber?: string
-  readonly postcode?: string
-  readonly city?: string
-  readonly phone?: string
-  readonly email?: string
-  readonly website?: string
-  readonly fee?: string
-  readonly capacity?: string
-  readonly openingHours?: string
-  readonly operator?: string
-  readonly description?: string
-  readonly note?: string
+  readonly street?: string | undefined
+  readonly housenumber?: string | undefined
+  readonly postcode?: string | undefined
+  readonly city?: string | undefined
+  readonly phone?: string | undefined
+  readonly email?: string | undefined
+  readonly website?: string | undefined
+  readonly fee?: string | undefined
+  readonly capacity?: string | undefined
+  readonly openingHours?: string | undefined
+  readonly operator?: string | undefined
+  readonly description?: string | undefined
+  readonly note?: string | undefined
   readonly createdAt: number
   readonly updatedAt: number
 }

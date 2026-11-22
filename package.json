@@ -17,6 +17,7 @@
     "preview": "vite preview",
     "generate-pwa-assets": "pwa-assets-generator && pwa-assets-generator -c pwa-assets.splash.config.ts",
     "test": "vitest run",
+    "typecheck": "tsc --noEmit",
     "test:watch": "vitest",
     "test:int": "vitest run --config vitest.config.int.ts"
   },

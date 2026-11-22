@@ -41,7 +41,7 @@ export function createMapActions(
   onRoute: () => void = () => {},
   layers?: LayerSwitcher,
 ): L.Control {
-  const control = L.control({ position: 'topright' })
+  const control = new L.Control({ position: 'topright' })
   control.onAdd = () => {
     const container = L.DomUtil.create('div', 'map-actions leaflet-bar')
     if (layers) container.appendChild(layers.el)

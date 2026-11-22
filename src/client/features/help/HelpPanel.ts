@@ -17,7 +17,7 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string): 
 export interface HelpPanelDeps {
   readonly filterStore: IFilterStore
   readonly onDismiss: () => void
-  readonly onOpenAuth?: () => void
+  readonly onOpenAuth?: (() => void) | undefined
   readonly profiles?: HelpProfiles
 }
 

@@ -21,7 +21,7 @@ export interface ImportResult {
   readonly skipped?: number
 }
 
-function parseAddress(address: string): { street?: string; city?: string } {
+function parseAddress(address: string): { street?: string | undefined; city?: string | undefined } {
   const parts = address.split(',').map(s => s.trim()).filter(Boolean)
   if (parts.length >= 2) {
     const city = parts[parts.length - 2]

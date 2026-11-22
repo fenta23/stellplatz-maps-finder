@@ -29,7 +29,7 @@ export interface FilterDef {
   readonly iconId: string
   readonly color: string
   readonly enabled: boolean
-  readonly hidden?: boolean
+  readonly hidden?: boolean | undefined
   readonly kind: FilterKind
   readonly builtin: boolean
   readonly order: number

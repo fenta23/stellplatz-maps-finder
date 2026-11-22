@@ -10,6 +10,7 @@ npm install       # deps
 npm run dev       # Vite :5173 (API via VITE_API_BASE aus .env oder lokaler Proxy :54321)
 npm test          # unit tests (Vitest, 1834 tests)
 npm run test:int  # integration tests vs Edge Function
+npm run typecheck # tsc --noEmit, läuft auch im CI vor den Tests
 npm run build     # → dist/client/
 ```
 

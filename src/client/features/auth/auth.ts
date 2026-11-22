@@ -4,10 +4,10 @@ export type MagicLinkResult = { ok: true } | { ok: false; error: string }
 
 export interface AuthUser {
   readonly id: string
-  readonly email?: string
-  readonly created_at?: string
-  readonly provider?: string
-  readonly helpSeen?: boolean
+  readonly email?: string | undefined
+  readonly created_at?: string | undefined
+  readonly provider?: string | undefined
+  readonly helpSeen?: boolean | undefined
 }
 
 function toAuthUser(user: User | null): AuthUser | null {
@@ -48,9 +48,13 @@ function storageKey(supabaseUrl: string): string {
   return ref ? `sb-${ref}-auth-token` : ''
 }
 
-/** Thin, testable wrapper over Supabase Auth (client injected for tests). */
-export function createAuth(client: SupabaseClient): Auth {
-  const key = storageKey(client.supabaseUrl)
+/**
+ * Thin, testable wrapper over Supabase Auth (client injected for tests).
+ * `supabaseUrl` is passed explicitly: `client.supabaseUrl` is protected in
+ * supabase-js and may change without notice.
+ */
+export function createAuth(client: SupabaseClient, supabaseUrl: string): Auth {
+  const key = storageKey(supabaseUrl)
   let userPromise: Promise<AuthUser | null> | null = null
 
   return {
