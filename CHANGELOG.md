@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **iPhone (iOS 27): kein Milchglas-Verlauf mehr über dem grünen Header.** iOS 27 zeichnet die Statusleiste über Web-Inhalten weich, solange oben kein festes, deckendes Element liegt. Ein schmaler Streifen in Header-Grün, so hoch wie die Statusleiste, gibt iOS jetzt die Farbe vor. Bei eingeklapptem Header verschwindet er, die Karte reicht dann wie bisher bis an den Rand. Am Rechner und auf Geräten ohne Notch ist er 0px hoch.
+  - **Code:** `#statusbar-strip` in `index.html`; Regressionstest `app/statusBarStrip.test.ts`.
+
 ### Changed
 - **Kartenknöpfe aufgeräumt: eine Leiste rechts oben.** Ebenen, „Zu meinem Standort“ und „Route importieren“ lagen bisher in drei Ecken verteilt (Zoom oben links, Ebenen oben rechts, Standort/Route unten links). Jetzt sitzen sie in einer senkrechten Leiste rechts oben – unter dem Header bzw. bei eingeklapptem Header auf Höhe der schwebenden Leiste. Sie springt nicht mehr mit Routen- oder POI-Sheet mit. Der Route-Import bleibt ein Tipp.
   - **Ebenen:** Das Auswahlfeld klappt links neben der Leiste nach unten auf und endet über einem offenen Sheet; reicht der Platz nicht, scrollt es.

@@ -141,6 +141,26 @@
                 letter-spacing: 0.2px;
             }
 
+            /* ── iOS 27 status-bar strip ──
+               iOS 27 frosts the status bar over web content unless a fixed,
+               opaque element sits at the top edge; it then tints the bar with
+               that element's background-color (theme-color is ignored, the
+               relative #topbar is not picked up). Only while the green header
+               shows: with the header folded away the map runs up to the edge. */
+            #statusbar-strip {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                height: env(safe-area-inset-top);
+                background: var(--accent-strong);
+                z-index: 1060; /* level with #topbar, below menus and sheets */
+                pointer-events: none;
+            }
+            body.ui-collapsed #statusbar-strip {
+                display: none;
+            }
+
             /* ── Map + detail layout ── */
             #content {
                 flex: 1;
@@ -158,6 +178,7 @@
         </style>
     </head>
     <body>
+        <div id="statusbar-strip" aria-hidden="true"></div>
         <div id="topbar">
             <button id="btn-menu" type="button" title="Menü" aria-label="Menü">
                 ☰
