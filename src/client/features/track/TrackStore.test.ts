@@ -356,6 +356,12 @@ describe('LocalTrackStore: plan of a planned route', () => {
     expect(new LocalTrackStore().get()).toEqual(saved)
   })
 
+  it('a plan in the stored JSON format (field `waypoints`) loads as an editable plan', () => {
+    const stored = '{"v":2,"activeId":"x","tracks":[{"id":"x","addedAt":1,"name":"A → B (Rad)","source":"planned","points":[[50,10],[50.1,10.1]],"lengthM":13000,"corridorM":500,"plan":{"mode":"bike","waypoints":[{"lat":50,"lon":10,"label":"A"},{"lat":50.05,"lon":10.05},{"lat":50.1,"lon":10.1,"label":"B"}]}}]}'
+    localStorage.setItem(KEY, stored)
+    expect(new LocalTrackStore().get()?.plan).toEqual(plan)
+  })
+
   it('a route stored without a plan still loads (not editable)', () => {
     make().set(sample({ source: 'planned' }))
     const again = new LocalTrackStore().get()

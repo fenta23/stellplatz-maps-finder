@@ -13,7 +13,7 @@ import { TRAVEL_MODE_LABEL, type TravelMode } from '@/core/travelMode.js'
 import { TrackImportError } from './trackErrors.js'
 import {
   MAX_LENGTH_M, MAX_VIA_POINTS,
-  type ImportedTrack, type RouteWaypoint, type TrackPoint,
+  type ImportedTrack, type RoutePlan, type RoutePoint, type TrackPoint,
 } from './trackTypes.js'
 
 export const ROUTE_PLANNING_ENABLED = true
@@ -28,29 +28,10 @@ const MIN_AIR_M = 20
 const MIN_ROUTE_M = 10
 const FALLBACK_NAME = 'Kartenpunkt'
 
-export interface RouteEndpoint {
-  readonly lat: number
-  readonly lon: number
-  readonly label?: string
-}
-
-export interface RouteRequest {
-  readonly start: RouteEndpoint
-  readonly end: RouteEndpoint
-  readonly mode: TravelMode
-  /** Points the route has to pass between start and end, in order. */
-  readonly via?: readonly RouteEndpoint[]
-}
-
-/** Start, via points, end. */
-function stops(req: RouteRequest): readonly RouteEndpoint[] {
-  return [req.start, ...(req.via ?? []), req.end]
-}
-
 /** The instance decides the profile; the path always says `driving`. Coordinates are lon,lat. */
-export function buildRouteUrl(req: RouteRequest): string {
-  const coords = stops(req).map(p => `${p.lon},${p.lat}`).join(';')
-  return `${BASE}/routed-${req.mode}/route/v1/driving/${coords}?overview=full&geometries=geojson`
+export function buildRouteUrl(plan: RoutePlan): string {
+  const coords = plan.waypoints.map(p => `${p.lon},${p.lat}`).join(';')
+  return `${BASE}/routed-${plan.mode}/route/v1/driving/${coords}?overview=full&geometries=geojson`
 }
 
 /** "Dresden → Pirna (Rad)" */
@@ -73,7 +54,7 @@ function toPoints(coordinates: unknown): TrackPoint[] | null {
 }
 
 /** Own label if given, else the street name OSRM snapped to, else a neutral fallback. */
-function endpointName(endpoint: RouteEndpoint, waypoint: unknown): string {
+function endpointName(endpoint: RoutePoint, waypoint: unknown): string {
   const label = endpoint.label?.trim()
   if (label) return label
   const name = (waypoint as { name?: unknown } | null | undefined)?.name
@@ -84,7 +65,7 @@ function endpointName(endpoint: RouteEndpoint, waypoint: unknown): string {
  * Where a via point is kept: on the road OSRM snapped it to, so its handle sits on
  * the line. Start and end keep the requested place instead (see `fetchPlannedRoute`).
  */
-function snappedVia(via: RouteEndpoint, waypoint: unknown): RouteWaypoint {
+function snappedVia(via: RoutePoint, waypoint: unknown): RoutePoint {
   const loc = (waypoint as { location?: unknown } | null | undefined)?.location
   const lon = Array.isArray(loc) ? loc[0] : undefined
   const lat = Array.isArray(loc) ? loc[1] : undefined
@@ -99,7 +80,7 @@ function snappedVia(via: RouteEndpoint, waypoint: unknown): RouteWaypoint {
  * resolved name as label — the route name then stays the same when a via point is added.
  */
 export async function fetchPlannedRoute(
-  req: RouteRequest,
+  plan: RoutePlan,
   fetchFn: typeof fetch = (...a) => fetch(...a),
   signal?: AbortSignal,
   options: { enabled?: boolean; timeoutMs?: number } = {},
@@ -107,12 +88,15 @@ export async function fetchPlannedRoute(
   const { enabled = ROUTE_PLANNING_ENABLED, timeoutMs = DEFAULT_TIMEOUT_MS } = options
   if (!enabled) throw new TrackImportError('route-disabled')
 
-  const via = req.via ?? []
+  const all = plan.waypoints
+  if (all.length < 2) throw new TrackImportError('route-unreachable', 'invalid plan')
+  const start = all[0]!
+  const end = all[all.length - 1]!
+  const via = all.slice(1, -1)
   if (via.length > MAX_VIA_POINTS) throw new TrackImportError('route-too-many-vias')
 
   // Straight-line checks first: no network request for obviously useless input.
   // With via points start = end is a legitimate round trip.
-  const all = stops(req)
   let airM = 0
   for (let i = 1; i < all.length; i++) airM += haversineMeters(all[i - 1]!, all[i]!)
   if (via.length === 0 && airM < MIN_AIR_M) throw new TrackImportError('route-same-point')
@@ -123,7 +107,7 @@ export async function fetchPlannedRoute(
 
   let body: unknown
   try {
-    const res = await fetchFn(buildRouteUrl(req), { credentials: 'omit', signal: combined })
+    const res = await fetchFn(buildRouteUrl(plan), { credentials: 'omit', signal: combined })
     if (res.status === 429) throw new TrackImportError('route-busy')
     if (res.status >= 500) throw new TrackImportError('route-unreachable', String(res.status))
     // OSRM reports routing failures as HTTP 400 with a JSON body — read it either way.
@@ -161,17 +145,17 @@ export async function fetchPlannedRoute(
     throw new TrackImportError('route-same-point')
   }
 
-  const startName = endpointName(req.start, wps[0])
-  const endName = endpointName(req.end, wps[all.length - 1])
-  const planned: RouteWaypoint[] = [
-    { lat: req.start.lat, lon: req.start.lon, label: startName },
+  const startName = endpointName(start, wps[0])
+  const endName = endpointName(end, wps[all.length - 1])
+  const planned: RoutePoint[] = [
+    { lat: start.lat, lon: start.lon, label: startName },
     ...via.map((v, i) => snappedVia(v, wps[i + 1])),
-    { lat: req.end.lat, lon: req.end.lon, label: endName },
+    { lat: end.lat, lon: end.lon, label: endName },
   ]
   return {
-    name: plannedRouteName(startName, endName, req.mode),
+    name: plannedRouteName(startName, endName, plan.mode),
     source: 'planned',
     points,
-    plan: { mode: req.mode, waypoints: planned },
+    plan: { mode: plan.mode, waypoints: planned },
   }
 }
