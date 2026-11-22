@@ -9,10 +9,12 @@ Eine Karten-App für Wanderer, Radfahrer und Camper, die Orte wie Wasser, Einkeh
 **Ort**:
 Ein Punkt auf der Karte, den die App wegen seines Nutzens zeigt, zum Beispiel eine Wasserstelle, ein Stellplatz, eine Hütte oder eine Bäckerei.
 _Avoid_: POI, Spot, Platz, Location
+_Im Code_: `Poi` / `OsmPoi` (siehe [ADR 0001](docs/adr/0001-poi-als-code-begriff-fuer-ort.md))
 
 **Eigener Ort**:
 Ein Ort, den jemand selbst auf die Karte gesetzt und beschrieben hat. Er gehört zum eingebauten Filter „Eigene Orte“.
 _Avoid_: Eigener POI, Custom POI, Markierung, Pin
+_Im Code_: `CustomPoi` (siehe [ADR 0001](docs/adr/0001-poi-als-code-begriff-fuer-ort.md))
 
 **Favorit**:
 Ein Ort, den jemand mit dem Herz gemerkt hat.
@@ -29,6 +31,7 @@ _Avoid_: Notiz, OSM-Note, Kommentar
 **Suchtreffer**:
 Etwas, das die Ortssuche zu einem eingegebenen Namen findet, etwa ein Dorf, ein Berg, ein See oder eine Adresse. Ein Suchtreffer kann Start oder Ziel einer Route werden, ist aber kein Ort.
 _Avoid_: Ort, Ortschaft, Place, Adresse
+_Im Code_: `PlaceSuggestion`
 
 ### Filter und Profile
 
