@@ -21,12 +21,15 @@ const PLUS = ICON('<path d="M5 12h14"/><path d="M12 5v14"/>')
 const ELEMENT_LABEL: Record<OsmElementKind, string> = { node: 'Punkt', way: 'Fläche', relation: 'Relation' }
 const COMMON_KEYS = ['amenity', 'shop', 'tourism', 'leisure', 'sport', 'natural', 'highway', 'man_made', 'historic']
 
+/** Tag-Bedingung, die der Editor beim Tippen direkt ändert. */
+type EditableTag = { -readonly [K in keyof TagCondition]: TagCondition[K] }
+
 interface EditorState {
   name: string
   iconId: string
   color: string
   elements: Set<OsmElementKind>
-  tags: TagCondition[]
+  tags: EditableTag[]
 }
 
 export class FilterConfigPanel {
@@ -304,7 +307,7 @@ export class FilterConfigPanel {
   private buildKeysDatalist(): HTMLElement {
     const datalist = el('datalist')
     datalist.id = 'fc-keys'
-    for (const k of COMMON_KEYS) { const o = el('option'); o.value = k; datalist.appendChild(o) }
+    for (const k of COMMON_KEYS) { const o = el<HTMLOptionElement>('option'); o.value = k; datalist.appendChild(o) }
     return datalist
   }
 

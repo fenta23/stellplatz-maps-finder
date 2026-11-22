@@ -62,7 +62,7 @@ describe('collectTagImages', () => {
     }))
     const r = await collectTagImages({ ...base, tags: { wikimedia_commons: 'Foo.jpg' } })
     expect(r).toHaveLength(1)
-    expect(r[0].caption).toBe('Wikimedia Commons')
+    expect(r[0]?.caption).toBe('Wikimedia Commons')
   })
 
   it('includes both image and wikimedia_commons', async () => {
@@ -71,8 +71,8 @@ describe('collectTagImages', () => {
     }))
     const r = await collectTagImages({ ...base, tags: { image: 'https://x.com/a.jpg', wikimedia_commons: 'Bar.jpg' } })
     expect(r).toHaveLength(2)
-    expect(r[0].src).toBe('https://x.com/a.jpg')
-    expect(r[1].caption).toBe('Wikimedia Commons')
+    expect(r[0]?.src).toBe('https://x.com/a.jpg')
+    expect(r[1]?.caption).toBe('Wikimedia Commons')
   })
 
   it('skips wikimedia_commons when resolution fails', async () => {

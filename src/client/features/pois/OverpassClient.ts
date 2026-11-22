@@ -17,18 +17,18 @@ export interface LatLngBounds {
 }
 
 export interface OsmTags {
-  readonly name?: string
-  readonly opening_hours?: string
-  readonly phone?: string
-  readonly website?: string
-  readonly fee?: string
-  readonly capacity?: string
-  readonly operator?: string
-  readonly description?: string
-  readonly motorhome?: string
-  readonly tourism?: string
-  readonly amenity?: string
-  readonly sport?: string
+  readonly name?: string | undefined
+  readonly opening_hours?: string | undefined
+  readonly phone?: string | undefined
+  readonly website?: string | undefined
+  readonly fee?: string | undefined
+  readonly capacity?: string | undefined
+  readonly operator?: string | undefined
+  readonly description?: string | undefined
+  readonly motorhome?: string | undefined
+  readonly tourism?: string | undefined
+  readonly amenity?: string | undefined
+  readonly sport?: string | undefined
   readonly [key: string]: string | undefined
 }
 

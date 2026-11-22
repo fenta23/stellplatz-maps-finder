@@ -10,6 +10,7 @@ function fakeAuth(initialUser: AuthUser | null = null) {
     signOut: vi.fn().mockResolvedValue(undefined),
     currentUser: vi.fn().mockResolvedValue(initialUser),
     onChange: vi.fn((cb: (u: AuthUser | null) => void) => { changeCb = cb; return () => {} }),
+    recoverSession: vi.fn().mockResolvedValue(null),
   }
   return { auth, emitChange: (u: AuthUser | null) => changeCb?.(u) }
 }

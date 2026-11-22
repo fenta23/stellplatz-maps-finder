@@ -20,6 +20,11 @@ export function isAuthConfigured(): boolean {
   return Boolean(SUPABASE_URL && SUPABASE_ANON_KEY)
 }
 
+/** Project URL the Supabase client talks to (empty when not configured). */
+export function getSupabaseUrl(): string {
+  return SUPABASE_URL
+}
+
 let client: SupabaseClient | null = null
 
 /** Lazy singleton Supabase client, or null when auth is not configured. */

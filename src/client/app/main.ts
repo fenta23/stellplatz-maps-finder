@@ -38,7 +38,7 @@ import { NotesListPanel } from '@/features/notes/NotesListPanel.js'
 import { SideMenu, type MenuEntry } from '@/features/menu/SideMenu.js'
 import { clearAppCache } from '@/features/menu/clearAppCache.js'
 import { UpdateBanner, watchServiceWorkerUpdates } from '@/features/update/UpdateBanner.js'
-import { getSupabaseClient } from '@/features/auth/authClient.js'
+import { getSupabaseClient, getSupabaseUrl } from '@/features/auth/authClient.js'
 import { createAuth, type Auth } from '@/features/auth/auth.js'
 import { AuthPanel } from '@/features/auth/AuthPanel.js'
 import { InfoPanel } from '@/features/info/InfoPanel.js'
@@ -116,7 +116,7 @@ async function init() {
   let authPanel: AuthPanel | null = null
   let loggedIn = false
   if (supabase) {
-    auth = createAuth(supabase)
+    auth = createAuth(supabase, getSupabaseUrl())
     void auth.currentUser().then(u => { loggedIn = !!u }).catch(() => {})
     auth.onChange(u => { loggedIn = !!u })
     authPanel = new AuthPanel(document.body, auth, {

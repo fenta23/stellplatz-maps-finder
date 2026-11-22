@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Typfehler aufgeräumt, Typprüfung vor jedem Deployment.** Der TypeScript-Compiler meldete 29 Fehler, die beim Bauen nicht auffielen, weil Vite den Code ohne Typprüfung übersetzt. Sie sind behoben. Typen und Unit-Tests werden jetzt schon in jedem Pull Request geprüft, und das Deployment bricht bei einem Typfehler ab. In der App ändert sich dadurch nichts.
+  - **Anmeldung robuster:** Der Speicher-Schlüssel für die Sitzung wird nicht mehr aus einem internen Feld von supabase-js gelesen, das sich bei einem Update unbemerkt ändern könnte. Die Projekt-URL wird jetzt ausdrücklich übergeben.
+  - **Code:** `npm run typecheck` (`tsc --noEmit`), neuer PR-Workflow `ci.yml` (Typecheck + Unit-Tests), Schritt „Typecheck“ in `deploy-pages.yml`; `createAuth(client, supabaseUrl)` + `getSupabaseUrl()` in `features/auth/`; Regressionstest in `auth.test.ts` (Test-Client ohne `supabaseUrl`).
 - **iPhone: kein Hineinzoomen mehr beim Tippen in Eingabefelder.** Das Komoot-Link-Feld im Import-Dialog, das Notizfeld im POI-Detail und die Felder im Eigene-Orte-Editor hatten eine Schrift unter 16px – iOS zoomte beim Antippen hinein und blieb danach gezoomt. Alle Felder haben jetzt mindestens 16px, auch künftige.
   - **Code:** Basisregel `input, textarea, select` in `styles/shell.css`; Regressionstest `styles/inputZoom.test.ts` prüft alle Stylesheets auf Feld-Schriftgrößen unter 16px.
 - **iPhone (iOS 27): kein Milchglas-Verlauf mehr über dem grünen Header.** iOS 27 zeichnet die Statusleiste über Web-Inhalten weich, solange oben kein festes, deckendes Element liegt. Ein schmaler Streifen in Header-Grün, so hoch wie die Statusleiste, gibt iOS jetzt die Farbe vor. Bei eingeklapptem Header verschwindet er, die Karte reicht dann wie bisher bis an den Rand. Am Rechner und auf Geräten ohne Notch ist er 0px hoch.

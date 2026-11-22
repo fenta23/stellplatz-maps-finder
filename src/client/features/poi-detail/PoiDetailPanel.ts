@@ -46,10 +46,10 @@ export function nearbyIconSvg(kind: string): string | undefined {
 const HEART_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5"/></svg>'
 
 export interface PanelConfig {
-  readonly isCustom?: boolean
-  readonly isLoggedIn?: boolean
-  readonly onEdit?: () => void
-  readonly onDelete?: () => void
+  readonly isCustom?: boolean | undefined
+  readonly isLoggedIn?: boolean | undefined
+  readonly onEdit?: (() => void) | undefined
+  readonly onDelete?: (() => void) | undefined
 }
 
 /** Per-open view state for the panel. */
@@ -250,7 +250,7 @@ export class PoiDetailPanel {
   }
 
   // ── Sub-render helpers ──────────────────────────────────────────────────────
-  private renderFav(view: DocumentFragment, isCustom: boolean, isFavorite: boolean): void {
+  private renderFav(view: ParentNode, isCustom: boolean, isFavorite: boolean): void {
     if (isCustom) { ref(view, 'fav').hidden = true; return }
     const fav = ref(view, 'fav')
     fav.setAttribute('aria-pressed', String(isFavorite))
@@ -264,7 +264,7 @@ export class PoiDetailPanel {
     })
   }
 
-  private renderMenu(view: DocumentFragment, config: PanelConfig): void {
+  private renderMenu(view: ParentNode, config: PanelConfig): void {
     const menuWrap = ref(view, 'menuWrap')
     const menuBtn = ref(view, 'menuBtn')
     const menu = ref(view, 'menu')
@@ -275,7 +275,7 @@ export class PoiDetailPanel {
     ref(view, 'deleteBtn').addEventListener('click', () => { setMenu(false); config.onDelete?.() })
   }
 
-  private renderTags(view: DocumentFragment, poi: OsmPoi): void {
+  private renderTags(view: ParentNode, poi: OsmPoi): void {
     renderList(ref(view, 'tags'), buildTags(poi), {
       row: r => ({ label: r.label, value: r.href ? '' : r.value }),
       decorate: (rowEl: HTMLElement, r: TagRow) => {

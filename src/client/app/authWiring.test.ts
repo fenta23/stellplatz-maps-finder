@@ -85,10 +85,9 @@ describe('auth.onChange → store connect → write-through', () => {
           return { data: { subscription: { unsubscribe: vi.fn() } } }
         }),
       },
-      supabaseUrl: 'https://test.supabase.co',
     } as unknown as SupabaseClient
 
-    const auth = createAuth(fakeClient)
+    const auth = createAuth(fakeClient, 'https://test.supabase.co')
     auth.onChange(user => {
       if (user) void favStore.connect(favBackend.backend)
     })
@@ -123,10 +122,9 @@ describe('auth.onChange → store connect → write-through', () => {
           return { data: { subscription: { unsubscribe: vi.fn() } } }
         }),
       },
-      supabaseUrl: 'https://test.supabase.co',
     } as unknown as SupabaseClient
 
-    const auth = createAuth(fakeClient)
+    const auth = createAuth(fakeClient, 'https://test.supabase.co')
     auth.onChange(user => {
       if (user) void favStore.connect(favBackend.backend)
     })
@@ -156,10 +154,9 @@ describe('auth.onChange → store connect → write-through', () => {
           return { data: { subscription: { unsubscribe: vi.fn() } } }
         }),
       },
-      supabaseUrl: 'https://test.supabase.co',
     } as unknown as SupabaseClient
 
-    const auth = createAuth(fakeClient)
+    const auth = createAuth(fakeClient, 'https://test.supabase.co')
     auth.onChange(user => {
       if (user) void favStore.connect(favBackend.backend)
       else favStore.disconnect()
