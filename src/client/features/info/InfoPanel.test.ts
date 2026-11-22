@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { InfoPanel } from "./InfoPanel.js";
 
 const flush = () => new Promise((r) => setTimeout(r, 0));
@@ -32,6 +32,23 @@ describe("InfoPanel", () => {
     expect(date.textContent).toBe("");
     panel.setPoiDataDate("2026-10-02");
     expect(date.textContent).toBe(", Stand 02.10.2026");
+  });
+
+  it("hides the clear-cache section without a callback", () => {
+    const c = document.createElement("div");
+    new InfoPanel(c);
+    const section = c.querySelector<HTMLElement>('[data-ref="cache-section"]')!;
+    expect(section.hidden).toBe(true);
+  });
+
+  it("shows the clear-cache button and runs the callback", () => {
+    const c = document.createElement("div");
+    const onClearCache = vi.fn();
+    new InfoPanel(c, { onClearCache });
+    const section = c.querySelector<HTMLElement>('[data-ref="cache-section"]')!;
+    expect(section.hidden).toBe(false);
+    c.querySelector<HTMLButtonElement>('[data-ref="clear-cache"]')!.click();
+    expect(onClearCache).toHaveBeenCalledOnce();
   });
 
   it("open and close via class", async () => {

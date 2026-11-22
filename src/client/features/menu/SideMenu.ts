@@ -12,6 +12,16 @@ export interface MenuDivider { readonly kind: 'divider' }
 export interface MenuSection { readonly kind: 'section'; readonly label: string }
 export type MenuEntry = MenuItem | MenuDivider | MenuSection
 
+/** Kleiner Textlink am Menüende (z. B. Datenschutz, Impressum). */
+export interface MenuFooterLink {
+  readonly label: string
+  readonly onSelect: () => void
+}
+
+export interface SideMenuOptions {
+  readonly footerLinks?: readonly MenuFooterLink[]
+}
+
 function isMenuItem(entry: MenuEntry): entry is MenuItem {
   return !('kind' in entry)
 }
@@ -22,7 +32,7 @@ export class SideMenu {
   private readonly backdrop: HTMLElement
   private readonly events: EventScope = createEventScope()
 
-  constructor(container: HTMLElement, items: readonly MenuEntry[]) {
+  constructor(container: HTMLElement, items: readonly MenuEntry[], options: SideMenuOptions = {}) {
     this.backdrop = clone('<div class="side-menu-backdrop"></div>')
     this.backdrop.addEventListener('click', () => this.close())
 
@@ -59,6 +69,21 @@ export class SideMenu {
         li.appendChild(btn)
         list.appendChild(li)
       }
+    }
+
+    const footerLinks = options.footerLinks ?? []
+    if (footerLinks.length > 0) {
+      const footer = document.createElement('nav')
+      footer.className = 'side-menu-footer'
+      for (const link of footerLinks) {
+        const btn = document.createElement('button')
+        btn.type = 'button'
+        btn.className = 'side-menu-footer-link'
+        btn.textContent = link.label
+        btn.addEventListener('click', () => { this.close(); link.onSelect() })
+        footer.appendChild(btn)
+      }
+      this.panel.appendChild(footer)
     }
 
     container.append(this.backdrop, this.panel)

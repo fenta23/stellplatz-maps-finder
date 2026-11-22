@@ -39,6 +39,33 @@ describe('SideMenu', () => {
     expect(menu.isOpen()).toBe(false)
   })
 
+  it('renders no footer without footer links', () => {
+    const { container } = setup([{ icon: '🗑️', label: 'X', onSelect: vi.fn() }])
+    expect(container.querySelector('.side-menu-footer')).toBeNull()
+  })
+
+  it('renders footer links that run their action and close the menu', () => {
+    const onDatenschutz = vi.fn()
+    const onImpressum = vi.fn()
+    const container = document.createElement('div')
+    const menu = new SideMenu(container, [{ icon: '🗑️', label: 'X', onSelect: vi.fn() }], {
+      footerLinks: [
+        { label: 'Datenschutz', onSelect: onDatenschutz },
+        { label: 'Impressum', onSelect: onImpressum },
+      ],
+    })
+    const links = container.querySelectorAll<HTMLButtonElement>('.side-menu-footer .side-menu-footer-link')
+    expect([...links].map(l => l.textContent)).toEqual(['Datenschutz', 'Impressum'])
+    // Fußzeilen-Links sind keine normalen Menüeinträge
+    expect(container.querySelectorAll('.side-menu-item')).toHaveLength(1)
+
+    menu.open()
+    links[1]!.click()
+    expect(onImpressum).toHaveBeenCalledOnce()
+    expect(onDatenschutz).not.toHaveBeenCalled()
+    expect(menu.isOpen()).toBe(false)
+  })
+
   it('closes when the backdrop is clicked', () => {
     const { container, menu } = setup([{ icon: '🗑️', label: 'X', onSelect: vi.fn() }])
     menu.open()

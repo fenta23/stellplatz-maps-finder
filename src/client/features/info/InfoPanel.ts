@@ -37,13 +37,23 @@ function renderChangelog(md: string): string {
   return out.join('\n')
 }
 
+export interface InfoPanelDeps {
+  /** Zeigt „Cache leeren & neu laden“; ohne Callback bleibt der Abschnitt verborgen. */
+  readonly onClearCache?: () => void
+}
+
 export class InfoPanel {
   private readonly panel: HTMLElement
   private readonly events: EventScope = createEventScope()
 
-  constructor(container: HTMLElement) {
+  constructor(container: HTMLElement, deps: InfoPanelDeps = {}) {
     this.panel = clone(panelHtml)
     ref(this.panel, 'version').textContent = `v${APP_VERSION}`
+    const { onClearCache } = deps
+    if (onClearCache) {
+      ref(this.panel, 'cache-section').hidden = false
+      ref(this.panel, 'clear-cache').addEventListener('click', () => onClearCache())
+    }
     this.panel.querySelectorAll('[data-ref="controller"]').forEach(el => { el.textContent = CONTROLLER })
     ref(this.panel, 'changelog').innerHTML = renderChangelog(changelogRaw)
     this.panel.querySelector('.fav-close')?.addEventListener('click', () => this.close())

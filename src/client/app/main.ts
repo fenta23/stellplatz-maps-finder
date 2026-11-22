@@ -70,7 +70,7 @@ import { initCustomPois } from './customPoiWiring.js'
 import { initAuthSync } from './authWiring.js'
 import { geocode } from '@/core/nominatim.js'
 import {
-  SVG_STAR, SVG_NOTE, SVG_USER, SVG_TRASH, SVG_INFO, SVG_UPLOAD, SVG_SHIELD, SVG_BUILDING, SVG_HELP, SVG_LEAF, SVG_ROUTE, SVG_ROUTE_PLAN, SVG_PROFILE,
+  SVG_STAR, SVG_NOTE, SVG_USER, SVG_INFO, SVG_UPLOAD, SVG_HELP, SVG_LEAF, SVG_ROUTE, SVG_PROFILE,
 } from './icons.js'
 // Cross-cutting responsive overrides — must load AFTER all feature CSS so the
 // media-query rules win over feature base rules of equal specificity.
@@ -552,7 +552,9 @@ async function init() {
   mapService.onTrackAction(() => trackWiring.openImport())
 
   // ── Side menu ───────────────────────────────────────────────────────────────
-  const infoPanel = new InfoPanel(document.body)
+  const infoPanel = new InfoPanel(document.body, {
+    onClearCache: () => void clearAppCache().then(() => location.reload()),
+  })
   poiTiles.manifest().then(m => infoPanel.setPoiDataDate(m.date)).catch(() => { /* Overpass fallback, no date */ })
   const datenschutzPanel = new DatenschutzPanel(document.body)
   const impressumPanel = new ImpressumPanel(document.body)
@@ -583,31 +585,30 @@ async function init() {
     searchWiring.close()
   }
 
+  // Route planen läuft über die Suchbox, „Cache leeren“ sitzt im Info-Panel,
+  // Datenschutz/Impressum als kleine Links in der Fußzeile.
   const menuItems: MenuEntry[] = [
+    { kind: 'section', label: 'Meine Daten' },
     { icon: SVG_STAR, label: 'Favoriten', onSelect: () => { closeAll(); favoritesPanel.open() } },
     { icon: SVG_NOTE, label: 'Notizen', onSelect: () => { closeAll(); notesPanel.open() } },
-    { icon: SVG_ROUTE_PLAN, label: 'Route planen', onSelect: () => openPlanner() },
+    { icon: SVG_UPLOAD, label: 'Orte importieren (Google Maps)', onSelect: () => importHandle.open() },
     { icon: SVG_ROUTE, label: 'Route importieren (GPX/Komoot)', onSelect: () => { closeAll(); trackWiring.openImport() } },
+    { kind: 'section', label: 'Unterwegs' },
     { icon: SVG_PROFILE, label: 'Profil', onSelect: () => { closeAll(); profileWiring.open() } },
     { icon: SVG_LEAF, label: 'Verantwortungsvoll unterwegs', onSelect: () => { closeAll(); responsibilityPanel.open() } },
-    { icon: SVG_UPLOAD, label: 'Google Maps importieren', onSelect: () => importHandle.open() },
+    { kind: 'section', label: 'App' },
   ]
   if (authPanel) {
     menuItems.push({ icon: SVG_USER, label: 'Konto', onSelect: () => authPanel!.open() })
   }
   menuItems.push({ icon: SVG_HELP, label: 'Hilfe', onSelect: () => { closeAll(); helpPanel.open() } })
   menuItems.push({ icon: SVG_INFO, label: 'Info', onSelect: () => { closeAll(); infoPanel.open() } })
-  menuItems.push({ kind: 'divider' })
-  menuItems.push({ kind: 'section', label: 'Rechtliches' })
-  menuItems.push({ icon: SVG_SHIELD, label: 'Datenschutz', onSelect: () => { closeAll(); datenschutzPanel.open() } })
-  menuItems.push({ icon: SVG_BUILDING, label: 'Impressum', onSelect: () => { closeAll(); impressumPanel.open() } })
-  menuItems.push({ kind: 'divider' })
-  menuItems.push({
-    icon: SVG_TRASH,
-    label: 'Cache leeren & neu laden',
-    onSelect: () => void clearAppCache().then(() => location.reload()),
+  const menu = new SideMenu(document.body, menuItems, {
+    footerLinks: [
+      { label: 'Datenschutz', onSelect: () => { closeAll(); datenschutzPanel.open() } },
+      { label: 'Impressum', onSelect: () => { closeAll(); impressumPanel.open() } },
+    ],
   })
-  const menu = new SideMenu(document.body, menuItems)
   document.getElementById('btn-menu')?.addEventListener('click', () => menu.toggle())
 
   // ── Update banner ───────────────────────────────────────────────────────────
