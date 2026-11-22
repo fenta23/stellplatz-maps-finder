@@ -63,8 +63,8 @@ Eine Route aus einer GPX-Datei oder einem Komoot-Link. Sie bleibt so, wie sie ge
 _Avoid_: Track, Tour
 
 **Verkehrsmittel**:
-Wie eine geplante Route berechnet wird: zu Fuß, mit dem Rad oder mit dem Auto. Es ist vom Profil unabhängig.
-_Avoid_: Modus, Travel Mode, Fortbewegungsart
+Wie eine geplante Route berechnet wird: zu Fuß, mit dem Rad oder mit dem Auto. Solange noch keins gewählt wurde, gibt das Profil den Startwert vor, danach gilt die letzte Wahl.
+_Avoid_: Modus, Fortbewegungsart
 
 **Korridor**:
 Der Bereich links und rechts einer Route, in dem die App Orte sucht.

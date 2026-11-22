@@ -1,6 +1,7 @@
+import { isTravelMode } from '@/core/travelMode.js'
 import {
   MAX_CORRIDOR_M, MIN_CORRIDOR_M, MAX_SAVED_TRACKS, isTrackSource,
-  type RouteMode, type RoutePlan, type RouteWaypoint, type SavedTrack, type Track, type TrackPoint,
+  type RoutePlan, type RouteWaypoint, type SavedTrack, type Track, type TrackPoint,
 } from './trackTypes.js'
 
 export interface ITrackStore {
@@ -29,13 +30,11 @@ export interface ITrackStore {
 const clampCorridor = (m: number) => Math.min(MAX_CORRIDOR_M, Math.max(MIN_CORRIDOR_M, m))
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
 
-const ROUTE_MODES: ReadonlySet<unknown> = new Set<RouteMode>(['foot', 'bike', 'car'])
-
 /** The plan of a planned route; a broken one is dropped (the route stays, it just cannot be edited). */
 function parsePlan(d: unknown): RoutePlan | null {
   if (!d || typeof d !== 'object') return null
   const r = d as Record<string, unknown>
-  if (!ROUTE_MODES.has(r.mode) || !Array.isArray(r.waypoints) || r.waypoints.length < 2) return null
+  if (!isTravelMode(r.mode) || !Array.isArray(r.waypoints) || r.waypoints.length < 2) return null
   const waypoints: RouteWaypoint[] = []
   for (const w of r.waypoints as unknown[]) {
     if (!w || typeof w !== 'object') return null
@@ -44,7 +43,7 @@ function parsePlan(d: unknown): RoutePlan | null {
     if (label !== undefined && typeof label !== 'string') return null
     waypoints.push({ lat, lon, ...(label ? { label } : {}) })
   }
-  return { mode: r.mode as RouteMode, waypoints }
+  return { mode: r.mode, waypoints }
 }
 
 /** Validates the fields of one route (shared by the v1 key and v2 entries); null if broken. */

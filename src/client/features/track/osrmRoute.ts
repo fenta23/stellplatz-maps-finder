@@ -9,10 +9,11 @@
 // are checked by us.
 
 import { haversineMeters } from '@/core/geo.js'
+import { TRAVEL_MODE_LABEL, type TravelMode } from '@/core/travelMode.js'
 import { TrackImportError } from './trackErrors.js'
 import {
   MAX_LENGTH_M, MAX_VIA_POINTS,
-  type ImportedTrack, type RouteMode, type RouteWaypoint, type TrackPoint,
+  type ImportedTrack, type RouteWaypoint, type TrackPoint,
 } from './trackTypes.js'
 
 export const ROUTE_PLANNING_ENABLED = true
@@ -26,7 +27,6 @@ const MIN_AIR_M = 20
 /** Route length below which the result counts as "same place". */
 const MIN_ROUTE_M = 10
 const FALLBACK_NAME = 'Kartenpunkt'
-const MODE_LABEL: Readonly<Record<RouteMode, string>> = { foot: 'Fuß', bike: 'Rad', car: 'Auto' }
 
 export interface RouteEndpoint {
   readonly lat: number
@@ -37,7 +37,7 @@ export interface RouteEndpoint {
 export interface RouteRequest {
   readonly start: RouteEndpoint
   readonly end: RouteEndpoint
-  readonly mode: RouteMode
+  readonly mode: TravelMode
   /** Points the route has to pass between start and end, in order. */
   readonly via?: readonly RouteEndpoint[]
 }
@@ -54,8 +54,8 @@ export function buildRouteUrl(req: RouteRequest): string {
 }
 
 /** "Dresden → Pirna (Rad)" */
-export function plannedRouteName(start: string, end: string, mode: RouteMode): string {
-  return `${start} → ${end} (${MODE_LABEL[mode]})`
+export function plannedRouteName(start: string, end: string, mode: TravelMode): string {
+  return `${start} → ${end} (${TRAVEL_MODE_LABEL[mode]})`
 }
 
 const isFiniteNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)

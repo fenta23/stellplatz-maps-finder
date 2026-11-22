@@ -6,8 +6,9 @@ import { createPlaceSuggest } from '@/app/placeSuggest.js'
 import {
   defaultTravelMode,
   shortPlaceLabel,
-  type PlanPoint, type PlanRequest, type PlanRole, type TravelMode,
+  type PlanPoint, type PlanRequest, type PlanRole,
 } from '@/features/route-planner/plannerModel.js'
+import type { TravelMode } from '@/core/travelMode.js'
 import { fetchPlannedRoute, type RouteEndpoint } from '@/features/track/osrmRoute.js'
 import { prepareTrack } from '@/features/track/trackImport.js'
 import { TrackImportError, trackImportErrorMessage } from '@/features/track/trackErrors.js'

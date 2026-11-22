@@ -27,7 +27,7 @@ Bekannte Störungen (OSM-Cloud-IP-Block, KI-Provider, Migrationen): `docs/troubl
 ## Frontend (`src/client/`) — vertical slices
 ```
 app/        main.ts (Wiring), session.ts (State), selection.ts, poiRefresher.ts, trackWiring.ts, trackPoiLoader.ts, routePlannerWiring.ts, routeEditWiring.ts, searchBoxWiring.ts (Koordinator Suchbox), uiCollapse.ts, placeSuggest.ts, aiFilterApply.ts (KI-Suche ersetzt Filter, mit Rückweg)
-core/       config.ts (apiUrl), template.ts (clone/ref), bind.ts (renderList), PlaceField (Ortsfeld mit Vorschlägen)
+core/       config.ts (apiUrl), template.ts (clone/ref), bind.ts (renderList), travelMode.ts (Verkehrsmittel), PlaceField (Ortsfeld mit Vorschlägen)
 features/
   menu/       SideMenu + clearAppCache
   map/        MapService + leafletAdapter + locationMarker + leafletTrackLayer; Basiskarten (Karte, Satellit, Fahrradkarte, Topo) mit Ebenen-Umschalter

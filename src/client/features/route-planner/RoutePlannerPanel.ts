@@ -2,9 +2,10 @@ import './route-planner.css'
 import { clone, ref } from '@/core/template.js'
 import { createEventScope, type EventScope } from '@/core/events.js'
 import { PlaceField, type PlaceSuggestion } from '@/core/PlaceField.js'
+import { TRAVEL_MODES, type TravelMode } from '@/core/travelMode.js'
 import {
-  TRAVEL_MODES, shortPlaceLabel,
-  type PlanPoint, type PlanRequest, type PlanRole, type TravelMode,
+  shortPlaceLabel,
+  type PlanPoint, type PlanRequest, type PlanRole,
 } from './plannerModel.js'
 import panelHtml from './routePlannerPanel.html?raw'
 

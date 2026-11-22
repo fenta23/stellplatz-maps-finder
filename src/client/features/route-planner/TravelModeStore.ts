@@ -1,4 +1,4 @@
-import { isTravelMode, type TravelMode } from './plannerModel.js'
+import { isTravelMode, type TravelMode } from '@/core/travelMode.js'
 
 /** Merkt sich das zuletzt gewählte Verkehrsmittel (nur lokal). */
 export class TravelModeStore {
