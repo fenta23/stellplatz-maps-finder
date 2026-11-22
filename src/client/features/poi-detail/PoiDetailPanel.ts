@@ -104,11 +104,14 @@ export class PoiDetailPanel {
     if (this.panel.classList.contains('hidden')) return
     this._collapsed = true
     this.panel.classList.add('poi-detail-panel--collapsed')
+    // Body class so Leaflet's bottom corner (attribution) sits right above the strip.
+    document.body.classList.add('detail-collapsed')
   }
 
   expand(): void {
     this._collapsed = false
     this.panel.classList.remove('poi-detail-panel--collapsed')
+    document.body.classList.remove('detail-collapsed')
   }
 
   // ── Event delegation + global key handling ──────────────────────────────────

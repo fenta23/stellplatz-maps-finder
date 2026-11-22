@@ -378,12 +378,10 @@
     body.track-open.track-collapsed .leaflet-bottom {
         bottom: calc(52px + env(safe-area-inset-bottom));
     }
-    /* The POI detail panel (bottom sheet, z 1100) takes over the same slot. */
+    /* The POI detail panel (bottom sheet, z 1100) takes over the same slot;
+       the controls then follow the detail panel (responsive.css). */
     body.track-open.detail-open .track-sheet {
         display: none;
-    }
-    body.track-open.detail-open .leaflet-bottom {
-        bottom: 0;
     }
 }
 

@@ -1,25 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import L from 'leaflet'
 import { readFileSync } from 'node:fs'
-import { BASE_LAYER_CONFIGS, MapService, TOPO_LAYER, buildBaseLayers, buildCycleLayerConfig, buildMapLayerConfig, createLocateControl, createMapActions } from './MapService.js'
+import { BASE_LAYER_CONFIGS, MapService, TOPO_LAYER, buildBaseLayers, buildCycleLayerConfig, buildMapLayerConfig, createMapActions } from './MapService.js'
 
 type OnAdd = { onAdd: () => HTMLElement }
-
-describe('createLocateControl', () => {
-  it('fires the callback when the button is clicked', () => {
-    const onClick = vi.fn()
-    const el = (createLocateControl(onClick) as unknown as OnAdd).onAdd()
-    const btn = el.querySelector<HTMLButtonElement>('.locate-btn')
-    expect(btn).toBeTruthy()
-    btn!.click()
-    expect(onClick).toHaveBeenCalledOnce()
-  })
-
-  it('exposes an accessible label', () => {
-    const el = (createLocateControl(vi.fn()) as unknown as OnAdd).onAdd()
-    expect(el.querySelector('.locate-btn')?.getAttribute('aria-label')).toBe('Zu meinem Standort')
-  })
-})
 
 describe('createMapActions', () => {
   it('renders the locate and route-import buttons (no routing-mode toggle)', () => {
@@ -38,6 +22,17 @@ describe('createMapActions', () => {
     routeBtn.click()
     expect(onRoute).toHaveBeenCalledOnce()
     expect(onLocate).toHaveBeenCalledOnce()
+  })
+
+  it('sits top-right (fixed spot, never moves with the sheets) with the layer chooser on top, then locate, then route import', () => {
+    const layers = { el: document.createElement('div'), close: vi.fn() }
+    layers.el.className = 'layer-switcher'
+    const control = createMapActions(vi.fn(), vi.fn(), layers)
+    expect(control.getPosition()).toBe('topright')
+    const el = (control as unknown as OnAdd).onAdd()
+    expect(Array.from(el.children).map(c => c.className)).toEqual(['layer-switcher', 'locate-btn', 'locate-btn track-btn'])
+    ;(control as unknown as { onRemove: () => void }).onRemove()
+    expect(layers.close).toHaveBeenCalledOnce()
   })
 })
 
@@ -214,6 +209,25 @@ describe('MapService base layer chooser', () => {
     expect(labels).toEqual(BASE_LAYER_CONFIGS.map(c => c.label))
     expect(radios().map(r => r.checked)).toEqual([true, false, false, false])
     expect(svc.getBaseLayerLabel()).toBe('Karte')
+  })
+
+  it('puts the layer chooser into the top-right action bar and the attribution bottom-left', () => {
+    new MapService(host)
+    const bar = host.querySelector('.leaflet-top.leaflet-right .map-actions')
+    expect(bar?.querySelector('.layer-btn')).toBeTruthy()
+    expect(bar?.querySelector('.track-btn')).toBeTruthy()
+    expect(host.querySelector('.leaflet-bottom .map-actions')).toBeNull()
+    expect(host.querySelector('.leaflet-bottom.leaflet-left .leaflet-control-attribution')).toBeTruthy()
+    expect(host.querySelector('.leaflet-bottom.leaflet-right .leaflet-control-attribution')).toBeNull()
+  })
+
+  it('caps the opened panel at the room between the bar and a bottom sheet (the lifted Leaflet bottom corner)', () => {
+    new MapService(host)
+    const rect = (top: number, bottom: number) => ({ top, bottom, left: 0, right: 0, width: 0, height: bottom - top, x: 0, y: top, toJSON: () => ({}) }) as DOMRect
+    vi.spyOn(host.querySelector<HTMLElement>('.map-actions')!, 'getBoundingClientRect').mockReturnValue(rect(113, 245))
+    vi.spyOn(host.querySelector<HTMLElement>('.leaflet-bottom')!, 'getBoundingClientRect').mockReturnValue(rect(300, 318))
+    toggle().click()
+    expect(panel().style.maxHeight).toBe('197px')
   })
 
   it('opens on button click and closes again', () => {
@@ -499,10 +513,24 @@ describe('map.css', () => {
     })
     const zoomIn = css.split('\n').filter(l => l.includes('leaflet-control-zoom-in') && !l.includes('svg') && !l.includes(':hover'))
     for (const l of zoomIn) expect(l).not.toContain('.layer-btn')
-    expect(css).toMatch(/\.layer-btn\s*\{[^}]*border-radius:\s*8px/)
   })
 
-  it('caps the attribution width so it stays right of the bottom-left controls', () => {
-    expect(css).toMatch(/\.leaflet-control-attribution\s*\{[^}]*max-width:\s*calc\(100vw/)
+  it('lets the bottom-left attribution wrap instead of running off-screen', () => {
+    expect(css).toMatch(/\.leaflet-bottom\.leaflet-left \.leaflet-control-attribution\s*\{[^}]*max-width:\s*calc\(100vw/)
+  })
+
+  it('does not clip the layer panel (no overflow:hidden on the action bar)', () => {
+    const rule = css.match(/\.map-actions\s*\{[^}]*\}/)![0]
+    expect(rule).not.toMatch(/overflow:\s*hidden/)
+  })
+
+  it('hides the zoom buttons on touch devices and uses 44px targets there', () => {
+    const touch = css.match(/@media \(hover: none\) and \(pointer: coarse\)\s*\{[\s\S]*?\n\}/)![0]
+    expect(touch).toMatch(/\.leaflet-control-zoom\s*\{\s*display:\s*none/)
+    expect(touch).toMatch(/height:\s*44px/)
+  })
+
+  it('keeps bottom controls above the home indicator / browser toolbar', () => {
+    expect(css).toMatch(/\.leaflet-bottom\s*\{\s*bottom:\s*env\(safe-area-inset-bottom\)/)
   })
 })

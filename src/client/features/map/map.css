@@ -1,22 +1,28 @@
-/* ── Map actions (locate + route-import buttons) ── */
+/* ── Map actions: one vertical glass bar top-right (layers, locate, route
+import) — below the header, beside the collapsed pill; it never moves with the
+bottom sheets. No
+overflow:hidden, or the layer panel (absolute, beside the bar) gets clipped:
+the first/last child round their own corners instead. ── */
 .map-actions {
     display: flex;
-    align-items: center;
+    flex-direction: column;
+    align-items: stretch;
     background: rgba(255, 255, 255, 0.88);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     border-radius: 12px;
     box-shadow: 0 2px 12px rgba(44, 40, 34, 0.14);
-    overflow: hidden;
-    margin-bottom: 20px!important
 }
-.map-actions .locate-btn {
+.map-actions .locate-btn,
+.map-actions .layer-btn {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 34px;
-    height: 34px;
+    width: 40px;
+    height: 40px;
     border: none;
+    border-radius: 0;
+    box-shadow: none;
     cursor: pointer;
     background: transparent;
     color: var(--ink-muted);
@@ -25,7 +31,18 @@
         color 0.15s;
     flex-shrink: 0;
 }
-.map-actions .locate-btn:hover {
+.map-actions > :first-child,
+.map-actions > :first-child .layer-btn {
+    border-radius: 12px 12px 0 0;
+}
+.map-actions > :last-child {
+    border-radius: 0 0 12px 12px;
+}
+.map-actions > * + * {
+    border-top: 1px solid var(--border-soft);
+}
+.map-actions .locate-btn:hover,
+.map-actions .layer-btn:hover {
     background: var(--surface-2);
     color: var(--accent);
 }
@@ -33,6 +50,22 @@
     width: 20px;
     height: 20px;
     display: block;
+}
+/* Touch: 44px targets (Apple HIG); pinch replaces the zoom buttons. */
+@media (hover: none) and (pointer: coarse) {
+    .map-actions .locate-btn,
+    .map-actions .layer-btn {
+        width: 44px;
+        height: 44px;
+    }
+    .map-actions .locate-btn svg,
+    .map-actions .layer-btn svg {
+        width: 22px;
+        height: 22px;
+    }
+    #map .leaflet-control-zoom {
+        display: none;
+    }
 }
 
 /* ── Map controls: one consistent look for zoom, layer switcher & locate.
@@ -46,7 +79,9 @@ body.ui-collapsed .leaflet-top {
     top: 0;
     margin-top: env(safe-area-inset-top);
 }
-.layer-switcher {
+/* The layer panel is positioned against the whole bar (not the button), so it
+   can use the bar's full height when growing upwards. */
+.map-actions {
     position: relative;
 }
 
@@ -74,9 +109,21 @@ body.ui-collapsed .leaflet-top {
     color: var(--accent);
 }
 
-/* More spacing between bottom-left controls and attribution */
+/* Bottom controls (attribution) stay clear of the home indicator / Safari's toolbar. */
+.leaflet-bottom {
+    bottom: env(safe-area-inset-bottom);
+}
 .leaflet-bottom .leaflet-control {
     margin-bottom: 0;
+}
+#map .leaflet-top .map-actions {
+    border: none;
+    margin-top: 14px;
+    margin-right: 12px;
+}
+/* Header folded away: level with the floating pill (top: 8px, responsive.css). */
+body.ui-collapsed #map .leaflet-top .map-actions {
+    margin-top: 8px;
 }
 
 .layer-btn svg,
@@ -100,11 +147,15 @@ body.ui-collapsed .leaflet-top {
     outline-offset: 2px;
 }
 
-/* "Ebenen" panel: card below the button, right-aligned. */
+/* "Ebenen" panel: card left of the bar, opening downwards from the bar's top
+   edge. Its max-height is set on open (MapService fitPanel) so it ends above
+   a bottom sheet. */
 .layer-panel {
     position: absolute;
-    top: calc(100% + 6px);
-    right: 0;
+    top: 0;
+    right: calc(100% + 8px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
     z-index: 1100;
     width: 230px;
     max-width: calc(100vw - 72px);
@@ -155,11 +206,13 @@ body.ui-collapsed .leaflet-top {
     font-weight: 600;
 }
 
-/* Attribution must never cover the bottom-left buttons (locate / route import):
-   keep it right of that group and let long credits wrap. */
-.leaflet-bottom.leaflet-right .leaflet-control-attribution {
-    max-width: calc(100vw - 100px);
+/* Attribution bottom-left, small and quiet; long credits wrap. */
+.leaflet-bottom.leaflet-left .leaflet-control-attribution {
+    max-width: calc(100vw - 24px);
     box-sizing: border-box;
+    font-size: 10px;
+    background: rgba(255, 255, 255, 0.7);
+    border-top-right-radius: 6px;
 }
 
 /* Hairline between + / − (matches the layer switcher's 1px gap look). */
@@ -177,13 +230,11 @@ body.ui-collapsed .leaflet-top {
     background: rgba(255, 255, 255, 0.92);
     cursor: default;
 }
-/* ── Desktop: shift top-right controls when detail panel is open ── */
+/* ── Desktop: the detail panel (340px) sits on the right — move the bar beside it. ── */
 @media (min-width: 601px) {
     body.detail-open .leaflet-top.leaflet-right {
         margin-right: 340px;
     }
-}.map-actions .locate-btn + .locate-btn {
-    border-left: 1px solid var(--border-soft);
 }
 
 /* ── Selected place: enlarged icon with a ring, above markers and clusters

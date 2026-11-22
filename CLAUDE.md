@@ -30,7 +30,7 @@ app/        main.ts (Wiring), session.ts (State), selection.ts, poiRefresher.ts,
 core/       config.ts (apiUrl), template.ts (clone/ref), bind.ts (renderList), travelMode.ts (Verkehrsmittel), PlaceField (Ortsfeld mit Vorschlägen)
 features/
   menu/       SideMenu + clearAppCache
-  map/        MapService + leafletAdapter + locationMarker + leafletRouteLayer; Basiskarten (Karte, Satellit, Fahrradkarte, Topo) mit Ebenen-Umschalter
+  map/        MapService + leafletAdapter + locationMarker + leafletRouteLayer; Basiskarten (Karte, Satellit, Fahrradkarte, Topo); Kartenknöpfe als Leiste rechts oben (Ebenen, Standort, Route importieren), Zoom nur ohne Touch, Attribution links unten
   pois/       OverpassClient + poiTiles (statische Kacheln) + PoiMarkerManager + poiMeta
   poi-detail/ PoiDetailPanel + poiData (Bilder, Nearby, Notes)
   route/      Route-Import (GPX, Komoot-Link) + Routenberechnung (OSRM) `osrmRoute.ts` + Geometrie + RouteStore + RouteImportDialog + corridor + RoutePanel (POIs entlang der Route) + gpxExport; bis zu 10 gespeicherte Routen in `stellplatz:tracks`

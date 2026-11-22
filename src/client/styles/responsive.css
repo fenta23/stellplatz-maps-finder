@@ -33,7 +33,18 @@ steal space from the absolutely-positioned map. */
         display: none;
     }
     body.searchbox-open.track-open .leaflet-bottom {
-        bottom: 0;
+        bottom: env(safe-area-inset-bottom);
+    }
+
+    /* ── POI detail sheet (50dvh, collapsed: 3.5rem strip) ──
+       Leaflet's bottom corner (attribution) rides on top of it; the layer
+       panel uses that edge as its floor (MapService fitPanel). #map raises specificity above the track-sheet
+       lifts in route.css (the detail panel hides that sheet). */
+    body.detail-open #map .leaflet-bottom {
+        bottom: 50dvh;
+    }
+    body.detail-open.detail-collapsed #map .leaflet-bottom {
+        bottom: 3.5rem;
     }
 
     /* ── Floating pill controls (shown when collapsed) ── */
