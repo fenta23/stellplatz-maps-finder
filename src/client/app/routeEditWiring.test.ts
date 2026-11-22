@@ -1,27 +1,27 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { createRouteEditWiring } from './routeEditWiring.js'
-import { LocalTrackStore } from '@/features/track/TrackStore.js'
-import type { TrackEditing } from '@/features/track/TrackLayer.js'
-import { buildRouteUrl } from '@/features/track/osrmRoute.js'
-import { trackImportErrorMessage, TrackImportError } from '@/features/track/trackErrors.js'
-import type { RoutePlan, Track, TrackPoint } from '@/features/track/trackTypes.js'
+import { LocalRouteStore } from '@/features/route/RouteStore.js'
+import type { RouteEditing } from '@/features/route/RouteLayer.js'
+import { buildRouteUrl } from '@/features/route/osrmRoute.js'
+import { routeImportErrorMessage, RouteImportError } from '@/features/route/routeErrors.js'
+import type { RoutePlan, Route, LinePoint } from '@/features/route/routeTypes.js'
 
 // The planned places lie a little off the ends of the line, like a searched town does.
 const PLAN: RoutePlan = {
   mode: 'bike',
   waypoints: [{ lat: 51.06, lon: 13.73, label: 'Dresden' }, { lat: 50.94, lon: 13.95, label: 'Pirna' }],
 }
-const LINE_START: TrackPoint = [51.05, 13.74]
-const LINE_END: TrackPoint = [50.95, 13.93]
-const planned: Track = {
+const LINE_START: LinePoint = [51.05, 13.74]
+const LINE_END: LinePoint = [50.95, 13.93]
+const planned: Route = {
   name: 'Dresden → Pirna (Rad)', source: 'planned',
   points: [LINE_START, [51.0, 13.85], LINE_END], lengthM: 18_432, corridorM: 800, plan: PLAN,
 }
-const gpx: Track = { name: 'Eifelrunde', source: 'gpx', points: [[50, 7], [50.1, 7.1]], lengthM: 13_000, corridorM: 500 }
+const gpx: Route = { name: 'Eifelrunde', source: 'gpx', points: [[50, 7], [50.1, 7.1]], lengthM: 13_000, corridorM: 500 }
 
-const NEW_START: TrackPoint = [51.051, 13.741]
-const NEW_END: TrackPoint = [50.951, 13.931]
-const SNAPPED_VIA: TrackPoint = [51.03, 13.8]
+const NEW_START: LinePoint = [51.051, 13.741]
+const NEW_END: LinePoint = [50.951, 13.931]
+const SNAPPED_VIA: LinePoint = [51.03, 13.8]
 /** OSRM answer for start + `vias` via points + end. */
 function osrmBody(vias = 1) {
   return {
@@ -46,13 +46,13 @@ function deferredFetch() {
   return { fetchFn, resolve: (r: Response) => settle.resolve(r), reject: (e: unknown) => settle.reject(e) }
 }
 
-function setup(initial: Track | null, opts: { fetchFn?: typeof fetch; enabled?: boolean } = {}) {
+function setup(initial: Route | null, opts: { fetchFn?: typeof fetch; enabled?: boolean } = {}) {
   localStorage.clear()
   let n = 0
-  const store = new LocalTrackStore(localStorage, { newId: () => `id${++n}` })
+  const store = new LocalRouteStore(localStorage, { newId: () => `id${++n}` })
   if (initial) store.set(initial)
-  const states: Array<TrackEditing | null> = []
-  const layer = { setEditing: (e: TrackEditing | null) => { states.push(e) } }
+  const states: Array<RouteEditing | null> = []
+  const layer = { setEditing: (e: RouteEditing | null) => { states.push(e) } }
   const flash = vi.fn<(msg: string) => void>()
   const fetchFn = opts.fetchFn ?? vi.fn<typeof fetch>(async () => ok())
   createRouteEditWiring({ store, layer, flash, fetchFn, ...(opts.enabled === undefined ? {} : { enabled: opts.enabled }) })
@@ -103,8 +103,8 @@ describe('createRouteEditWiring: which routes can be edited', () => {
 })
 
 describe('createRouteEditWiring: dragging the line', () => {
-  const GRAB: TrackPoint = [51.0, 13.85]
-  const DROP: TrackPoint = [51.04, 13.8]
+  const GRAB: LinePoint = [51.0, 13.85]
+  const DROP: LinePoint = [51.04, 13.8]
 
   it('asks OSRM for the route via the drop point and replaces the SAME saved route', async () => {
     const { store, editing, flash, fetchFn } = setup(planned)
@@ -167,7 +167,7 @@ describe('createRouteEditWiring: handles', () => {
   it('dragging the start: requested without its old label, shown where dropped, renamed after the road', async () => {
     const d = deferredFetch()
     const { store, editing, fetchFn } = setup(planned, { fetchFn: d.fetchFn })
-    const to: TrackPoint = [51.07, 13.7]
+    const to: LinePoint = [51.07, 13.7]
     editing()!.onMove(0, to)
     expect(urlOf(fetchFn)).toBe(buildRouteUrl({ mode: 'bike', waypoints: [{ lat: 51.07, lon: 13.7 }, PLAN.waypoints[1]!] }))
     expect(editing()).toMatchObject({ busy: true, waypoints: [to, LINE_END] })
@@ -180,14 +180,14 @@ describe('createRouteEditWiring: handles', () => {
   it('dragging the end keeps the start on the line while the request runs', () => {
     const d = deferredFetch()
     const { editing } = setup(planned, { fetchFn: d.fetchFn })
-    const to: TrackPoint = [50.9, 14.0]
+    const to: LinePoint = [50.9, 14.0]
     editing()!.onMove(1, to)
     expect(editing()?.waypoints).toEqual([LINE_START, to])
   })
 
   it('tapping a via point removes it and recalculates without it', async () => {
     const via = { lat: 51.03, lon: 13.8 }
-    const withVia: Track = { ...planned, plan: { mode: 'bike', waypoints: [PLAN.waypoints[0]!, via, PLAN.waypoints[1]!] } }
+    const withVia: Route = { ...planned, plan: { mode: 'bike', waypoints: [PLAN.waypoints[0]!, via, PLAN.waypoints[1]!] } }
     const { store, editing, fetchFn } = setup(withVia, { fetchFn: vi.fn<typeof fetch>(async () => ok(0)) })
     expect(editing()?.waypoints).toEqual([LINE_START, [51.03, 13.8], LINE_END])
     editing()!.onRemove(1)
@@ -215,7 +215,7 @@ describe('createRouteEditWiring: failures and interruptions', () => {
     editing()!.onInsert([51.0, 13.85], [51.04, 13.8])
     await flush()
     expect(store.get()).toBe(before)
-    expect(flash).toHaveBeenCalledWith(trackImportErrorMessage(new TrackImportError('route-busy')))
+    expect(flash).toHaveBeenCalledWith(routeImportErrorMessage(new RouteImportError('route-busy')))
     expect(editing()?.busy).toBeUndefined()
     expect(editing()?.waypoints).toEqual([LINE_START, LINE_END])
   })
@@ -227,7 +227,7 @@ describe('createRouteEditWiring: failures and interruptions', () => {
     editing()!.onInsert([51.0, 13.85], [51.3, 13.8])
     await flush()
     expect(store.get()?.points).toEqual(planned.points)
-    expect(flash).toHaveBeenCalledWith(trackImportErrorMessage(new TrackImportError('route-no-road')))
+    expect(flash).toHaveBeenCalledWith(routeImportErrorMessage(new RouteImportError('route-no-road')))
   })
 
   it('switching to another route while the request runs aborts it and drops the result', async () => {

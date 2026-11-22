@@ -4,7 +4,7 @@ import type { OsmPoi } from '@/features/pois/OverpassClient.js'
 import type { TargetMarker } from '@/features/map/targetMarker.js'
 import type { GeocodeOptions, NominatimResult } from '@/core/nominatim.js'
 import type { TravelMode } from '@/core/travelMode.js'
-import type { Track } from '@/features/track/trackTypes.js'
+import type { Route } from '@/features/route/routeTypes.js'
 
 const poi: OsmPoi = { id: 7, osmType: 'node', type: 'campsite', lat: 50.95, lon: 13.93, tags: { name: 'Camping Pirna' } }
 const here = { lat: 51.05, lon: 13.74 }
@@ -61,7 +61,7 @@ function setup(o: SetupOpts = {}) {
   })
   let stored: TravelMode | null = o.stored ?? null
   const modeStore = { get: () => stored, set: vi.fn((m: TravelMode) => { stored = m }) }
-  const importTrack = vi.fn<(t: Track) => void>()
+  const importRoute = vi.fn<(t: Route) => void>()
   const collapseDetail = vi.fn()
   const userPos = { current: o.userPos ?? null }
   const requestUserPos = vi.fn(async () => o.requested ?? null)
@@ -75,7 +75,7 @@ function setup(o: SetupOpts = {}) {
     markers: { start, end },
     getProfiles: () => o.profiles ?? [],
     modeStore,
-    importTrack,
+    importRoute,
     fetchFn: o.fetchFn ?? okFetch(),
     isMobile: () => o.mobile ?? false,
     collapseDetail,
@@ -88,7 +88,7 @@ function setup(o: SetupOpts = {}) {
   const modeBtn = (m: TravelMode) => container.querySelector<HTMLButtonElement>(`[data-mode="${m}"]`)!
   const panelHidden = () => (container.firstElementChild as HTMLElement).hidden
   return {
-    wiring, container, start, end, picks, pickPoint, modeStore, importTrack, collapseDetail, userPos,
+    wiring, container, start, end, picks, pickPoint, modeStore, importRoute, collapseDetail, userPos,
     requestUserPos, geocode, q, val, modeBtn, panelHidden,
   }
 }
@@ -119,7 +119,7 @@ describe('createRoutePlannerWiring', () => {
   describe('planning', () => {
     it('hands over a planned track, remembers the mode and removes the markers', async () => {
       const fetchFn = okFetch()
-      const { wiring, importTrack, modeStore, start, end, q, modeBtn } = setup({ userPos: here, fetchFn })
+      const { wiring, importRoute, modeStore, start, end, q, modeBtn } = setup({ userPos: here, fetchFn })
       wiring.planFromPoi(poi, 'end')
       expect(start.show).toHaveBeenCalled()
       expect(end.show).toHaveBeenCalled()
@@ -129,10 +129,10 @@ describe('createRoutePlannerWiring', () => {
 
       expect(fetchFn).toHaveBeenCalledTimes(1)
       expect(String(fetchFn.mock.calls[0]?.[0])).toContain('routed-bike')
-      expect(importTrack).toHaveBeenCalledTimes(1)
-      const track = importTrack.mock.calls[0]?.[0]
-      expect(track?.source).toBe('planned')
-      expect(track?.name).toContain('Camping Pirna')
+      expect(importRoute).toHaveBeenCalledTimes(1)
+      const route = importRoute.mock.calls[0]?.[0]
+      expect(route?.source).toBe('planned')
+      expect(route?.name).toContain('Camping Pirna')
       expect(modeStore.set).toHaveBeenCalledWith('bike')
       expect(start.pos).toBeNull()
       expect(end.pos).toBeNull()
@@ -143,7 +143,7 @@ describe('createRoutePlannerWiring', () => {
       // Regression: the panel's "Kartenpunkt" field text was passed on as the label, so
       // the waypoint-name fallback in fetchPlannedRoute never kicked in and every route
       // between two map taps was called "Kartenpunkt → Kartenpunkt (Auto)".
-      const { wiring, q, picks, importTrack } = setup()
+      const { wiring, q, picks, importRoute } = setup()
       wiring.open()
       q<HTMLButtonElement>('startPick').click()
       picks[0]?.onPick(51.05, 13.74)
@@ -152,19 +152,19 @@ describe('createRoutePlannerWiring', () => {
       q<HTMLButtonElement>('go').click()
       await flush()
 
-      expect(importTrack).toHaveBeenCalledTimes(1)
-      expect(importTrack.mock.calls[0]?.[0]?.name).toBe('Start → Ziel (Auto)')
+      expect(importRoute).toHaveBeenCalledTimes(1)
+      expect(importRoute.mock.calls[0]?.[0]?.name).toBe('Start → Ziel (Auto)')
     })
 
     it('uses the snapped road for a map-picked start but keeps the POI name for the destination', async () => {
-      const { wiring, q, picks, importTrack } = setup()
+      const { wiring, q, picks, importRoute } = setup()
       wiring.planFromPoi(poi, 'end')
       q<HTMLButtonElement>('startPick').click()
       picks[0]?.onPick(51.05, 13.74)
       q<HTMLButtonElement>('go').click()
       await flush()
 
-      expect(importTrack.mock.calls[0]?.[0]?.name).toBe('Start → Camping Pirna (Auto)')
+      expect(importRoute.mock.calls[0]?.[0]?.name).toBe('Start → Camping Pirna (Auto)')
     })
 
     it('refreshes a held "Mein Standort" start to the current position when the planner opens again', () => {
@@ -201,12 +201,12 @@ describe('createRoutePlannerWiring', () => {
 
     it('does not remember the mode when planning fails', async () => {
       const fetchFn = vi.fn<typeof fetch>(async () => new Response('{}', { status: 500 }))
-      const { wiring, importTrack, modeStore, q } = setup({ userPos: here, fetchFn })
+      const { wiring, importRoute, modeStore, q } = setup({ userPos: here, fetchFn })
       wiring.planFromPoi(poi, 'end')
       q<HTMLButtonElement>('go').click()
       await flush()
       expect(modeStore.set).not.toHaveBeenCalled()
-      expect(importTrack).not.toHaveBeenCalled()
+      expect(importRoute).not.toHaveBeenCalled()
     })
 
     it('shows a German message in the panel and keeps it open on an OSRM error', async () => {
@@ -222,9 +222,9 @@ describe('createRoutePlannerWiring', () => {
       expect(start.pos).not.toBeNull() // markers stay while the planner is open
     })
 
-    it('shows the generic text when importTrack throws something that is not a track error', async () => {
-      const { wiring, q, importTrack } = setup({ userPos: here })
-      importTrack.mockImplementation(() => { throw new Error('boom') })
+    it('shows the generic text when importRoute throws something that is not a route error', async () => {
+      const { wiring, q, importRoute } = setup({ userPos: here })
+      importRoute.mockImplementation(() => { throw new Error('boom') })
       wiring.planFromPoi(poi, 'end')
       q<HTMLButtonElement>('go').click()
       await flush()
@@ -235,13 +235,13 @@ describe('createRoutePlannerWiring', () => {
       const fetchFn = vi.fn<typeof fetch>((_url, init) => new Promise<Response>((_res, rej) => {
         init?.signal?.addEventListener('abort', () => rej(new DOMException('aborted', 'AbortError')))
       }))
-      const { wiring, q, importTrack } = setup({ userPos: here, fetchFn })
+      const { wiring, q, importRoute } = setup({ userPos: here, fetchFn })
       wiring.planFromPoi(poi, 'end')
       q<HTMLButtonElement>('go').click()
       await flush()
       wiring.close()
       await flush()
-      expect(importTrack).not.toHaveBeenCalled()
+      expect(importRoute).not.toHaveBeenCalled()
       expect(q('status').textContent).toBe('')
     })
   })
@@ -542,7 +542,7 @@ describe('createRoutePlannerWiring', () => {
       expect(h.start.label).toBe('Start: Konstanz')
       expect(h.end.label).toBe('Ziel: Hamburg')
       expect(h.q<HTMLButtonElement>('go').disabled).toBe(false)
-      expect(h.importTrack).not.toHaveBeenCalled()
+      expect(h.importRoute).not.toHaveBeenCalled()
       expect(fetchFn).not.toHaveBeenCalled()
     })
 
@@ -618,8 +618,8 @@ describe('createRoutePlannerWiring', () => {
       h.q<HTMLButtonElement>('go').click()
       await flush()
       expect(String(fetchFn.mock.calls[0]?.[0])).toContain('routed-bike')
-      expect(h.importTrack).toHaveBeenCalledTimes(1)
-      expect(h.importTrack.mock.calls[0]?.[0]?.source).toBe('planned')
+      expect(h.importRoute).toHaveBeenCalledTimes(1)
+      expect(h.importRoute.mock.calls[0]?.[0]?.source).toBe('planned')
       expect(h.wiring.isOpen()).toBe(false)
     })
   })

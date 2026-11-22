@@ -62,7 +62,7 @@ export interface MapArea {
   readonly bottom: number
 }
 
-/** Map edges covered by UI other than the detail panel (header, track panel), in CSS px. */
+/** Map edges covered by UI other than the detail panel (header, route panel), in CSS px. */
 export interface CoveredEdges {
   readonly left?: number
   readonly top?: number

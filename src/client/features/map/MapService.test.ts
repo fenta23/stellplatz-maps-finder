@@ -24,19 +24,19 @@ describe('createLocateControl', () => {
 describe('createMapActions', () => {
   it('renders the locate and route-import buttons (no routing-mode toggle)', () => {
     const onLocate = vi.fn()
-    const onTrack = vi.fn()
-    const el = (createMapActions(onLocate, onTrack) as unknown as OnAdd).onAdd()
+    const onRoute = vi.fn()
+    const el = (createMapActions(onLocate, onRoute) as unknown as OnAdd).onAdd()
     expect(el.classList.contains('map-actions')).toBe(true)
     expect(el.querySelector('.routing-toggle')).toBeNull()
     expect(el.querySelectorAll('button')).toHaveLength(2)
     el.querySelector<HTMLButtonElement>('.locate-btn:not(.track-btn)')!.click()
     expect(onLocate).toHaveBeenCalledOnce()
-    expect(onTrack).not.toHaveBeenCalled()
-    const trackBtn = el.querySelector<HTMLButtonElement>('.track-btn')!
-    expect(trackBtn.title).toBe('Route importieren')
-    expect(trackBtn.getAttribute('aria-label')).toBe('Route importieren')
-    trackBtn.click()
-    expect(onTrack).toHaveBeenCalledOnce()
+    expect(onRoute).not.toHaveBeenCalled()
+    const routeBtn = el.querySelector<HTMLButtonElement>('.track-btn')!
+    expect(routeBtn.title).toBe('Route importieren')
+    expect(routeBtn.getAttribute('aria-label')).toBe('Route importieren')
+    routeBtn.click()
+    expect(onRoute).toHaveBeenCalledOnce()
     expect(onLocate).toHaveBeenCalledOnce()
   })
 })

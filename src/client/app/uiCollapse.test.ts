@@ -3,15 +3,15 @@ import { createUiCollapse } from './uiCollapse.js'
 
 function setup(over: { mobile?: boolean; ready?: boolean; expanded?: boolean } = {}) {
   const collapseDetail = vi.fn()
-  const collapseTrack = vi.fn()
+  const collapseRoute = vi.fn()
   const ui = createUiCollapse({
     isMobile: () => over.mobile ?? true,
     isReady: () => over.ready ?? true,
     isBoxExpanded: () => over.expanded ?? false,
     collapseDetail,
-    collapseTrack,
+    collapseRoute,
   })
-  return { ui, collapseDetail, collapseTrack }
+  return { ui, collapseDetail, collapseRoute }
 }
 
 const collapsed = () => document.body.classList.contains('ui-collapsed')
@@ -20,19 +20,19 @@ afterEach(() => { document.body.className = ''; vi.useRealTimers() })
 
 describe('createUiCollapse', () => {
   it('folds header and sheets away on mobile', () => {
-    const { ui, collapseDetail, collapseTrack } = setup()
+    const { ui, collapseDetail, collapseRoute } = setup()
     ui.collapse()
     expect(collapsed()).toBe(true)
     expect(collapseDetail).toHaveBeenCalledTimes(1)
-    expect(collapseTrack).toHaveBeenCalledTimes(1)
+    expect(collapseRoute).toHaveBeenCalledTimes(1)
   })
 
   it('does nothing on desktop', () => {
-    const { ui, collapseDetail, collapseTrack } = setup({ mobile: false })
+    const { ui, collapseDetail, collapseRoute } = setup({ mobile: false })
     ui.collapse()
     expect(collapsed()).toBe(false)
     expect(collapseDetail).not.toHaveBeenCalled()
-    expect(collapseTrack).not.toHaveBeenCalled()
+    expect(collapseRoute).not.toHaveBeenCalled()
   })
 
   it('does nothing before the map is ready', () => {
@@ -43,11 +43,11 @@ describe('createUiCollapse', () => {
   })
 
   it('keeps the header while the search box is expanded, but still folds the sheets', () => {
-    const { ui, collapseDetail, collapseTrack } = setup({ expanded: true })
+    const { ui, collapseDetail, collapseRoute } = setup({ expanded: true })
     ui.collapse()
     expect(collapsed()).toBe(false)
     expect(collapseDetail).toHaveBeenCalledTimes(1)
-    expect(collapseTrack).toHaveBeenCalledTimes(1)
+    expect(collapseRoute).toHaveBeenCalledTimes(1)
   })
 
   it('expand brings the header back', () => {

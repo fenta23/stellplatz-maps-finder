@@ -5,7 +5,7 @@ export interface UiCollapseDeps {
   /** The search box shows the route form or the AI dialog. */
   readonly isBoxExpanded: () => boolean
   readonly collapseDetail: () => void
-  readonly collapseTrack: () => void
+  readonly collapseRoute: () => void
 }
 
 export interface UiCollapse {
@@ -35,7 +35,7 @@ export function createUiCollapse(deps: UiCollapseDeps): UiCollapse {
       if (Date.now() < holdUntil) return
       if (!deps.isBoxExpanded()) document.body.classList.add(COLLAPSED)
       deps.collapseDetail()
-      deps.collapseTrack()
+      deps.collapseRoute()
     },
     expand() {
       document.body.classList.remove(COLLAPSED)

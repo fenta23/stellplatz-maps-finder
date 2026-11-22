@@ -33,7 +33,7 @@ export function createLocateControl(onClick: () => void): L.Control {
 }
 
 /** Map-actions control (bottom-left): the locate button and the route-import button. */
-export function createMapActions(onLocate: () => void, onTrack: () => void = () => {}): L.Control {
+export function createMapActions(onLocate: () => void, onRoute: () => void = () => {}): L.Control {
   const control = L.control({ position: 'bottomleft' })
   control.onAdd = () => {
     const container = L.DomUtil.create('div', 'map-actions leaflet-bar')
@@ -45,12 +45,12 @@ export function createMapActions(onLocate: () => void, onTrack: () => void = () 
     locateBtn.setAttribute('aria-label', 'Zu meinem Standort')
     L.DomEvent.on(locateBtn, 'click', (e: Event) => { L.DomEvent.stop(e); onLocate() })
 
-    const trackBtn = L.DomUtil.create('button', 'locate-btn track-btn', container) as HTMLButtonElement
-    trackBtn.type = 'button'
-    trackBtn.innerHTML = SVG_ROUTE
-    trackBtn.title = 'Route importieren'
-    trackBtn.setAttribute('aria-label', 'Route importieren')
-    L.DomEvent.on(trackBtn, 'click', (e: Event) => { L.DomEvent.stop(e); onTrack() })
+    const routeBtn = L.DomUtil.create('button', 'locate-btn track-btn', container) as HTMLButtonElement
+    routeBtn.type = 'button'
+    routeBtn.innerHTML = SVG_ROUTE
+    routeBtn.title = 'Route importieren'
+    routeBtn.setAttribute('aria-label', 'Route importieren')
+    L.DomEvent.on(routeBtn, 'click', (e: Event) => { L.DomEvent.stop(e); onRoute() })
 
     L.DomEvent.disableClickPropagation(container)
     return container
@@ -316,7 +316,7 @@ export class MapService {
   private readonly contextMenuListeners: Array<(lat: number, lng: number) => void> = []
   private readonly placementListeners: Array<(lat: number, lng: number) => void> = []
   private readonly locateListeners: Array<() => void> = []
-  private readonly trackActionListeners: Array<() => void> = []
+  private readonly routeActionListeners: Array<() => void> = []
   private readonly dragStartListeners: Array<() => void> = []
   private readonly zoomStartListeners: Array<() => void> = []
   private readonly baseLayers: Record<string, L.TileLayer>
@@ -341,7 +341,7 @@ export class MapService {
     createLayerSwitcher(BASE_LAYER_CONFIGS, () => this.activeLayer.id, id => this.selectBaseLayer(id)).addTo(this.map)
     createMapActions(
       () => { for (const l of this.locateListeners) l() },
-      () => { for (const l of this.trackActionListeners) l() },
+      () => { for (const l of this.routeActionListeners) l() },
     ).addTo(this.map)
 
     // Swap Leaflet's "+"/"−" zoom glyphs for Lucide icons (styled like the other controls).
@@ -412,11 +412,11 @@ export class MapService {
   }
 
   /** Fires when the "import route" control is tapped. */
-  onTrackAction(listener: () => void): () => void {
-    this.trackActionListeners.push(listener)
+  onRouteAction(listener: () => void): () => void {
+    this.routeActionListeners.push(listener)
     return () => {
-      const idx = this.trackActionListeners.indexOf(listener)
-      if (idx !== -1) this.trackActionListeners.splice(idx, 1)
+      const idx = this.routeActionListeners.indexOf(listener)
+      if (idx !== -1) this.routeActionListeners.splice(idx, 1)
     }
   }
 

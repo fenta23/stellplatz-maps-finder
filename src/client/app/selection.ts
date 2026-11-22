@@ -19,7 +19,7 @@ export interface SelectionDeps {
   /** Whether the user is logged in (gates premium features like park4night). */
   readonly isLoggedIn?: () => boolean
   /** Position of a POI along the active imported route; null/absent → not shown. */
-  readonly getTrackInfo?: (poi: OsmPoi) => PanelView['trackInfo'] | null
+  readonly getRouteInfo?: (poi: OsmPoi) => PanelView['routeInfo'] | null
   /** A POI became the selected one (e.g. mark it on the map). */
   readonly onSelected?: (poi: OsmPoi) => void
   /** Nothing is selected any more. */
@@ -58,10 +58,10 @@ export function createSelection(deps: SelectionDeps): Selection {
       if (opts?.center && deps.centerInView) deps.centerInView(poi)
       else deps.panIntoView(poi)
       deps.onSelected?.(poi)
-      const trackInfo = deps.getTrackInfo?.(poi)
+      const routeInfo = deps.getRouteInfo?.(poi)
       panel.show(poi, {
         isFavorite: isFav(poi), noteText: noteOf(poi), config: buildConfig(poi),
-        ...(trackInfo ? { trackInfo } : {}),
+        ...(routeInfo ? { routeInfo } : {}),
       })
       if (!isCustom(poi)) deps.loadDetails(poi)
     },

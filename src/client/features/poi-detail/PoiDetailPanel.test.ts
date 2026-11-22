@@ -119,21 +119,21 @@ describe('PoiDetailPanel', () => {
     expect(container.querySelector<HTMLAnchorElement>('.btn-p4n')?.href).toContain('park4night.com')
   })
 
-  it('shows the route position line when trackInfo is given', () => {
+  it('shows the route position line when routeInfo is given', () => {
     const container = document.createElement('div')
     const panel = new PoiDetailPanel(container)
-    panel.show(poi, { trackInfo: { kmAlong: 12.4, kmToEnd: 73.6, offsetM: 180 } })
+    panel.show(poi, { routeInfo: { kmAlong: 12.4, kmToEnd: 73.6, offsetM: 180 } })
     const line = container.querySelector<HTMLElement>('.track-info')!
     expect(line.hidden).toBe(false)
     expect(line.textContent).toBe('Route: km 12,4 · noch 73,6 km · 180 m abseits')
   })
 
-  it('hides the route position line without trackInfo (also after a previous show)', () => {
+  it('hides the route position line without routeInfo (also after a previous show)', () => {
     const container = document.createElement('div')
     const panel = new PoiDetailPanel(container)
     expect(panel.show(poi)).toBeUndefined()
     expect(container.querySelector<HTMLElement>('.track-info')?.hidden).toBe(true)
-    panel.show(poi, { trackInfo: { kmAlong: 1, kmToEnd: 2, offsetM: 5 } })
+    panel.show(poi, { routeInfo: { kmAlong: 1, kmToEnd: 2, offsetM: 5 } })
     panel.show(poi)
     expect(container.querySelector<HTMLElement>('.track-info')?.hidden).toBe(true)
   })
