@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Kartenknöpfe aufgeräumt: eine Leiste rechts oben.** Ebenen, „Zu meinem Standort“ und „Route importieren“ lagen bisher in drei Ecken verteilt (Zoom oben links, Ebenen oben rechts, Standort/Route unten links). Jetzt sitzen sie in einer senkrechten Leiste rechts oben – unter dem Header bzw. bei eingeklapptem Header auf Höhe der schwebenden Leiste. Sie springt nicht mehr mit Routen- oder POI-Sheet mit. Der Route-Import bleibt ein Tipp.
+  - **Ebenen:** Das Auswahlfeld klappt links neben der Leiste nach unten auf und endet über einem offenen Sheet; reicht der Platz nicht, scrollt es.
+  - **Handy/Touch:** Zoom-Knöpfe ausgeblendet (Zwei-Finger-Zoom und Doppeltipp genügen), Knöpfe 44px groß. Am Rechner bleibt der Zoom oben links.
+  - **Quellenangabe** (Leaflet/OSM) steht klein links unten, mit Abstand zum Home-Indicator bzw. zur Safari-Leiste, und rutscht über offene Sheets.
+  - **Code:** `createMapActions` (`features/map/MapService.ts`) nimmt den Ebenen-Umschalter auf; das Panel misst beim Öffnen den Platz bis zur unteren Leaflet-Ecke. `PoiDetailPanel` setzt `body.detail-collapsed`.
+
 ### Added
 - **Geplante Route auf der Karte ändern: Linie ziehen, Start und Ziel verschieben.** Eine berechnete Route lässt sich jetzt wie in gängigen Kartendiensten anpassen, statt sie neu zu planen. Am Rechner die Linie mit der Maus greifen und woanders hinziehen – dort entsteht ein Zwischenpunkt, über den die Route neu berechnet wird. Am Handy lange auf die Linie drücken (am Rechner auch Rechtsklick): Es erscheint ein Griff, der sich danach ziehen lässt. Start (grün), Ziel (rot) und Zwischenpunkte haben eigene Griffe; ein Tipp auf einen Zwischenpunkt entfernt ihn. Bis zu 10 Zwischenpunkte sind möglich.
   - **Dieselbe Route, kein neuer Eintrag:** Die geänderte Route ersetzt die gespeicherte (gleicher Eintrag in der Routenliste, gleicher Korridor), die Karte springt nicht, die Orte entlang der Route laden neu.
