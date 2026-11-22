@@ -1,9 +1,8 @@
 import type { TravelMode } from '@/core/travelMode.js'
+import type { RoutePoint } from '@/features/track/trackTypes.js'
 export type PlanRole = 'start' | 'end'
 
-export interface PlanPoint {
-  readonly lat: number
-  readonly lon: number
+export interface PlanPoint extends RoutePoint {
   readonly label: string
   readonly kind: 'place' | 'gps' | 'map' | 'poi'
 }

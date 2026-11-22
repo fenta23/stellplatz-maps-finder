@@ -114,7 +114,7 @@ describe('createRouteEditWiring: dragging the line', () => {
 
     expect(fetchFn).toHaveBeenCalledTimes(1)
     expect(urlOf(fetchFn)).toBe(buildRouteUrl({
-      start: PLAN.waypoints[0]!, end: PLAN.waypoints[1]!, mode: 'bike', via: [{ lat: DROP[0], lon: DROP[1] }],
+      mode: 'bike', waypoints: [PLAN.waypoints[0]!, { lat: DROP[0], lon: DROP[1] }, PLAN.waypoints[1]!],
     }))
     const now = store.get()!
     expect(store.list()).toHaveLength(1)
@@ -169,7 +169,7 @@ describe('createRouteEditWiring: handles', () => {
     const { store, editing, fetchFn } = setup(planned, { fetchFn: d.fetchFn })
     const to: TrackPoint = [51.07, 13.7]
     editing()!.onMove(0, to)
-    expect(urlOf(fetchFn)).toBe(buildRouteUrl({ start: { lat: 51.07, lon: 13.7 }, end: PLAN.waypoints[1]!, mode: 'bike' }))
+    expect(urlOf(fetchFn)).toBe(buildRouteUrl({ mode: 'bike', waypoints: [{ lat: 51.07, lon: 13.7 }, PLAN.waypoints[1]!] }))
     expect(editing()).toMatchObject({ busy: true, waypoints: [to, LINE_END] })
     d.resolve(ok(0))
     await flush()
@@ -192,7 +192,7 @@ describe('createRouteEditWiring: handles', () => {
     expect(editing()?.waypoints).toEqual([LINE_START, [51.03, 13.8], LINE_END])
     editing()!.onRemove(1)
     await flush()
-    expect(urlOf(fetchFn)).toBe(buildRouteUrl({ start: PLAN.waypoints[0]!, end: PLAN.waypoints[1]!, mode: 'bike' }))
+    expect(urlOf(fetchFn)).toBe(buildRouteUrl(PLAN))
     expect(store.get()?.plan?.waypoints).toHaveLength(2)
   })
 

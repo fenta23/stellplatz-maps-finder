@@ -9,7 +9,8 @@ import {
   type PlanPoint, type PlanRequest, type PlanRole,
 } from '@/features/route-planner/plannerModel.js'
 import type { TravelMode } from '@/core/travelMode.js'
-import { fetchPlannedRoute, type RouteEndpoint } from '@/features/track/osrmRoute.js'
+import { fetchPlannedRoute } from '@/features/track/osrmRoute.js'
+import type { RoutePoint } from '@/features/track/trackTypes.js'
 import { prepareTrack } from '@/features/track/trackImport.js'
 import { TrackImportError, trackImportErrorMessage } from '@/features/track/trackErrors.js'
 import type { Track } from '@/features/track/trackTypes.js'
@@ -97,13 +98,13 @@ export function createRoutePlannerWiring(deps: RoutePlannerWiringDeps): RoutePla
   }
 
   /** A map tap has no name of its own: leave the label out so the route is named after the road OSRM snapped it to. */
-  function endpointOf(p: PlanPoint): RouteEndpoint {
+  function routePointOf(p: PlanPoint): RoutePoint {
     return p.kind === 'map' ? { lat: p.lat, lon: p.lon } : { lat: p.lat, lon: p.lon, label: p.label }
   }
 
   async function plan(req: PlanRequest, signal: AbortSignal): Promise<void> {
     const imported = await fetchPlannedRoute(
-      { start: endpointOf(req.start), end: endpointOf(req.end), mode: req.mode },
+      { mode: req.mode, waypoints: [routePointOf(req.start), routePointOf(req.end)] },
       deps.fetchFn,
       signal,
     )
