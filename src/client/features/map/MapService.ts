@@ -15,46 +15,44 @@ const SVG_ROUTE = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20
 const SVG_PLUS = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/></svg>'
 const SVG_MINUS = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" x2="19" y1="12" y2="12"/></svg>'
 
-/** A control button that recenters the map on the user's location. */
-export function createLocateControl(onClick: () => void): L.Control {
-  const control = L.control({ position: 'bottomleft' })
-  control.onAdd = () => {
-    const container = L.DomUtil.create('div', 'locate-control leaflet-bar')
-    const btn = L.DomUtil.create('button', 'locate-btn', container) as HTMLButtonElement
-    btn.type = 'button'
-    btn.innerHTML = SVG_LOCATE
-    btn.title = 'Zu meinem Standort'
-    btn.setAttribute('aria-label', 'Zu meinem Standort')
-    L.DomEvent.on(btn, 'click', (e: Event) => { L.DomEvent.stop(e); onClick() })
-    L.DomEvent.disableClickPropagation(container)
-    return container
-  }
-  return control
+/** The "Ebenen" chooser element plus a handle to close its panel (removes document listeners). */
+export interface LayerSwitcher {
+  readonly el: HTMLElement
+  readonly close: () => void
 }
 
-/** Map-actions control (bottom-left): the locate button and the route-import button. */
-export function createMapActions(onLocate: () => void, onRoute: () => void = () => {}): L.Control {
-  const control = L.control({ position: 'bottomleft' })
+function createActionButton(parent: HTMLElement, className: string, svg: string, label: string, onClick: () => void): HTMLButtonElement {
+  const btn = L.DomUtil.create('button', className, parent) as HTMLButtonElement
+  btn.type = 'button'
+  btn.innerHTML = svg
+  btn.title = label
+  btn.setAttribute('aria-label', label)
+  L.DomEvent.on(btn, 'click', (e: Event) => { L.DomEvent.stop(e); onClick() })
+  return btn
+}
+
+/**
+ * Map-actions bar (top-right, vertical, right under the header / beside the
+ * collapsed pill — a fixed spot that never jumps with the bottom sheets):
+ * base-layer chooser on top, then locate, then route import (one tap).
+ */
+export function createMapActions(
+  onLocate: () => void,
+  onRoute: () => void = () => {},
+  layers?: LayerSwitcher,
+): L.Control {
+  const control = L.control({ position: 'topright' })
   control.onAdd = () => {
     const container = L.DomUtil.create('div', 'map-actions leaflet-bar')
-
-    const locateBtn = L.DomUtil.create('button', 'locate-btn', container) as HTMLButtonElement
-    locateBtn.type = 'button'
-    locateBtn.innerHTML = SVG_LOCATE
-    locateBtn.title = 'Zu meinem Standort'
-    locateBtn.setAttribute('aria-label', 'Zu meinem Standort')
-    L.DomEvent.on(locateBtn, 'click', (e: Event) => { L.DomEvent.stop(e); onLocate() })
-
-    const routeBtn = L.DomUtil.create('button', 'locate-btn track-btn', container) as HTMLButtonElement
-    routeBtn.type = 'button'
-    routeBtn.innerHTML = SVG_ROUTE
-    routeBtn.title = 'Route importieren'
-    routeBtn.setAttribute('aria-label', 'Route importieren')
-    L.DomEvent.on(routeBtn, 'click', (e: Event) => { L.DomEvent.stop(e); onRoute() })
-
+    if (layers) container.appendChild(layers.el)
+    createActionButton(container, 'locate-btn', SVG_LOCATE, 'Zu meinem Standort', onLocate)
+    createActionButton(container, 'locate-btn track-btn', SVG_ROUTE, 'Route importieren', onRoute)
     L.DomEvent.disableClickPropagation(container)
+    L.DomEvent.disableScrollPropagation(container)
     return container
   }
+  // Leaflet removes the DOM; make sure no document listeners outlive the control.
+  control.onRemove = () => layers?.close()
   return control
 }
 
@@ -171,7 +169,7 @@ export const TOPO_LAYER: BaseLayerConfig = {
   subdomains: ['a', 'b', 'c'],
 }
 
-/** Base map layers offered in the layer chooser (top-right control) — first is the default. */
+/** Base map layers offered in the layer chooser (action bar, bottom-right) — first is the default. */
 export const BASE_LAYER_CONFIGS: readonly BaseLayerConfig[] = [
   buildMapLayerConfig(),
   SATELLITE_LAYER,
@@ -216,98 +214,103 @@ function storeLayerId(id: string): void {
   } catch { /* storage unavailable — choice just isn't remembered */ }
 }
 
+/** Gap between an opened layer panel and whatever sits below it (sheet, screen edge). */
+const PANEL_BOTTOM_GAP_PX = 8
+/** Never squeeze the layer panel below this; it scrolls inside. */
+const PANEL_MIN_HEIGHT_PX = 120
+
 /** The "Ebenen" chooser: one button that opens a radio panel with every base layer. */
-function createLayerSwitcher(
+function buildLayerSwitcher(
   configs: readonly BaseLayerConfig[],
   getActiveId: () => BaseLayerId,
   onSelect: (id: BaseLayerId) => void,
-): L.Control {
-  const control = L.control({ position: 'topright' })
-  let closePanel: () => void = () => {}
+): LayerSwitcher {
+  const container = L.DomUtil.create('div', 'layer-switcher')
 
-  control.onAdd = () => {
-    const container = L.DomUtil.create('div', 'layer-switcher')
+  const btn = L.DomUtil.create('button', 'layer-btn', container) as HTMLButtonElement
+  btn.type = 'button'
+  btn.innerHTML = SVG_LAYERS
+  btn.title = 'Ebenen'
+  btn.setAttribute('aria-label', 'Ebenen')
+  btn.setAttribute('aria-haspopup', 'true')
+  btn.setAttribute('aria-expanded', 'false')
 
-    const btn = L.DomUtil.create('button', 'layer-btn', container) as HTMLButtonElement
-    btn.type = 'button'
-    btn.innerHTML = SVG_LAYERS
-    btn.title = 'Ebenen'
-    btn.setAttribute('aria-label', 'Ebenen')
-    btn.setAttribute('aria-haspopup', 'true')
-    btn.setAttribute('aria-expanded', 'false')
+  const panel = L.DomUtil.create('div', 'layer-panel', container)
+  panel.hidden = true
+  const heading = L.DomUtil.create('div', 'layer-panel-title', panel)
+  heading.id = 'layer-panel-title'
+  heading.textContent = 'Ebenen'
+  const group = L.DomUtil.create('div', 'layer-options', panel)
+  group.setAttribute('role', 'radiogroup')
+  group.setAttribute('aria-labelledby', heading.id)
 
-    const panel = L.DomUtil.create('div', 'layer-panel', container)
-    panel.hidden = true
-    const heading = L.DomUtil.create('div', 'layer-panel-title', panel)
-    heading.id = 'layer-panel-title'
-    heading.textContent = 'Ebenen'
-    const group = L.DomUtil.create('div', 'layer-options', panel)
-    group.setAttribute('role', 'radiogroup')
-    group.setAttribute('aria-labelledby', heading.id)
-
-    const inputs = new Map<BaseLayerId, HTMLInputElement>()
-    for (const cfg of configs) {
-      const label = L.DomUtil.create('label', 'layer-option', group) as HTMLLabelElement
-      const input = L.DomUtil.create('input', '', label) as HTMLInputElement
-      input.type = 'radio'
-      input.name = 'base-layer'
-      input.value = cfg.id
-      const text = L.DomUtil.create('span', 'layer-option-label', label)
-      text.textContent = cfg.label
-      inputs.set(cfg.id, input)
-      L.DomEvent.on(input, 'click', () => {
-        close()
-        onSelect(cfg.id)
-        sync()
-      })
-    }
-
-    function sync(): void {
-      const active = getActiveId()
-      for (const [id, input] of inputs) input.checked = id === active
-    }
-
-    const onDocClick = (e: Event) => {
-      if (!container.contains(e.target as Node)) close()
-    }
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { close(); btn.focus() }
-    }
-
-    function open(): void {
+  const inputs = new Map<BaseLayerId, HTMLInputElement>()
+  for (const cfg of configs) {
+    const label = L.DomUtil.create('label', 'layer-option', group) as HTMLLabelElement
+    const input = L.DomUtil.create('input', '', label) as HTMLInputElement
+    input.type = 'radio'
+    input.name = 'base-layer'
+    input.value = cfg.id
+    const text = L.DomUtil.create('span', 'layer-option-label', label)
+    text.textContent = cfg.label
+    inputs.set(cfg.id, input)
+    L.DomEvent.on(input, 'click', () => {
+      close()
+      onSelect(cfg.id)
       sync()
-      panel.hidden = false
-      container.classList.add('open')
-      btn.setAttribute('aria-expanded', 'true')
-      document.addEventListener('click', onDocClick, true)
-      document.addEventListener('keydown', onKey)
-      inputs.get(getActiveId())?.focus()
-    }
-    function close(): void {
-      if (panel.hidden) return
-      panel.hidden = true
-      container.classList.remove('open')
-      btn.setAttribute('aria-expanded', 'false')
-      document.removeEventListener('click', onDocClick, true)
-      document.removeEventListener('keydown', onKey)
-    }
-
-    closePanel = close
-    L.DomEvent.on(btn, 'click', (e: Event) => {
-      L.DomEvent.stop(e)
-      if (panel.hidden) open(); else close()
     })
-
-    L.DomEvent.disableClickPropagation(container)
-    L.DomEvent.disableScrollPropagation(container)
-    sync()
-    return container
   }
 
-  // Leaflet removes the DOM; make sure no document listeners outlive the control.
-  control.onRemove = () => closePanel()
+  function sync(): void {
+    const active = getActiveId()
+    for (const [id, input] of inputs) input.checked = id === active
+  }
 
-  return control
+  const onDocClick = (e: Event) => {
+    if (!container.contains(e.target as Node)) close()
+  }
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') { close(); btn.focus() }
+  }
+
+  /**
+   * The panel opens downwards from the bar's top edge. A bottom sheet (route,
+   * POI detail) may leave little room: Leaflet's bottom corner is lifted right
+   * above it (route.css / responsive.css), so cap the panel there and let it scroll.
+   */
+  function fitPanel(): void {
+    const bar = container.parentElement ?? container
+    const floor = bar.closest('.leaflet-container')?.querySelector('.leaflet-bottom')?.getBoundingClientRect().bottom ?? 0
+    const room = floor - bar.getBoundingClientRect().top - PANEL_BOTTOM_GAP_PX
+    panel.style.maxHeight = room > 0 ? `${Math.max(PANEL_MIN_HEIGHT_PX, room)}px` : ''
+  }
+
+  function open(): void {
+    sync()
+    panel.hidden = false
+    fitPanel()
+    container.classList.add('open')
+    btn.setAttribute('aria-expanded', 'true')
+    document.addEventListener('click', onDocClick, true)
+    document.addEventListener('keydown', onKey)
+    inputs.get(getActiveId())?.focus()
+  }
+  function close(): void {
+    if (panel.hidden) return
+    panel.hidden = true
+    container.classList.remove('open')
+    btn.setAttribute('aria-expanded', 'false')
+    document.removeEventListener('click', onDocClick, true)
+    document.removeEventListener('keydown', onKey)
+  }
+
+  L.DomEvent.on(btn, 'click', (e: Event) => {
+    L.DomEvent.stop(e)
+    if (panel.hidden) open(); else close()
+  })
+
+  sync()
+  return { el: container, close }
 }
 
 export class MapService {
@@ -332,16 +335,18 @@ export class MapService {
     center: [number, number] = [48.137, 11.576],
     zoom = 13,
   ) {
-    this.map = L.map(container, { zoomControl: true }).setView(center, zoom)
+    // Attribution bottom-left: the bottom-right corner belongs to the action bar.
+    this.map = L.map(container, { zoomControl: true, attributionControl: false }).setView(center, zoom)
+    L.control.attribution({ position: 'bottomleft' }).addTo(this.map)
 
     this.baseLayers = buildBaseLayers()
     const stored = readStoredLayerId()
     this.activeLayer = BASE_LAYER_CONFIGS.find(c => c.id === stored) ?? BASE_LAYER_CONFIGS[0]!
     this.baseLayers[this.activeLayer.label]!.addTo(this.map)
-    createLayerSwitcher(BASE_LAYER_CONFIGS, () => this.activeLayer.id, id => this.selectBaseLayer(id)).addTo(this.map)
     createMapActions(
       () => { for (const l of this.locateListeners) l() },
       () => { for (const l of this.routeActionListeners) l() },
+      buildLayerSwitcher(BASE_LAYER_CONFIGS, () => this.activeLayer.id, id => this.selectBaseLayer(id)),
     ).addTo(this.map)
 
     // Swap Leaflet's "+"/"−" zoom glyphs for Lucide icons (styled like the other controls).

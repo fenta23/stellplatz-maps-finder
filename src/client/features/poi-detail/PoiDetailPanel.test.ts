@@ -290,6 +290,20 @@ describe('PoiDetailPanel', () => {
       expect(container.querySelector('.poi-detail-panel')?.classList.contains('poi-detail-panel--collapsed')).toBe(false)
     })
 
+    it('mirrors the collapsed state on <body> (the map bottom controls sit above the strip) and clears it on hide', () => {
+      const container = document.createElement('div')
+      const panel = new PoiDetailPanel(container)
+      panel.show(poi)
+      expect(document.body.classList.contains('detail-collapsed')).toBe(false)
+      panel.collapse()
+      expect(document.body.classList.contains('detail-collapsed')).toBe(true)
+      panel.expand()
+      expect(document.body.classList.contains('detail-collapsed')).toBe(false)
+      panel.collapse()
+      panel.hide()
+      expect(document.body.classList.contains('detail-collapsed')).toBe(false)
+    })
+
     it('show() always clears the collapsed state', () => {
       const container = document.createElement('div')
       const panel = new PoiDetailPanel(container)
