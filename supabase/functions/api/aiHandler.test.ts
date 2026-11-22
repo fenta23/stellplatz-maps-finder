@@ -24,7 +24,7 @@ vi.mock('../_shared/aiClient.ts', () => ({
   chatCompletion: (...args: unknown[]) => chatCompletion(...args),
 }))
 
-import { handleAi } from './aiHandler.ts'
+import { handleAi, summaryCacheKey, SUMMARY_PROMPT_VERSION } from './aiHandler.ts'
 import { DEFAULT_FILTERS, FILTER_ICONS, MAX_SELECTOR_CONDITIONS } from '../../../src/client/features/filters/filterModel.ts'
 import { TRAVEL_MODES } from '../../../src/client/core/travelMode.ts'
 
@@ -100,6 +100,25 @@ describe('handleAi summarize', () => {
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({ summary: 'Kostenloser Parkplatz für Wohnmobile.' })
   })
+
+  // Regression: the prompt framed every place for motorhome travellers, so a
+  // mountain hut or a bike shop got a camper-flavoured summary.
+  it('prompt addresses hikers, cyclists and campers, not only motorhomes', async () => {
+    chatCompletion.mockResolvedValue('Eine Hütte.')
+    await handleAi(post({ task: 'summarize', tags: { tourism: 'alpine_hut' } }), null)
+    const messages = chatCompletion.mock.calls[0]![0] as { role: string; content: string }[]
+    const system = messages.find(m => m.role === 'system')!.content
+    for (const g of ['Wanderer', 'Radfahrer', 'Camper']) expect(system).toContain(g)
+    expect(system).not.toContain('Karte für Wohnmobil-/Camper-Stellplätze')
+    expect(system).not.toContain('Schreibe für Reisende mit Wohnmobil/Camper')
+  })
+
+  // Regression: cached summaries (30 days) would keep the old camper wording.
+  it('cache key carries the prompt version', async () => {
+    const key = await summaryCacheKey('m', 'tourism=alpine_hut')
+    expect(key).toMatch(new RegExp(`^ai:summary:${SUMMARY_PROMPT_VERSION}:m:[0-9a-f]{32}$`))
+    expect(SUMMARY_PROMPT_VERSION).not.toBe('')
+  })
 })
 
 async function systemPrompt(): Promise<string> {
@@ -132,6 +151,12 @@ describe('chat route intent', () => {
   it('prompt states the selector condition limit', async () => {
     const system = await systemPrompt()
     expect(system).toContain(`Höchstens ${MAX_SELECTOR_CONDITIONS} Tag-Bedingungen`)
+  })
+
+  it('prompt intro addresses hikers, cyclists and campers', async () => {
+    const intro = (await systemPrompt()).split('\n')[0]!
+    for (const g of ['Wanderer', 'Radfahrer', 'Camper']) expect(intro).toContain(g)
+    expect(intro).not.toContain('Wohnmobil')
   })
 
   it('prompt no longer mentions maxDistanceKm', async () => {

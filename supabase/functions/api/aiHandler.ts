@@ -66,12 +66,20 @@ async function isAuthenticated(req: Request): Promise<boolean> {
 
 // ── Task: summarize (Phase 1) ────────────────────────────────────────────────
 
-const SUMMARY_SYSTEM = `Du bist ein Assistent in einer Karte für Wohnmobil-/Camper-Stellplätze.
+/** Bump whenever SUMMARY_SYSTEM changes, so cached summaries are regenerated. */
+export const SUMMARY_PROMPT_VERSION = 'v2'
+
+const SUMMARY_SYSTEM = `Du bist ein Assistent in einer Outdoor-Karte für Wanderer, Radfahrer und Camper.
 Fasse die folgenden OpenStreetMap-Tags eines Ortes in 2–3 kurzen, natürlichen deutschen Sätzen zusammen.
 Regeln:
 - Nutze AUSSCHLIESSLICH die gegebenen Tags. Erfinde nichts dazu (keine Preise, Öffnungszeiten oder Ausstattung, die nicht in den Tags steht).
-- Schreibe für Reisende mit Wohnmobil/Camper, sachlich und knapp.
-- Kein Auflisten der Roh-Tags, sondern flüssiger Text.
+- Beginne damit, was der Ort ist. Hebe dann hervor, was für die passende Zielgruppe zählt:
+  bei Hütten, Unterständen oder Trinkwasser für Wanderer, bei Fahrrad-Service oder Ladestationen für Radfahrer,
+  bei Stell- und Campingplätzen oder Entsorgung für Camper. Bei Versorgung und Einkehr (z.B. Supermarkt,
+  Restaurant, Toilette) schreibe allgemein für Reisende.
+- Sprich keine Zielgruppe an, für die der Ort offensichtlich nicht gedacht ist (z.B. keine Wohnmobile bei
+  einer Berghütte), außer die Tags sagen es ausdrücklich (z.B. motorhome=yes, bicycle=yes).
+- Sachlich und knapp. Kein Auflisten der Roh-Tags, sondern flüssiger Text.
 - Wenn die Tags zu wenig hergeben, sage das in einem kurzen Satz.
 - Antworte nur mit dem Text, ohne Einleitung oder Überschrift.`
 
@@ -90,6 +98,10 @@ function tagLines(tags: Record<string, unknown>): string {
     .join('\n')
 }
 
+export async function summaryCacheKey(model: string, lines: string): Promise<string> {
+  return `ai:summary:${SUMMARY_PROMPT_VERSION}:${model}:${await sha256Hex(lines)}`
+}
+
 async function handleSummarize(body: AiRequest, req: Request, origin: string | null): Promise<Response> {
   if (!aiConfigured()) return jsonResponse({ summary: null }, 200, origin)
 
@@ -101,7 +113,7 @@ async function handleSummarize(body: AiRequest, req: Request, origin: string | n
   if (!gate.ok) return gate.res
   const supabase = gate.supabase
 
-  const cacheKey = `ai:summary:${aiModel()}:${await sha256Hex(lines)}`
+  const cacheKey = await summaryCacheKey(aiModel(), lines)
   if (supabase) {
     const cached = await readCachedSummary(supabase, cacheKey)
     if (cached !== null) return jsonResponse({ summary: cached }, 200, origin)
@@ -127,7 +139,7 @@ async function handleSummarize(body: AiRequest, req: Request, origin: string | n
 
 // ── Task: chat (Phase 2) ─────────────────────────────────────────────────────
 
-const CHAT_SYSTEM = `Du bist der Suchassistent einer Karte für Wohnmobil-/Camper-Reisende.
+const CHAT_SYSTEM = `Du bist der Suchassistent einer Outdoor-Karte für Wanderer, Radfahrer und Camper.
 Deine EINZIGE Aufgabe: dem Nutzer helfen, passende Orte auf der Karte zu finden
 (Stellplätze, Campingplätze, Entsorgung, Wasser, Klettern, Hütten sowie Versorgung
 und Einkehr für Wanderer, Radfahrer und Camper wie Supermarkt, Toilette, Restaurant,
