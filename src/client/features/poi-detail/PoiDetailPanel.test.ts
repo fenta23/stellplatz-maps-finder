@@ -202,7 +202,7 @@ describe('PoiDetailPanel', () => {
     new PoiDetailPanel(container).show(poi)
     const rows = container.querySelectorAll('.poi-tags tr')
     const text = [...rows].map(r => r.textContent?.replace(/\s+/g, ' ').trim())
-    expect(text).toContain('Typ Campingplatz')
+    expect(text).toContain('Filter Campingplatz')
     expect(text.some(t => t?.startsWith('Gebühr'))).toBe(true)
   })
 

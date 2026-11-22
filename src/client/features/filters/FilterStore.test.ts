@@ -119,4 +119,32 @@ describe('LocalFilterStore', () => {
     expect(s.get('local')?.name).toBe('LocalName')
     expect(s.get('remoteOnly')?.name).toBe('Remote')
   })
+
+  describe('umbenannter Standardname (Eigene POIs → Eigene Orte)', () => {
+    const personal = (name: string): FilterDef => ({
+      ...DEFAULT_FILTERS.find(f => f.id === PERSONAL_FILTER_ID)!, name,
+    })
+
+    it('zeigt für einen gespeicherten alten Standardnamen den neuen Namen', () => {
+      localStorage.setItem('stellplatz:filter-defs', JSON.stringify([personal('Eigene POIs')]))
+      expect(new LocalFilterStore().get(PERSONAL_FILTER_ID)?.name).toBe('Eigene Orte')
+    })
+
+    it('behält einen selbst gewählten Namen', () => {
+      localStorage.setItem('stellplatz:filter-defs', JSON.stringify([personal('Meine Spots')]))
+      expect(new LocalFilterStore().get(PERSONAL_FILTER_ID)?.name).toBe('Meine Spots')
+    })
+
+    it('migriert auch Records aus applyRemote und replaceAll', () => {
+      const a = new LocalFilterStore()
+      a.applyRemote([personal('Eigene POIs')])
+      expect(a.get(PERSONAL_FILTER_ID)?.name).toBe('Eigene Orte')
+      const b = new LocalFilterStore()
+      b.replaceAll([personal('Eigene POIs')])
+      expect(b.get(PERSONAL_FILTER_ID)?.name).toBe('Eigene Orte')
+      const c = new LocalFilterStore()
+      c.replaceAll([personal('Meine Spots')])
+      expect(c.get(PERSONAL_FILTER_ID)?.name).toBe('Meine Spots')
+    })
+  })
 })

@@ -19,7 +19,7 @@ export class CustomPoiEditor {
     this.pendingLat = lat
     this.pendingLon = lon
     return new Promise(resolve => {
-      const view = this.render('POI hinzufügen')
+      const view = this.render('Ort hinzufügen')
       this.populatePosition(view, lat, lon)
       this.wireEvents(view, null, result => {
         resolve(result ? result.poi : null)
@@ -32,7 +32,7 @@ export class CustomPoiEditor {
     this.pendingLat = poi.lat
     this.pendingLon = poi.lon
     return new Promise(resolve => {
-      const view = this.render('POI bearbeiten')
+      const view = this.render('Ort bearbeiten')
       this.populateExisting(view, poi)
       this.wireEvents(view, poi, result => {
         resolve(result ? result.poi : null)

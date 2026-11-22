@@ -165,7 +165,7 @@ export class AiSearchDialog {
       bits.push(head)
     } else if (intent.place) bits.push(`📍 ${intent.place}`)
     const cats = intent.enableFilters.length + intent.adHocFilters.length
-    if (cats) bits.push(`${cats} Kategorie${cats > 1 ? 'n' : ''}`)
+    if (cats) bits.push(`${cats} Filter`)
     recap.textContent = bits.join(' · ') || 'Auswahl anwenden'
     card.appendChild(recap)
 
