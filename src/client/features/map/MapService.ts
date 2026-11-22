@@ -67,15 +67,22 @@ export interface BaseLayerConfig {
   /** Highest zoom level the provider actually serves (Leaflet `maxNativeZoom`). */
   readonly maxZoom: number
   readonly subdomains?: readonly string[]
+  /** Transparent label tiles drawn on top of the base (e.g. place names over imagery). */
+  readonly overlayUrl?: string
 }
 
-/** Satellite layer — Esri World Imagery, keyless and free. */
+/**
+ * Satellite layer — Esri World Imagery, keyless and free. Pure imagery has no
+ * place names, so Esri's transparent "Boundaries and Places" reference tiles
+ * (same host) go on top, like a classic hybrid map.
+ */
 const SATELLITE_LAYER: BaseLayerConfig = {
   id: 'satellite',
   label: 'Satellit',
   url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
   attribution: 'Luftbilder © <a href="https://www.esri.com">Esri</a>, Maxar, Earthstar Geographics',
   maxZoom: 19,
+  overlayUrl: 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
 }
 
 const BASE_LAYER_STORAGE_KEY = 'stellplatz:base-layer'
@@ -195,6 +202,25 @@ export function buildBaseLayers(configs: readonly BaseLayerConfig[] = BASE_LAYER
       maxZoom: displayMaxZoom,
       maxNativeZoom: cfg.maxZoom,
       ...(cfg.subdomains ? { subdomains: [...cfg.subdomains] } : {}),
+    })
+  }
+  return layers
+}
+
+/**
+ * Builds a `{ label → TileLayer }` map of the label overlays (only configs with
+ * `overlayUrl`). Same zoom handling as `buildBaseLayers`; `zIndex: 2` keeps the
+ * labels above the base tiles (Leaflet's default is 1).
+ */
+export function buildOverlayLayers(configs: readonly BaseLayerConfig[] = BASE_LAYER_CONFIGS): Record<string, L.TileLayer> {
+  const layers: Record<string, L.TileLayer> = {}
+  const displayMaxZoom = Math.max(...configs.map(c => c.maxZoom))
+  for (const cfg of configs) {
+    if (!cfg.overlayUrl) continue
+    layers[cfg.label] = L.tileLayer(cfg.overlayUrl, {
+      maxZoom: displayMaxZoom,
+      maxNativeZoom: cfg.maxZoom,
+      zIndex: 2,
     })
   }
   return layers
@@ -323,6 +349,7 @@ export class MapService {
   private readonly dragStartListeners: Array<() => void> = []
   private readonly zoomStartListeners: Array<() => void> = []
   private readonly baseLayers: Record<string, L.TileLayer>
+  private readonly overlayLayers: Record<string, L.TileLayer>
   private activeLayer: BaseLayerConfig
   private readonly baseLayerChangeListeners: Array<(key: string) => void> = []
   private debounceTimer: ReturnType<typeof setTimeout> | null = null
@@ -343,6 +370,8 @@ export class MapService {
     const stored = readStoredLayerId()
     this.activeLayer = BASE_LAYER_CONFIGS.find(c => c.id === stored) ?? BASE_LAYER_CONFIGS[0]!
     this.baseLayers[this.activeLayer.label]!.addTo(this.map)
+    this.overlayLayers = buildOverlayLayers()
+    this.overlayLayers[this.activeLayer.label]?.addTo(this.map)
     createMapActions(
       () => { for (const l of this.locateListeners) l() },
       () => { for (const l of this.routeActionListeners) l() },
@@ -449,7 +478,9 @@ export class MapService {
     storeLayerId(next.id)
     if (next.id === this.activeLayer.id) return
     this.baseLayers[this.activeLayer.label]?.remove()
+    this.overlayLayers[this.activeLayer.label]?.remove()
     this.baseLayers[next.label]?.addTo(this.map)
+    this.overlayLayers[next.label]?.addTo(this.map)
     this.activeLayer = next
     for (const l of this.baseLayerChangeListeners) l(next.label)
   }

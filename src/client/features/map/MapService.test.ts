@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import L from 'leaflet'
 import { readFileSync } from 'node:fs'
-import { BASE_LAYER_CONFIGS, MapService, TOPO_LAYER, buildBaseLayers, buildCycleLayerConfig, buildMapLayerConfig, createMapActions } from './MapService.js'
+import { BASE_LAYER_CONFIGS, MapService, TOPO_LAYER, buildBaseLayers, buildCycleLayerConfig, buildMapLayerConfig, buildOverlayLayers, createMapActions } from './MapService.js'
 
 type OnAdd = { onAdd: () => HTMLElement }
 
@@ -53,6 +53,14 @@ describe('BASE_LAYER_CONFIGS', () => {
     const sat = BASE_LAYER_CONFIGS.find(c => c.label === 'Satellit')
     expect(sat?.url).toContain('server.arcgisonline.com')
     expect(sat?.url).toContain('World_Imagery')
+  })
+
+  // Regression: pure World Imagery shows no place names at all.
+  it('overlays Esri place-name labels on the satellite layer (same host) and on no other layer', () => {
+    const sat = BASE_LAYER_CONFIGS.find(c => c.id === 'satellite')
+    expect(sat?.overlayUrl).toContain('server.arcgisonline.com')
+    expect(sat?.overlayUrl).toContain('World_Boundaries_and_Places')
+    expect(BASE_LAYER_CONFIGS.filter(c => c.overlayUrl).map(c => c.id)).toEqual(['satellite'])
   })
 
   it('every layer carries an attribution (free-tier requirement)', () => {
@@ -174,6 +182,19 @@ describe('buildBaseLayers zoom handling', () => {
   })
 })
 
+describe('buildOverlayLayers', () => {
+  it('builds label layers only for configs with an overlay, above the base and with the same zoom handling', () => {
+    const layers = buildOverlayLayers()
+    expect(Object.keys(layers)).toEqual(['Satellit'])
+    const sat = layers['Satellit']!
+    const overallMax = Math.max(...BASE_LAYER_CONFIGS.map(c => c.maxZoom))
+    expect((sat as unknown as { _url: string })._url).toContain('World_Boundaries_and_Places')
+    expect(sat.options.zIndex).toBe(2)
+    expect(sat.options.maxNativeZoom).toBe(19)
+    expect(sat.options.maxZoom).toBe(overallMax)
+  })
+})
+
 describe('MapService base layer chooser', () => {
   const KEY = 'stellplatz:base-layer'
   let host: HTMLElement
@@ -251,6 +272,25 @@ describe('MapService base layer chooser', () => {
     expect(panel().hidden).toBe(true)
     expect(radios().map(r => r.checked)).toEqual([false, false, false, true])
     expect(localStorage.getItem(KEY)).toBe('topo')
+  })
+
+  it('shows the place-name overlay with the satellite layer and removes it again when switching away', () => {
+    const svc = new MapService(host)
+    const sat = BASE_LAYER_CONFIGS.find(c => c.id === 'satellite')!
+    expect(activeTileUrls(svc)).toEqual([BASE_LAYER_CONFIGS[0]!.url])
+    toggle().click()
+    radios()[1]!.click()
+    expect(activeTileUrls(svc)).toEqual([sat.url, sat.overlayUrl])
+    toggle().click()
+    radios()[0]!.click()
+    expect(activeTileUrls(svc)).toEqual([BASE_LAYER_CONFIGS[0]!.url])
+  })
+
+  it('adds the overlay when the stored layer is satellite at construction', () => {
+    localStorage.setItem(KEY, 'satellite')
+    const svc = new MapService(host)
+    const sat = BASE_LAYER_CONFIGS.find(c => c.id === 'satellite')!
+    expect(activeTileUrls(svc)).toEqual([sat.url, sat.overlayUrl])
   })
 
   it('re-selecting the active layer only closes the panel', () => {
