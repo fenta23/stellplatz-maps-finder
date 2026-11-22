@@ -1,3 +1,12 @@
+/* ── Eingabefelder ──
+   iOS zoomt beim Fokus, wenn font-size < 16px, und zoomt nicht zurück.
+   Basis für alle Felder; eigene font-size muss >= 16px bleiben (styles/inputZoom.test.ts). */
+input,
+textarea,
+select {
+    font-size: 16px;
+}
+
 /* ── Status toast ── */
 #status {
     display: none;

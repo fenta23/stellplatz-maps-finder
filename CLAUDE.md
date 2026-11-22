@@ -87,6 +87,7 @@ _shared/    utils.ts (CORS, Query-Validation, BBox-Snap, Supabase-Client, Rate-L
 - `readonly`, pure functions, explizite Dependencies
 - Jedes Feature hat Unit Tests
 - **Jeder Bug bekommt einen Test** — ein Regressionstest, der den Bug reproduziert (gegen den alten Code rot, mit dem Fix grün), gehört zum Bugfix dazu
+- **Eingabefelder (input/textarea/select) immer mit font-size ≥ 16px** — sonst zoomt iOS beim Fokus und zoomt nicht zurück. Basisregel in `styles/shell.css`, geprüft von `styles/inputZoom.test.ts` (scannt alle CSS-Dateien + `index.html`)
 - Changelog in CHANGELOG.md (Keep a Changelog) — NACH jedem Commit/PR ergänzen, nicht erst am Ende!
 
 ## Agent skills
