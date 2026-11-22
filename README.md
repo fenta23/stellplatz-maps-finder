@@ -20,7 +20,7 @@ Kartenbasierte Web-App für **Wandernde**, **Radfahrende** und **Camper**: Parkp
 - 📍 **In der Nähe**: Tankstelle, Supermarkt, Apotheke, Bäckerei, Frischwasser, Entsorgung (bis 2 km)
 - 📝 **Community-Hinweise** aus der OSM Notes API
 - 🕐 **Öffnungsstatus-Badge** (parst `opening_hours`-Tag live)
-- 📱 **Installierbare PWA** — Home-Bildschirm, Offline-Shell, „Cache leeren"-Eintrag im Menü
+- 📱 **Installierbare PWA** — Home-Bildschirm, Offline-Shell, „Cache leeren & neu laden" im Info-Panel
 - 🔒 Kein Google; läuft ohne API-Keys (Mapillary & Supabase optional)
 
 ## Tech Stack

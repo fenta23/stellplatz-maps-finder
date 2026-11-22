@@ -78,3 +78,16 @@
 .info-section p {
     margin: 0 0 8px;
 }
+.info-cache-btn {
+    border: 1px solid var(--accent);
+    background: none;
+    color: var(--accent);
+    font: inherit;
+    font-weight: 600;
+    padding: 8px 14px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+}
+.info-cache-btn:hover {
+    background: var(--surface-2);
+}

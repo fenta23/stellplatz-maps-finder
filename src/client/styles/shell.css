@@ -111,6 +111,38 @@
 .side-menu-list {
     list-style: none;
     padding: 8px 0;
+    flex: 1;
+    overflow-y: auto;
+}
+/* Rechtliches als kleine Textlinks am Menüende */
+.side-menu-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 0;
+    padding: 12px 10px calc(12px + env(safe-area-inset-bottom));
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
+.side-menu-footer-link {
+    border: none;
+    background: none;
+    cursor: pointer;
+    padding: 6px 8px;
+    font-size: 0.8rem;
+    color: var(--ink-muted);
+    border-radius: var(--radius-sm);
+}
+.side-menu-footer-link:hover {
+    color: var(--ink);
+    text-decoration: underline;
+}
+.side-menu-footer-link + .side-menu-footer-link::before {
+    content: '·';
+    margin-right: 16px;
+    margin-left: -8px;
+    color: var(--ink-muted);
+    text-decoration: none;
+    display: inline-block;
 }
 .side-menu-item {
     display: flex;
