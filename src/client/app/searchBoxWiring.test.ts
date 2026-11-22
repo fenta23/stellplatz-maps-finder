@@ -5,7 +5,7 @@ import type { OsmPoi } from '@/features/pois/OverpassClient.js'
 import type { TargetMarker } from '@/features/map/targetMarker.js'
 import type { NominatimResult } from '@/core/nominatim.js'
 import type { TravelMode } from '@/core/travelMode.js'
-import type { Track } from '@/features/track/trackTypes.js'
+import type { Route } from '@/features/route/routeTypes.js'
 import { KNOWN_FILTER_IDS, type AiChatResponse, type AiIntent } from '@/features/ai/intentSchema.js'
 
 const poi: OsmPoi = { id: 7, osmType: 'node', type: 'campsite', lat: 50.95, lon: 13.93, tags: { name: 'Camping Pirna' } }
@@ -53,7 +53,7 @@ function setup(o: SetupOpts = {}) {
   })
   let stored: TravelMode | null = null
   const modeStore = { get: () => stored, set: vi.fn((m: TravelMode) => { stored = m }) }
-  const importTrack = vi.fn<(t: Track) => void>()
+  const importRoute = vi.fn<(t: Route) => void>()
   const collapseDetail = vi.fn()
   const geocode = vi.fn(async (_q: string, _opts?: unknown): Promise<NominatimResult[]> => [koeln])
   const centerOn = vi.fn()
@@ -73,7 +73,7 @@ function setup(o: SetupOpts = {}) {
       markers: { start, end },
       getProfiles: () => [],
       modeStore,
-      importTrack,
+      importRoute,
       fetchFn,
       isMobile: () => o.mobile ?? false,
       collapseDetail,
@@ -101,7 +101,7 @@ function setup(o: SetupOpts = {}) {
     mousedown(options().find(x => !x.classList.contains('place-option-action'))!)
   }
   return {
-    wiring, container, start, end, picks, pickPoint, importTrack, collapseDetail, geocode, centerOn,
+    wiring, container, start, end, picks, pickPoint, importRoute, collapseDetail, geocode, centerOn,
     applyAiIntent, sendAiChat, expandUi, openImport, fetchFn, q, root, mode, plannerPanel, aiDialog,
     options, aiRow, mousedown, type, esc, pickPlace,
   }
@@ -196,7 +196,7 @@ describe('createSearchBoxWiring', () => {
       t.q<HTMLButtonElement>('go').click()
       await flush()
       expect(t.fetchFn).toHaveBeenCalledTimes(1)
-      expect(t.importTrack).toHaveBeenCalledTimes(1)
+      expect(t.importRoute).toHaveBeenCalledTimes(1)
       expect(t.mode()).toBe('search')
       expect(t.plannerPanel().hidden).toBe(true)
     })
@@ -327,7 +327,7 @@ describe('createSearchBoxWiring', () => {
       expect(document.activeElement).toBe(s.q('go'))
       // Prefilled only: the user presses "Route berechnen".
       expect(s.fetchFn).not.toHaveBeenCalled()
-      expect(s.importTrack).not.toHaveBeenCalled()
+      expect(s.importRoute).not.toHaveBeenCalled()
     })
 
     it('a route wish whose destination is not found stays in the form with the name and a hint', async () => {

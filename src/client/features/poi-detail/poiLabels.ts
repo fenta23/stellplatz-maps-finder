@@ -48,7 +48,7 @@ export function formatMeters(m: number): string {
 const deKm = (km: number): string => km.toFixed(1).replace('.', ',')
 
 /** Position of a POI along an imported route, e.g. "Route: km 12,4 · noch 73,6 km · 180 m abseits". */
-export function trackInfoText(info: { readonly kmAlong: number; readonly kmToEnd: number; readonly offsetM: number }): string {
+export function routeInfoText(info: { readonly kmAlong: number; readonly kmToEnd: number; readonly offsetM: number }): string {
   return `Route: km ${deKm(info.kmAlong)} · noch ${deKm(info.kmToEnd)} km · ${formatRouteOffset(info.offsetM)}`
 }
 

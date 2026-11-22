@@ -9,11 +9,11 @@ import {
   type PlanPoint, type PlanRequest, type PlanRole,
 } from '@/features/route-planner/plannerModel.js'
 import type { TravelMode } from '@/core/travelMode.js'
-import { fetchPlannedRoute } from '@/features/track/osrmRoute.js'
-import type { RoutePoint } from '@/features/track/trackTypes.js'
-import { prepareTrack } from '@/features/track/trackImport.js'
-import { TrackImportError, trackImportErrorMessage } from '@/features/track/trackErrors.js'
-import type { Track } from '@/features/track/trackTypes.js'
+import { fetchPlannedRoute } from '@/features/route/osrmRoute.js'
+import type { RoutePoint } from '@/features/route/routeTypes.js'
+import { prepareRoute } from '@/features/route/routeImport.js'
+import { RouteImportError, routeImportErrorMessage } from '@/features/route/routeErrors.js'
+import type { Route } from '@/features/route/routeTypes.js'
 
 type LatLon = { readonly lat: number; readonly lon: number }
 
@@ -40,8 +40,8 @@ export interface RoutePlannerWiringDeps {
     get(): TravelMode | null
     set(mode: TravelMode): void
   }
-  /** Hand the planned route over to the track wiring (shows it, saves it, loads POIs). */
-  readonly importTrack: (track: Track) => void
+  /** Hand the planned route over to the route wiring (shows it, saves it, loads POIs). */
+  readonly importRoute: (route: Route) => void
   readonly fetchFn?: typeof fetch | undefined
   readonly isMobile: () => boolean
   /** Fold the POI detail sheet away (mobile only, so the map is free for the route). */
@@ -108,11 +108,11 @@ export function createRoutePlannerWiring(deps: RoutePlannerWiringDeps): RoutePla
       deps.fetchFn,
       signal,
     )
-    const track = prepareTrack(imported)
+    const route = prepareRoute(imported)
     deps.modeStore.set(req.mode)
-    // The track layer draws start/end itself from here on.
+    // The route layer draws start/end itself from here on.
     clearMarkers()
-    deps.importTrack(track)
+    deps.importRoute(route)
   }
 
   const panel = new RoutePlannerPanel(deps.container, {
@@ -123,7 +123,7 @@ export function createRoutePlannerWiring(deps: RoutePlannerWiringDeps): RoutePla
       () => done(null),
     ),
     plan,
-    describeError: err => err instanceof TrackImportError ? trackImportErrorMessage(err) : PLAN_FAILED_MESSAGE,
+    describeError: err => err instanceof RouteImportError ? routeImportErrorMessage(err) : PLAN_FAILED_MESSAGE,
     initialMode: () => defaultTravelMode(deps.modeStore.get(), deps.getProfiles()),
     onPointsChange: (s, e) => {
       start = s

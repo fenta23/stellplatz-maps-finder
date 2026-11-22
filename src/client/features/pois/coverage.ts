@@ -1,6 +1,6 @@
 import type { LatLngBounds } from './OverpassClient.js'
 
-// Tracks which 0.05° grid cells have already been fetched, so a viewport made
+// Routes which 0.05° grid cells have already been fetched, so a viewport made
 // entirely of seen cells needs no network, and a partially-new viewport only
 // queries the bounding box of its not-yet-seen cells (a thin strip when
 // panning) instead of the whole area again.

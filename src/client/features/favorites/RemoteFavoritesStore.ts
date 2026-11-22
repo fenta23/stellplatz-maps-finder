@@ -101,7 +101,7 @@ export class SyncedFavoritesStore implements IFavoritesStore {
       await Promise.allSettled(guestOnly.map(poi => backend.add(poi)))
     }
 
-    // Track which IDs are now confirmed synced.
+    // Route which IDs are now confirmed synced.
     for (const p of remote) this.syncedIds.add(p.id)
     for (const p of guestOnly) this.syncedIds.add(p.id)
     this.saveSyncedIds()

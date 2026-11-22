@@ -1,5 +1,5 @@
 import type { TravelMode } from '@/core/travelMode.js'
-import type { RoutePoint } from '@/features/track/trackTypes.js'
+import type { RoutePoint } from '@/features/route/routeTypes.js'
 export type PlanRole = 'start' | 'end'
 
 export interface PlanPoint extends RoutePoint {

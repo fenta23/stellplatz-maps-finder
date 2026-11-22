@@ -23,7 +23,7 @@ import { FilterPanel } from '@/features/filters/FilterPanel.js'
 import { LocalFilterStore } from '@/features/filters/FilterStore.js'
 import { SyncedFilterStore } from '@/features/filters/RemoteFilterStore.js'
 import { FilterConfigPanel } from '@/features/filters/FilterConfigPanel.js'
-import { trackRowTexts } from './trackRows.js'
+import { routeRowTexts } from './routeRows.js'
 import { setPoiMetaRegistry, typeLabel, typeIcon } from '@/features/pois/poiMeta.js'
 import { filterIconPath, PERSONAL_FILTER_ID } from '@/features/filters/filterModel.js'
 import { DEFAULT_PERSONAL_COLOR } from '@/features/custom-pois/CustomPoiMarkerManager.js'
@@ -54,7 +54,7 @@ import { createSession } from './session.js'
 import { createSelection } from './selection.js'
 import { createPoiRefresher, fetchSignature } from './poiRefresher.js'
 import { initImport } from './importWiring.js'
-import { createTrackWiring } from './trackWiring.js'
+import { createRouteWiring } from './routeWiring.js'
 import { shouldCenterOnUser } from './startupCenter.js'
 import { createProfileWiring } from './profileWiring.js'
 import { createSearchBoxWiring } from './searchBoxWiring.js'
@@ -63,9 +63,9 @@ import { AiFilterUndoStore, applyAiFilterPlan, planAiFilterApply, restoreAiFilte
 import { createRouteEditWiring } from './routeEditWiring.js'
 import { TravelModeStore } from '@/features/route-planner/TravelModeStore.js'
 import { LocalProfileStore } from '@/features/profile/ProfileStore.js'
-import { createTrackPoiLoader } from './trackPoiLoader.js'
-import { LocalTrackStore } from '@/features/track/TrackStore.js'
-import { createLeafletTrackLayer } from '@/features/map/leafletTrackLayer.js'
+import { createRoutePoiLoader } from './routePoiLoader.js'
+import { LocalRouteStore } from '@/features/route/RouteStore.js'
+import { createLeafletRouteLayer } from '@/features/map/leafletRouteLayer.js'
 import { initCustomPois } from './customPoiWiring.js'
 import { initAuthSync } from './authWiring.js'
 import { geocode } from '@/core/nominatim.js'
@@ -142,7 +142,7 @@ async function init() {
   // ── Filters ─────────────────────────────────────────────────────────────────
   const filterStore = new SyncedFilterStore(new LocalFilterStore())
   let openProfiles: () => void = () => {}
-  // Bound once the search box exists (its route planner needs trackWiring, which is created further down).
+  // Bound once the search box exists (its route planner needs routeWiring, which is created further down).
   let openPlanner: () => void = () => {}
   let offerPoiToPlanner: (poi: OsmPoi) => boolean = () => false
   const filterConfigPanel = new FilterConfigPanel(document.body, filterStore, { onOpenProfiles: () => openProfiles() })
@@ -162,15 +162,15 @@ async function init() {
   // Erst-Standort nicht blockierend ermitteln und Karte zentrieren – aber nur,
   // solange der Nutzer die Karte noch nicht selbst bewegt hat (kein Ruck/Sprung).
   let userMovedMap = false
-  // Bound once trackWiring exists (created further down); the location fix arrives later.
-  let isTrackActive: () => boolean = () => false
+  // Bound once routeWiring exists (created further down); the location fix arrives later.
+  let isRouteActive: () => boolean = () => false
   mapService.onDragStart(() => { userMovedMap = true })
   void requestLocation(statusEl).then(userPos => {
     setStatus('')
     if (userPos) {
       session.userPos = { lat: userPos[0], lon: userPos[1] }
       locationMarker.update(userPos)
-      if (shouldCenterOnUser({ userMovedMap, trackActive: isTrackActive() })) mapService.setCenter(userPos[0], userPos[1], 13)
+      if (shouldCenterOnUser({ userMovedMap, routeActive: isRouteActive() })) mapService.setCenter(userPos[0], userPos[1], 13)
     } else {
       flashStatus('Standort nicht verfügbar – Karte auf Deutschland zentriert')
     }
@@ -264,7 +264,7 @@ async function init() {
     // Close zoom first (no animation), then centre in the part of the map no panel covers.
     centerOn: pos => {
       map.setView([pos.lat, pos.lon], Math.max(map.getZoom(), NEARBY_ZOOM), { animate: false })
-      centerPoiInView(map, mapContainer, pos, { top: effectiveMapTop(), ...trackWiring.mapInsets() })
+      centerPoiInView(map, mapContainer, pos, { top: effectiveMapTop(), ...routeWiring.mapInsets() })
     },
     iconFor: nearbyIconSvg,
     flash: flashInfo,
@@ -279,16 +279,16 @@ async function init() {
     session, panel: detailPanel, favorites,
     panIntoView: poi => panPoiIntoView(map, mapContainer, poi, effectiveMapTop()),
     // Picked from the route list: put it in the middle of what is left of the map
-    // between header, track panel and detail panel. trackWiring is created further down.
-    centerInView: poi => centerPoiInView(map, mapContainer, poi, { top: effectiveMapTop(), ...trackWiring.mapInsets() }),
+    // between header, route panel and detail panel. routeWiring is created further down.
+    centerInView: poi => centerPoiInView(map, mapContainer, poi, { top: effectiveMapTop(), ...routeWiring.mapInsets() }),
     loadDetails,
     getNote: poi => notes.get(String(poi.id)),
     onEditCustomPoi: customPois.editCurrent,
     onDeleteCustomPoi: customPois.deleteCurrent,
     isLoggedIn: () => loggedIn,
-    getTrackInfo: poi => trackWiring.positionOf(poi), // trackWiring is created further down
-    onSelected: poi => { nearbyWiring.clear(); showHighlight(poi); trackWiring.onPoiSelected(poi) },
-    onCleared: () => { nearbyWiring.clear(); poiHighlight.clear(); trackWiring.onPoiSelected(null) },
+    getRouteInfo: poi => routeWiring.positionOf(poi), // routeWiring is created further down
+    onSelected: poi => { nearbyWiring.clear(); showHighlight(poi); routeWiring.onPoiSelected(poi) },
+    onCleared: () => { nearbyWiring.clear(); poiHighlight.clear(); routeWiring.onPoiSelected(null) },
   })
 
   // ── Auth sync ───────────────────────────────────────────────────────────────
@@ -326,49 +326,49 @@ async function init() {
   mapService.onBoundsChanged(() => refreshDebounced())
   setTimeout(() => void refresh(), 800)
 
-  // ── Track import (GPX / Komoot) + POIs along the route ─────────────────────
+  // ── Route import (GPX / Komoot) + POIs along the route ─────────────────────
   // Created before the filter/collapse hooks below, which talk to it. While a
-  // track is active the refresher is suspended and the map shows only the
+  // route is active the refresher is suspended and the map shows only the
   // corridor POIs.
-  const trackStore = new LocalTrackStore()
+  const routeStore = new LocalRouteStore()
   // No dragging of the route while a point is being picked on the map (planner, own place).
-  const trackLayer = createLeafletTrackLayer(map, undefined, { canEdit: () => !mapService.isPlacing })
-  const trackWiring = createTrackWiring({
-    store: trackStore,
-    layer: trackLayer,
+  const routeLayer = createLeafletRouteLayer(map, undefined, { canEdit: () => !mapService.isPlacing })
+  const routeWiring = createRouteWiring({
+    store: routeStore,
+    layer: routeLayer,
     dialogContainer: document.body,
     panelContainer: document.body,
     flash: flashInfo,
     // The import dialog offers "Route planen": swap it for the planner.
-    onOpenPlanner: () => { trackWiring.closeImport(); openPlanner() },
-    createLoader: callbacks => createTrackPoiLoader({ getOsmFilters, tiles: poiTiles, ...callbacks }),
+    onOpenPlanner: () => { routeWiring.closeImport(); openPlanner() },
+    createLoader: callbacks => createRoutePoiLoader({ getOsmFilters, tiles: poiTiles, ...callbacks }),
     refresher,
     setMarkers: pois => markerManager.updatePois(pois),
     selectPoi: poi => void selection.select(poi, { center: true }),
     isTypeActive: type => osmFilterIds().has(type),
     rowFor: poi => ({
-      ...trackRowTexts(poi.tags.name, typeLabel(poi.type), { type: poi.type, now: new Date() }),
+      ...routeRowTexts(poi.tags.name, typeLabel(poi.type), { type: poi.type, now: new Date() }),
       color: styleResolver(poi.type).color,
       iconSvg: typeIcon(poi.type), // our own icon set, not user data
     }),
   })
-  isTrackActive = () => trackWiring.isTrackActive()
-  // After the track wiring: its store listener draws the line before this one sets the handles.
-  createRouteEditWiring({ store: trackStore, layer: trackLayer, flash: flashInfo })
+  isRouteActive = () => routeWiring.isRouteActive()
+  // After the route wiring: its store listener draws the line before this one sets the handles.
+  createRouteEditWiring({ store: routeStore, layer: routeLayer, flash: flashInfo })
 
   filterStore.onChange(() => {
     // A new/edited filter or parking switched on needs data not loaded yet.
     const sig = fetchSignature(getOsmFilters())
     const needsRefetch = sig !== lastFetchSignature
     lastFetchSignature = sig
-    // With an active track the refresher is suspended; the track wiring reloads the corridor instead.
-    if (needsRefetch && !trackWiring.isTrackActive()) refreshDebounced()
+    // With an active route the refresher is suspended; the route wiring reloads the corridor instead.
+    if (needsRefetch && !routeWiring.isRouteActive()) refreshDebounced()
     markerManager.setActiveTypes(osmFilterIds())
     markerManager.setStyleResolver(styleResolver)
     // Chip toggles re-assign already loaded POIs (a bakery-café belongs to the
     // active chip) — memory only. After setActiveTypes so visibility is current.
     refresher.reclassify()
-    trackWiring.onFiltersChanged(needsRefetch)
+    routeWiring.onFiltersChanged(needsRefetch)
     const personal = filterStore.get(PERSONAL_FILTER_ID)
     if (personal) {
       customPois.markerManager.setVisible(!personal.hidden && personal.enabled)
@@ -387,7 +387,7 @@ async function init() {
     isReady: () => mapReady,
     isBoxExpanded: () => searchWiring.isExpanded(), // created further down
     collapseDetail: () => detailPanel.collapse(),
-    collapseTrack: () => trackWiring.collapsePanel(),
+    collapseRoute: () => routeWiring.collapsePanel(),
   })
   const expandUI = () => uiCollapse.expand()
 
@@ -476,7 +476,7 @@ async function init() {
       markers: { start: createLeafletTargetMarker(map), end: createLeafletTargetMarker(map) },
       getProfiles: () => profileStore.get(),
       modeStore: new TravelModeStore(),
-      importTrack: track => trackWiring.importTrack(track),
+      importRoute: route => routeWiring.importRoute(route),
       isMobile,
       collapseDetail: () => detailPanel.collapse(),
       poiLabel: poi => poi.tags.name ?? typeLabel(poi.type),
@@ -492,7 +492,7 @@ async function init() {
     },
     applyAiIntent,
     expandUi: expandUI,
-    openImport: () => { closeAll(); trackWiring.openImport() },
+    openImport: () => { closeAll(); routeWiring.openImport() },
   })
   openPlanner = () => { closeAll(); searchWiring.openRoute() }
   offerPoiToPlanner = poi => searchWiring.offerPoi(poi)
@@ -545,11 +545,11 @@ async function init() {
     refreshCustomMarkers: customPois.refreshMarkers,
   })
 
-  mapService.onBaseLayerChange(key => trackWiring.setSatellite(key === 'Satellit'))
+  mapService.onBaseLayerChange(key => routeWiring.setSatellite(key === 'Satellit'))
   // The base layer is restored from localStorage before any listener exists —
   // bring the route line's colours in line with it once.
-  trackWiring.setSatellite(mapService.getBaseLayerLabel() === 'Satellit')
-  mapService.onTrackAction(() => trackWiring.openImport())
+  routeWiring.setSatellite(mapService.getBaseLayerLabel() === 'Satellit')
+  mapService.onRouteAction(() => routeWiring.openImport())
 
   // ── Side menu ───────────────────────────────────────────────────────────────
   const infoPanel = new InfoPanel(document.body, {
@@ -581,7 +581,7 @@ async function init() {
   const closeAll = () => {
     infoPanel.close(); datenschutzPanel.close(); impressumPanel.close()
     favoritesPanel.close(); notesPanel.close(); helpPanel.close()
-    responsibilityPanel.close(); trackWiring.closeImport(); profileWiring.close()
+    responsibilityPanel.close(); routeWiring.closeImport(); profileWiring.close()
     searchWiring.close()
   }
 
@@ -592,7 +592,7 @@ async function init() {
     { icon: SVG_STAR, label: 'Favoriten', onSelect: () => { closeAll(); favoritesPanel.open() } },
     { icon: SVG_NOTE, label: 'Notizen', onSelect: () => { closeAll(); notesPanel.open() } },
     { icon: SVG_UPLOAD, label: 'Orte importieren (Google Maps)', onSelect: () => importHandle.open() },
-    { icon: SVG_ROUTE, label: 'Route importieren (GPX/Komoot)', onSelect: () => { closeAll(); trackWiring.openImport() } },
+    { icon: SVG_ROUTE, label: 'Route importieren (GPX/Komoot)', onSelect: () => { closeAll(); routeWiring.openImport() } },
     { kind: 'section', label: 'Unterwegs' },
     { icon: SVG_PROFILE, label: 'Profil', onSelect: () => { closeAll(); profileWiring.open() } },
     { icon: SVG_LEAF, label: 'Verantwortungsvoll unterwegs', onSelect: () => { closeAll(); responsibilityPanel.open() } },

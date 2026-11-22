@@ -6,7 +6,7 @@ import { customIdToNumber } from '@/features/custom-pois/CustomPoi.js'
 import { clone, ref } from '@/core/template.js'
 import { createEventScope, type EventScope } from '@/core/events.js'
 import { renderList } from '@/core/bind.js'
-import { esc, safeUrl, trackInfoText, typeLabel } from './poiLabels.js'
+import { esc, safeUrl, routeInfoText, typeLabel } from './poiLabels.js'
 import { buildTags } from './buildTags.js'
 import type { TagRow } from './buildTags.js'
 import { renderImages, showLightbox, hideLightbox } from './imageGallery.js'
@@ -58,7 +58,7 @@ export interface PanelView {
   readonly noteText?: string
   readonly config?: PanelConfig
   /** Position along the active imported route; shown as a summary line. */
-  readonly trackInfo?: { readonly kmAlong: number; readonly kmToEnd: number; readonly offsetM: number }
+  readonly routeInfo?: { readonly kmAlong: number; readonly kmToEnd: number; readonly offsetM: number }
 }
 
 // ── Generic listener helper ──────────────────────────────────────────────────
@@ -158,7 +158,7 @@ export class PoiDetailPanel {
 
   // ── Public render ───────────────────────────────────────────────────────────
   show(poi: OsmPoi, panelView: PanelView = {}): void {
-    const { isFavorite = false, noteText = '', config, trackInfo } = panelView
+    const { isFavorite = false, noteText = '', config, routeInfo } = panelView
     this.expand()
     this.panel.classList.remove('hidden')
     document.body.classList.add('detail-open')
@@ -189,9 +189,9 @@ export class PoiDetailPanel {
     }
 
     // Position along the active route
-    if (trackInfo) {
+    if (routeInfo) {
       ref(view, 'trackInfo').hidden = false
-      ref(view, 'trackInfoText').textContent = trackInfoText(trackInfo)
+      ref(view, 'trackInfoText').textContent = routeInfoText(routeInfo)
     }
 
     // Cemetery water hint (all year; extra sentence in winter)

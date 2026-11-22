@@ -1,24 +1,24 @@
-import type { ITrackStore } from '@/features/track/TrackStore.js'
-import type { TrackLayer } from '@/features/track/TrackLayer.js'
-import { fetchPlannedRoute, ROUTE_PLANNING_ENABLED } from '@/features/track/osrmRoute.js'
-import { insertVia, moveWaypoint, removeVia } from '@/features/track/routeEdit.js'
-import { prepareTrack } from '@/features/track/trackImport.js'
-import { trackImportErrorMessage } from '@/features/track/trackErrors.js'
-import { formatKm } from '@/features/track/TrackImportDialog.js'
-import type { RoutePlan, SavedTrack, TrackPoint } from '@/features/track/trackTypes.js'
+import type { IRouteStore } from '@/features/route/RouteStore.js'
+import type { RouteLayer } from '@/features/route/RouteLayer.js'
+import { fetchPlannedRoute, ROUTE_PLANNING_ENABLED } from '@/features/route/osrmRoute.js'
+import { insertVia, moveWaypoint, removeVia } from '@/features/route/routeEdit.js'
+import { prepareRoute } from '@/features/route/routeImport.js'
+import { routeImportErrorMessage } from '@/features/route/routeErrors.js'
+import { formatKm } from '@/features/route/RouteImportDialog.js'
+import type { RoutePlan, SavedRoute, LinePoint } from '@/features/route/routeTypes.js'
 
 export interface RouteEditWiringDeps {
-  readonly store: ITrackStore
-  readonly layer: Pick<TrackLayer, 'setEditing'>
+  readonly store: IRouteStore
+  readonly layer: Pick<RouteLayer, 'setEditing'>
   readonly flash: (msg: string) => void
   readonly fetchFn?: typeof fetch | undefined
   /** Default: the route planner's kill switch — no planning, no editing. */
   readonly enabled?: boolean | undefined
 }
 
-type EditableTrack = SavedTrack & { readonly plan: RoutePlan }
+type EditableRoute = SavedRoute & { readonly plan: RoutePlan }
 
-const toLatLon = ([lat, lon]: TrackPoint) => ({ lat, lon })
+const toLatLon = ([lat, lon]: LinePoint) => ({ lat, lon })
 
 /**
  * Changing a planned route on the map: the layer reports a dragged line or handle,
@@ -33,7 +33,7 @@ export function createRouteEditWiring(deps: RouteEditWiringDeps): void {
   /** The running recalculation and the route it belongs to. */
   let running: { readonly id: string; readonly ctrl: AbortController } | null = null
 
-  const editable = (t: SavedTrack | null): t is EditableTrack =>
+  const editable = (t: SavedRoute | null): t is EditableRoute =>
     enabled && t !== null && t.source === 'planned' && t.plan !== undefined
 
   /**
@@ -41,19 +41,19 @@ export function createRouteEditWiring(deps: RouteEditWiringDeps): void {
    * a searched place ("Dresden") can be well off the road the route starts on.
    * Only an end the user has just dragged (pending plan) is shown where it was dropped.
    */
-  function handlesOf(track: EditableTrack, plan: RoutePlan = track.plan): TrackPoint[] {
-    const points = plan.waypoints.map((w): TrackPoint => [w.lat, w.lon])
+  function handlesOf(route: EditableRoute, plan: RoutePlan = route.plan): LinePoint[] {
+    const points = plan.waypoints.map((w): LinePoint => [w.lat, w.lon])
     const last = plan.waypoints.length - 1
-    if (plan.waypoints[0] === track.plan.waypoints[0]) points[0] = track.points[0]!
-    if (plan.waypoints[last] === track.plan.waypoints[track.plan.waypoints.length - 1]) {
-      points[last] = track.points[track.points.length - 1]!
+    if (plan.waypoints[0] === route.plan.waypoints[0]) points[0] = route.points[0]!
+    if (plan.waypoints[last] === route.plan.waypoints[route.plan.waypoints.length - 1]) {
+      points[last] = route.points[route.points.length - 1]!
     }
     return points
   }
 
-  function show(track: EditableTrack, pending?: RoutePlan): void {
+  function show(route: EditableRoute, pending?: RoutePlan): void {
     layer.setEditing({
-      waypoints: handlesOf(track, pending),
+      waypoints: handlesOf(route, pending),
       ...(pending ? { busy: true } : {}),
       onInsert: (grab, drop) => change(t => insertVia(t.plan, t.points, toLatLon(grab), toLatLon(drop))),
       onMove: (index, to) => change(t => moveWaypoint(t.plan, index, toLatLon(to))),
@@ -62,34 +62,34 @@ export function createRouteEditWiring(deps: RouteEditWiringDeps): void {
   }
 
   function sync(): void {
-    const track = store.get()
-    if (editable(track)) show(track)
+    const route = store.get()
+    if (editable(route)) show(route)
     else layer.setEditing(null)
   }
 
-  function change(edit: (track: EditableTrack) => RoutePlan): void {
-    const track = store.get()
-    if (running || !editable(track)) return
-    const plan = edit(track)
-    if (plan === track.plan) { sync(); return } // nothing to do; puts a dragged handle back
-    void recalculate(track, plan)
+  function change(edit: (route: EditableRoute) => RoutePlan): void {
+    const route = store.get()
+    if (running || !editable(route)) return
+    const plan = edit(route)
+    if (plan === route.plan) { sync(); return } // nothing to do; puts a dragged handle back
+    void recalculate(route, plan)
   }
 
-  async function recalculate(track: EditableTrack, plan: RoutePlan): Promise<void> {
+  async function recalculate(route: EditableRoute, plan: RoutePlan): Promise<void> {
     const ctrl = new AbortController()
-    running = { id: track.id, ctrl }
-    show(track, plan) // handles where the user put them, locked while the request runs
+    running = { id: route.id, ctrl }
+    show(route, plan) // handles where the user put them, locked while the request runs
     try {
       const imported = await fetchPlannedRoute(plan, deps.fetchFn, ctrl.signal, { enabled })
       if (ctrl.signal.aborted) return
-      const next = prepareTrack(imported, track.corridorM)
+      const next = prepareRoute(imported, route.corridorM)
       running = null // before `replace`: its onChange unlocks the handles
-      store.replace(track.id, next)
+      store.replace(route.id, next)
       flash(`Route angepasst · ${formatKm(next.lengthM)}`)
     } catch (err) {
       if (ctrl.signal.aborted) return // the route was switched or closed meanwhile
       running = null
-      flash(trackImportErrorMessage(err))
+      flash(routeImportErrorMessage(err))
       sync() // handles back to the unchanged route
     }
   }

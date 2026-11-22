@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { typeLabel, bool, formatMeters, trackInfoText, esc, safeUrl, TYPE_LABELS, ACCESS_LABELS } from './poiLabels.js'
+import { typeLabel, bool, formatMeters, routeInfoText, esc, safeUrl, TYPE_LABELS, ACCESS_LABELS } from './poiLabels.js'
 
 describe('typeLabel', () => {
   it('returns the German label for known types', () => {
@@ -98,17 +98,17 @@ describe('label maps', () => {
   })
 })
 
-describe('trackInfoText', () => {
+describe('routeInfoText', () => {
   it('formats km with German decimal comma and offset in metres', () => {
-    expect(trackInfoText({ kmAlong: 12.4, kmToEnd: 73.6, offsetM: 180 }))
+    expect(routeInfoText({ kmAlong: 12.4, kmToEnd: 73.6, offsetM: 180 }))
       .toBe('Route: km 12,4 · noch 73,6 km · 180 m abseits')
   })
   it('rounds to 10 m and switches to km from 1000 m', () => {
-    expect(trackInfoText({ kmAlong: 0, kmToEnd: 5, offsetM: 10.4 })).toBe('Route: km 0,0 · noch 5,0 km · 10 m abseits')
-    expect(trackInfoText({ kmAlong: 1, kmToEnd: 2, offsetM: 1234 })).toBe('Route: km 1,0 · noch 2,0 km · 1,2 km abseits')
+    expect(routeInfoText({ kmAlong: 0, kmToEnd: 5, offsetM: 10.4 })).toBe('Route: km 0,0 · noch 5,0 km · 10 m abseits')
+    expect(routeInfoText({ kmAlong: 1, kmToEnd: 2, offsetM: 1234 })).toBe('Route: km 1,0 · noch 2,0 km · 1,2 km abseits')
   })
   it('says "an der Route" when the offset rounds to less than 10 m', () => {
-    expect(trackInfoText({ kmAlong: 3.04, kmToEnd: 1, offsetM: 4.9 })).toBe('Route: km 3,0 · noch 1,0 km · an der Route')
-    expect(trackInfoText({ kmAlong: 3, kmToEnd: 1, offsetM: 0 })).toContain('an der Route')
+    expect(routeInfoText({ kmAlong: 3.04, kmToEnd: 1, offsetM: 4.9 })).toBe('Route: km 3,0 · noch 1,0 km · an der Route')
+    expect(routeInfoText({ kmAlong: 3, kmToEnd: 1, offsetM: 0 })).toContain('an der Route')
   })
 })

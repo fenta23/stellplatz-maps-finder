@@ -169,7 +169,7 @@ z-index must beat Leaflet's panes/controls (root stacking context). */
     body.searchbox-open .track-sheet {
         display: none;
     }
-    /* track.css moves Leaflet's left-hand controls right of the column; with the
+    /* route.css moves Leaflet's left-hand controls right of the column; with the
        column hidden they go back to the edge. */
     body.searchbox-open.track-open .leaflet-top.leaflet-left,
     body.searchbox-open.track-open .leaflet-bottom.leaflet-left {
