@@ -1,7 +1,7 @@
 import type { ITrackStore } from '@/features/track/TrackStore.js'
 import type { TrackLayer } from '@/features/track/TrackLayer.js'
 import { fetchPlannedRoute, ROUTE_PLANNING_ENABLED } from '@/features/track/osrmRoute.js'
-import { insertVia, moveWaypoint, planRequest, removeVia } from '@/features/track/routeEdit.js'
+import { insertVia, moveWaypoint, removeVia } from '@/features/track/routeEdit.js'
 import { prepareTrack } from '@/features/track/trackImport.js'
 import { trackImportErrorMessage } from '@/features/track/trackErrors.js'
 import { formatKm } from '@/features/track/TrackImportDialog.js'
@@ -80,7 +80,7 @@ export function createRouteEditWiring(deps: RouteEditWiringDeps): void {
     running = { id: track.id, ctrl }
     show(track, plan) // handles where the user put them, locked while the request runs
     try {
-      const imported = await fetchPlannedRoute(planRequest(plan), deps.fetchFn, ctrl.signal, { enabled })
+      const imported = await fetchPlannedRoute(plan, deps.fetchFn, ctrl.signal, { enabled })
       if (ctrl.signal.aborted) return
       const next = prepareTrack(imported, track.corridorM)
       running = null // before `replace`: its onChange unlocks the handles

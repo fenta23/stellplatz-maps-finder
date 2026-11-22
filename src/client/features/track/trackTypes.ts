@@ -19,8 +19,8 @@ export function sourceLabel(s: TrackSource): string {
   return SOURCE_LABELS[s]
 }
 
-/** A point the planned route has to pass: start, via point or end. */
-export interface RouteWaypoint {
+/** Start, Zwischenpunkt (via) or Ziel of a planned route. */
+export interface RoutePoint {
   readonly lat: number
   readonly lon: number
   /** Name shown in the route name; absent for points set on the map (via points, dragged ends). */
@@ -31,7 +31,7 @@ export interface RouteWaypoint {
 export interface RoutePlan {
   readonly mode: TravelMode
   /** Start, via points in route order, end — at least two. */
-  readonly waypoints: readonly RouteWaypoint[]
+  readonly waypoints: readonly RoutePoint[] // field name kept for stored routes
 }
 
 /** How many via points a planned route may have (start and end not counted). */

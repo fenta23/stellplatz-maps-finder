@@ -84,7 +84,7 @@ _Avoid_: Wegpunkt, Endpunkt, Zielpunkt
 
 **Zwischenpunkt**:
 Ein Punkt zwischen Start und Ziel, durch den eine geplante Route führen muss.
-_Avoid_: Wegpunkt, Via, Via-Punkt
+_Avoid_: Wegpunkt
 
 ### Karte
 

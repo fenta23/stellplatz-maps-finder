@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { insertVia, moveWaypoint, planRequest, removeVia } from './routeEdit.js'
+import { insertVia, moveWaypoint, removeVia } from './routeEdit.js'
 import type { RoutePlan, TrackPoint } from './trackTypes.js'
 
 // A straight line west → east along 50° N; 0.01° of longitude ≈ 716 m.
@@ -84,17 +84,5 @@ describe('removeVia', () => {
   it.each([0, 3, -1, 4, 1.5])('never removes start or end, nor an invalid index (%s)', (index) => {
     const p = plan(at(10.1), at(10.3))
     expect(removeVia(p, index)).toBe(p)
-  })
-})
-
-describe('planRequest', () => {
-  it('start and end with their labels, no via key without via points', () => {
-    const req = planRequest(plan())
-    expect(req).toEqual({ start: START, end: END, mode: 'bike' })
-    expect(req).not.toHaveProperty('via')
-  })
-
-  it('via points in order', () => {
-    expect(planRequest(plan(at(10.1), at(10.3)))).toEqual({ start: START, end: END, mode: 'bike', via: [at(10.1), at(10.3)] })
   })
 })

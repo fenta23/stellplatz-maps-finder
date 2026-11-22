@@ -1,9 +1,9 @@
 // Changing a planned route by dragging it on the map: pure functions from the old
 // plan to the new one. The recalculation itself is `fetchPlannedRoute`.
 
-import { MAX_SNAP_M, type RouteRequest } from './osrmRoute.js'
+import { MAX_SNAP_M } from './osrmRoute.js'
 import { createSegmentIndex, project } from './trackGeometry.js'
-import type { RoutePlan, RouteWaypoint, TrackPoint } from './trackTypes.js'
+import type { RoutePlan, RoutePoint, TrackPoint } from './trackTypes.js'
 
 type LatLon = { readonly lat: number; readonly lon: number }
 
@@ -28,14 +28,14 @@ export function insertVia(
       if (km <= grabKm) at = i + 1
     }
   }
-  const via: RouteWaypoint = { lat: drop.lat, lon: drop.lon }
+  const via: RoutePoint = { lat: drop.lat, lon: drop.lon }
   return { mode: plan.mode, waypoints: [...wps.slice(0, at), via, ...wps.slice(at)] }
 }
 
 /** Waypoint `index` (start, via or end) now sits at `to`; it loses its label. */
 export function moveWaypoint(plan: RoutePlan, index: number, to: LatLon): RoutePlan {
   if (!Number.isInteger(index) || index < 0 || index >= plan.waypoints.length) return plan
-  const moved: RouteWaypoint = { lat: to.lat, lon: to.lon }
+  const moved: RoutePoint = { lat: to.lat, lon: to.lon }
   return { mode: plan.mode, waypoints: plan.waypoints.map((w, i) => (i === index ? moved : w)) }
 }
 
@@ -43,16 +43,4 @@ export function moveWaypoint(plan: RoutePlan, index: number, to: LatLon): RouteP
 export function removeVia(plan: RoutePlan, index: number): RoutePlan {
   if (!Number.isInteger(index) || index <= 0 || index >= plan.waypoints.length - 1) return plan
   return { mode: plan.mode, waypoints: plan.waypoints.filter((_, i) => i !== index) }
-}
-
-/** The OSRM request for a plan. */
-export function planRequest(plan: RoutePlan): RouteRequest {
-  const wps = plan.waypoints
-  const via = wps.slice(1, -1)
-  return {
-    start: wps[0]!,
-    end: wps[wps.length - 1]!,
-    mode: plan.mode,
-    ...(via.length > 0 ? { via } : {}),
-  }
 }

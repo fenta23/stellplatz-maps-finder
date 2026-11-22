@@ -1,7 +1,7 @@
 import { isTravelMode } from '@/core/travelMode.js'
 import {
   MAX_CORRIDOR_M, MIN_CORRIDOR_M, MAX_SAVED_TRACKS, isTrackSource,
-  type RoutePlan, type RouteWaypoint, type SavedTrack, type Track, type TrackPoint,
+  type RoutePlan, type RoutePoint, type SavedTrack, type Track, type TrackPoint,
 } from './trackTypes.js'
 
 export interface ITrackStore {
@@ -35,7 +35,7 @@ function parsePlan(d: unknown): RoutePlan | null {
   if (!d || typeof d !== 'object') return null
   const r = d as Record<string, unknown>
   if (!isTravelMode(r.mode) || !Array.isArray(r.waypoints) || r.waypoints.length < 2) return null
-  const waypoints: RouteWaypoint[] = []
+  const waypoints: RoutePoint[] = []
   for (const w of r.waypoints as unknown[]) {
     if (!w || typeof w !== 'object') return null
     const { lat, lon, label } = w as Record<string, unknown>
