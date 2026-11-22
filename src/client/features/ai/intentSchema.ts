@@ -2,7 +2,7 @@ import {
   DEFAULT_FILTERS, FILTER_COLORS, FILTER_ICONS, isValidSelector,
   type FilterDef, type OsmSelector, type OsmElementKind, type TagCondition,
 } from '@/features/filters/filterModel.js'
-import { isTravelMode, type TravelMode } from '@/features/route-planner/plannerModel.js'
+import { isTravelMode, type TravelMode } from '@/core/travelMode.js'
 
 // Validation of the AI chat response. This is the SECURITY layer of the
 // scope-guard: whatever the model emits, only values that survive these checks

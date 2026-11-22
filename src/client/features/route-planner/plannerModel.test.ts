@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { shortPlaceLabel, defaultTravelMode, isTravelMode } from './plannerModel.js'
+import { shortPlaceLabel, defaultTravelMode } from './plannerModel.js'
 
 describe('shortPlaceLabel', () => {
   it('takes the part before the first comma, trimmed', () => {
@@ -33,13 +33,5 @@ describe('defaultTravelMode', () => {
   it('defaults to car without or with unknown profiles', () => {
     expect(defaultTravelMode(null, [])).toBe('car')
     expect(defaultTravelMode(null, ['unknown'])).toBe('car')
-  })
-})
-
-describe('isTravelMode', () => {
-  it('accepts exactly the three modes', () => {
-    expect(isTravelMode('foot') && isTravelMode('bike') && isTravelMode('car')).toBe(true)
-    expect(isTravelMode('plane')).toBe(false)
-    expect(isTravelMode(null)).toBe(false)
   })
 })

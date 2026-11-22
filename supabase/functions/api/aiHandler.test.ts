@@ -26,7 +26,7 @@ vi.mock('../_shared/aiClient.ts', () => ({
 
 import { handleAi } from './aiHandler.ts'
 import { DEFAULT_FILTERS, FILTER_ICONS, MAX_SELECTOR_CONDITIONS } from '../../../src/client/features/filters/filterModel.ts'
-import { TRAVEL_MODES } from '../../../src/client/features/route-planner/plannerModel.ts'
+import { TRAVEL_MODES } from '../../../src/client/core/travelMode.ts'
 
 const env: Record<string, string> = { AI_REQUIRE_AUTH: 'false' }
 

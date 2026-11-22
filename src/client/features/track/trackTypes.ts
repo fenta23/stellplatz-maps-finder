@@ -1,3 +1,4 @@
+import type { TravelMode } from '@/core/travelMode.js'
 // Shared types and limits of the track slice (imported tour → line on the map).
 
 /** `[lat, lon]` — a tuple instead of an object keeps a 20,000-point track small in localStorage. */
@@ -18,9 +19,6 @@ export function sourceLabel(s: TrackSource): string {
   return SOURCE_LABELS[s]
 }
 
-/** Travel mode of a planned route (picks the OSRM instance). */
-export type RouteMode = 'foot' | 'bike' | 'car'
-
 /** A point the planned route has to pass: start, via point or end. */
 export interface RouteWaypoint {
   readonly lat: number
@@ -31,7 +29,7 @@ export interface RouteWaypoint {
 
 /** How a planned route was calculated — kept with the route so it can be changed on the map later. */
 export interface RoutePlan {
-  readonly mode: RouteMode
+  readonly mode: TravelMode
   /** Start, via points in route order, end — at least two. */
   readonly waypoints: readonly RouteWaypoint[]
 }

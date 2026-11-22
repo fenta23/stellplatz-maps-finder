@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { RoutePlannerPanel, type RoutePlannerDeps } from './RoutePlannerPanel.js'
 import type { PlaceSuggestion } from '@/core/PlaceField.js'
-import type { PlanPoint, PlanRequest, TravelMode } from './plannerModel.js'
+import type { PlanPoint, PlanRequest } from './plannerModel.js'
+import type { TravelMode } from '@/core/travelMode.js'
 
 const koeln: PlaceSuggestion = { label: 'Köln, Nordrhein-Westfalen, Deutschland', lat: 50.94, lon: 6.96 }
 const poi: PlanPoint = { lat: 50.1, lon: 7.2, label: 'Stellplatz am See', kind: 'poi' }

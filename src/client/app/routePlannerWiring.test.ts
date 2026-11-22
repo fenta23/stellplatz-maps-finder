@@ -3,7 +3,7 @@ import { createRoutePlannerWiring, PLAN_FAILED_MESSAGE, MY_LOCATION_LABEL } from
 import type { OsmPoi } from '@/features/pois/OverpassClient.js'
 import type { TargetMarker } from '@/features/map/targetMarker.js'
 import type { GeocodeOptions, NominatimResult } from '@/core/nominatim.js'
-import type { TravelMode } from '@/features/route-planner/plannerModel.js'
+import type { TravelMode } from '@/core/travelMode.js'
 import type { Track } from '@/features/track/trackTypes.js'
 
 const poi: OsmPoi = { id: 7, osmType: 'node', type: 'campsite', lat: 50.95, lon: 13.93, tags: { name: 'Camping Pirna' } }

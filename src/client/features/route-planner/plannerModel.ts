@@ -1,5 +1,4 @@
-/** Verkehrsmittel der Routenplanung; identisch zu `RouteMode` im Track-Slice. */
-export type TravelMode = 'foot' | 'bike' | 'car'
+import type { TravelMode } from '@/core/travelMode.js'
 export type PlanRole = 'start' | 'end'
 
 export interface PlanPoint {
@@ -13,12 +12,6 @@ export interface PlanRequest {
   readonly start: PlanPoint
   readonly end: PlanPoint
   readonly mode: TravelMode
-}
-
-export const TRAVEL_MODES: readonly TravelMode[] = ['foot', 'bike', 'car']
-
-export function isTravelMode(v: unknown): v is TravelMode {
-  return v === 'foot' || v === 'bike' || v === 'car'
 }
 
 /** "Eifel, Rheinland-Pfalz, Deutschland" → "Eifel". Leerer Anfang → ganzer Name. */

@@ -3,10 +3,9 @@ import { clone, ref } from '@/core/template.js'
 import { createEventScope } from '@/core/events.js'
 import { sendAiChat, type ChatTurn } from './AiClient.js'
 import type { AiChatResponse, AiIntent } from './intentSchema.js'
-import type { TravelMode } from '@/features/route-planner/plannerModel.js'
+import { TRAVEL_MODE_LABEL } from '@/core/travelMode.js'
 import dialogHtml from './aiSearchDialog.html?raw'
 
-const MODE_LABEL: Record<TravelMode, string> = { foot: 'Fuß', bike: 'Rad', car: 'Auto' }
 
 export interface AiSearchDialogDeps {
   /** Bestätigten Intent auf die Karte anwenden (Filter + Ortssprung). */
@@ -161,7 +160,7 @@ export class AiSearchDialog {
     const route = intent.route
     if (route) {
       let head = `${route.from ?? 'Mein Standort'} → ${route.to}`
-      if (route.mode) head += ` · ${MODE_LABEL[route.mode]}`
+      if (route.mode) head += ` · ${TRAVEL_MODE_LABEL[route.mode]}`
       bits.push(head)
     } else if (intent.place) bits.push(`📍 ${intent.place}`)
     const cats = intent.enableFilters.length + intent.adHocFilters.length
